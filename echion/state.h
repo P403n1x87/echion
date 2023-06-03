@@ -20,3 +20,6 @@ static int running = 0;
 static std::thread *where_thread = nullptr;
 static std::condition_variable where_cv;
 static std::mutex where_lock;
+
+static PyObject *asyncio_current_tasks = NULL;
+static PyObject *asyncio_all_tasks = NULL;

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <echion/stacks.h>
-#include <echion/threadinfo.h>
+#include <echion/threads.h>
 
 // ----------------------------------------------------------------------------
 static void render(FrameStack &stack, std::ostream &output)

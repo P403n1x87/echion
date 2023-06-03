@@ -55,8 +55,41 @@ void unwind_native_stack()
 }
 
 // ----------------------------------------------------------------------------
+static size_t
+unwind_frame(PyObject *frame_addr, FrameStack *stack)
+{
+    std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
+    int count = 0;
+
+    PyObject *current_frame_addr = frame_addr;
+    while (current_frame_addr != NULL && stack->size() < MAX_FRAMES)
+    {
+        if (seen_frames.find(current_frame_addr) != seen_frames.end())
+        {
+            stack->push_back(new Frame("INVALID"));
+            count++;
+            break;
+        }
+        seen_frames.insert(current_frame_addr);
+
+        Frame *frame = Frame::read(current_frame_addr, &current_frame_addr);
+        if (frame == NULL)
+        {
+            stack->push_back(new Frame("INVALID"));
+            count++;
+            break;
+        }
+
+        stack->push_back(frame);
+        count++;
+    }
+
+    return count;
+}
+
+// ----------------------------------------------------------------------------
 static void
-unwind_python_stack(PyThreadState *tstate)
+unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     std::unordered_set<void *> seen_frames; // Used to detect cycles in the stack
 
@@ -68,82 +101,37 @@ unwind_python_stack(PyThreadState *tstate)
     if (copy_type(cframe_addr, cframe))
         // TODO: Invalid frame
         return;
-    _PyInterpreterFrame *iframe_addr = cframe.current_frame;
 
-    while (iframe_addr != NULL && python_stack.size() < MAX_FRAMES)
-    {
-        _PyInterpreterFrame iframe;
-
-        if (seen_frames.find((void *)iframe_addr) != seen_frames.end() || copy_type(iframe_addr, iframe))
-        {
-            python_stack.push_back(INVALID_FRAME);
-            break;
-        }
-        seen_frames.insert((void *)iframe_addr);
-
-        // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
-        // from the code object.
-        const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-        auto frame = Frame::get(iframe.f_code, lasti);
-
-        python_stack.push_back(frame);
-
-        if (frame == INVALID_FRAME)
-            break;
-
-        frame->is_entry = iframe.is_entry;
-
-        iframe_addr = iframe.previous;
-    }
-
+    PyObject *frame_addr = (PyObject *)cframe.current_frame;
 #else // Python < 3.11
-    PyFrameObject *frame_addr = tstate->frame;
-
-    // Unwind the stack from leaf to root and store it in a stack. This way we
-    // can print it from root to leaf.
-    while (frame_addr != NULL && python_stack.size() < MAX_FRAMES)
-    {
-        PyFrameObject py_frame;
-
-        if (seen_frames.find((void *)frame_addr) != seen_frames.end() || copy_type(frame_addr, py_frame))
-        {
-            python_stack.push_back(INVALID_FRAME);
-            break;
-        }
-        seen_frames.insert((void *)frame_addr);
-
-        Frame *frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
-        python_stack.push_back(frame);
-        if (frame == INVALID_FRAME)
-            break;
-
-        frame_addr = py_frame.f_back;
-    }
-
+    PyObject *frame_addr = (PyObject *)tstate->frame;
 #endif
+    unwind_frame(frame_addr, &stack);
 }
 
 // ----------------------------------------------------------------------------
 static void
-interleave_stacks()
+unwind_python_stack(PyThreadState *tstate)
+{
+    unwind_python_stack(tstate, python_stack);
+}
+
+// ----------------------------------------------------------------------------
+static void
+interleave_stacks(FrameStack *python_stack)
 {
     interleaved_stack.clear();
 
-    while (!native_stack.empty())
+    auto p = python_stack->rbegin();
+    // The last two frames are usually the signal trampoline and the signal
+    // handler. We skip them.
+    for (auto n = native_stack.rbegin(); n != native_stack.rend() - 2; ++n)
     {
-        Frame *native_frame = native_stack.back();
-        native_stack.pop_back();
-
-        if (native_stack.size() < 2)
-        {
-            // The last two frames are usually the signal trampoline and the
-            // signal handler. We skip them.
-            continue;
-        }
+        Frame *native_frame = *n;
 
         if (strstr(native_frame->name, "PyEval_EvalFrameDefault") != NULL)
         {
-            if (python_stack.empty())
+            if (p == python_stack->rend())
             {
                 // We expected a Python frame but we found none, so we report
                 // the native frame instead.
@@ -157,23 +145,18 @@ interleave_stacks()
                 // function that calls the Python code.
 #if PY_VERSION_HEX >= 0x030b0000
                 int cframe_count = 0;
-                while (!python_stack.empty())
+                while (p != python_stack->rend())
                 {
                     // The Python stack will start with an entry frame at the top.
                     // We stop popping at the next entry frame.
-                    Frame *python_frame = python_stack.back();
-                    cframe_count += python_frame->is_entry;
+                    cframe_count += (*p)->is_entry;
                     if (cframe_count >= 2)
                         break;
 
-                    python_stack.pop_back();
-
-                    interleaved_stack.push_front(python_frame);
+                    interleaved_stack.push_front(*p++);
                 }
 #else
-                Frame *python_frame = python_stack.back();
-                python_stack.pop_back();
-                interleaved_stack.push_front(python_frame);
+                interleaved_stack.push_front(*p++);
 #endif
             }
         }
@@ -181,12 +164,17 @@ interleave_stacks()
             interleaved_stack.push_front(native_frame);
     }
 
-    if (!python_stack.empty())
+    if (p != python_stack->rend())
     {
         std::cerr << "Python stack not empty after interleaving!" << std::endl;
-        Frame *python_frame = python_stack.back();
-        python_stack.pop_back();
-
-        interleaved_stack.push_front(python_frame);
+        while (p != python_stack->rend())
+            interleaved_stack.push_front(*p++);
     }
+}
+
+// ----------------------------------------------------------------------------
+static void
+interleave_stacks()
+{
+    interleave_stacks(&python_stack);
 }

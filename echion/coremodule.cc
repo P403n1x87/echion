@@ -22,11 +22,13 @@
 
 #include <echion/config.h>
 #include <echion/frame.h>
+#include <echion/mirrors.h>
 #include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
-#include <echion/threadinfo.h>
+#include <echion/tasks.h>
+#include <echion/threads.h>
 #include <echion/timing.h>
 #include <echion/vm.h>
 
@@ -44,7 +46,7 @@ get_native_id()
 }
 
 // ----------------------------------------------------------------------------
-static void unwind_thread(PyThreadState *tstate)
+static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
 {
     if (native)
     {
@@ -55,6 +57,7 @@ static void unwind_thread(PyThreadState *tstate)
         // Pass the current thread state to the signal handler. This is needed
         // to unwind the Python stack from within it.
         current_tstate = tstate;
+        current_thread_info = info;
 
         // Send a signal to the thread to unwind its native stack.
         pthread_kill((pthread_t)tstate->thread_id, SIGPROF);
@@ -66,8 +69,9 @@ static void unwind_thread(PyThreadState *tstate)
     }
     else
     {
-        // Unwind just the Python stack
         unwind_python_stack(tstate);
+        if (info->asyncio_loop != 0)
+            unwind_tasks(tstate, info);
     }
 }
 
@@ -148,22 +152,48 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     if (thread_name == NULL)
         return;
 
-    // Print the PID and thread name
-    output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+    unwind_thread(tstate, info);
 
-    unwind_thread(tstate);
-
-    // Print the stack
-    if (native)
+    // Asyncio tasks
+    if (current_tasks.empty())
     {
-        interleave_stacks();
-        render(interleaved_stack, output);
+        // Print the PID and thread name
+        output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+
+        // Print the stack
+        if (native)
+        {
+            interleave_stacks();
+            render(interleaved_stack, output);
+        }
+        else
+            render(python_stack, output);
+
+        // Print the metric
+        output << " " << delta << std::endl;
     }
     else
-        render(python_stack, output);
+    {
+        for (auto task_pair : current_tasks)
+        {
+            output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
 
-    // Print the metric
-    output << " " << delta << std::endl;
+            FrameStack *task_stack = task_pair->second;
+            if (native)
+            {
+                // NOTE: These stacks might be non-sensical, especially with
+                // Python < 3.11.
+                interleave_stacks(task_stack);
+                render(interleaved_stack, output);
+            }
+            else
+                render(*task_stack, output);
+
+            output << " " << delta << std::endl;
+        }
+        // TODO: Memory leak?
+        current_tasks.clear();
+    }
 }
 
 static void where_listener()
@@ -180,10 +210,11 @@ static void where_listener()
                   << "🐴 Echion reporting for duty" << std::endl
                   << std::endl;
 
+        // TODO: Add support for tasks
         for_each_thread(
             [](PyThreadState *tstate, ThreadInfo *info) -> void
             {
-                unwind_thread(tstate);
+                unwind_thread(tstate, info);
                 if (native)
                 {
                     interleave_stacks();
@@ -287,6 +318,8 @@ static void _init()
 static void _start()
 {
     init_frame_cache(MAX_FRAMES * (1 + native));
+
+    install_signals();
 }
 
 // ----------------------------------------------------------------------------
@@ -467,6 +500,57 @@ init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
+static PyObject *
+track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    uintptr_t thread_id; // map key
+    PyObject *loop;
+
+    if (!PyArg_ParseTuple(args, "lO", &thread_id, &loop))
+        return NULL;
+
+    {
+        std::lock_guard<std::mutex> guard(thread_info_map_lock);
+
+        if (thread_info_map.find(thread_id) != thread_info_map.end())
+        {
+            ThreadInfo *info = thread_info_map[thread_id];
+            info->asyncio_loop = loop != Py_None ? (uintptr_t)loop : 0;
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    if (!PyArg_ParseTuple(args, "OO", &asyncio_current_tasks, &asyncio_all_tasks))
+        return NULL;
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+link_tasks(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    PyObject *parent, *child;
+
+    if (!PyArg_ParseTuple(args, "OO", &parent, &child))
+        return NULL;
+
+    {
+        std::lock_guard<std::mutex> guard(task_link_map_lock);
+
+        task_link_map[child] = parent;
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
 static PyMethodDef echion_core_methods[] = {
     {"start", start, METH_NOARGS, "Start the stack sampler"},
     {"start_async", start_async, METH_NOARGS, "Start the stack sampler asynchronously"},
@@ -474,6 +558,10 @@ static PyMethodDef echion_core_methods[] = {
     {"track_thread", track_thread, METH_VARARGS, "Map the name of a thread with its identifier"},
     {"untrack_thread", untrack_thread, METH_VARARGS, "Untrack a terminated thread"},
     {"init", init, METH_NOARGS, "Initialize the stack sampler (usually after a fork)"},
+    // Task support
+    {"track_asyncio_loop", track_asyncio_loop, METH_VARARGS, "Map the name of a task with its identifier"},
+    {"init_asyncio", init_asyncio, METH_VARARGS, "Enter a task"},
+    {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},

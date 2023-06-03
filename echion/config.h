@@ -11,8 +11,6 @@
 
 #include <signal.h>
 
-#include <echion/signals.h>
-
 // Sampling interval
 static unsigned int interval = 1000;
 
@@ -64,8 +62,6 @@ set_native(PyObject *Py_UNUSED(m), PyObject *args)
 
     native = new_native;
 
-    signal(SIGPROF, native ? sigprof_handler : SIG_DFL);
-
     Py_RETURN_NONE;
 }
 
@@ -78,8 +74,6 @@ set_where(PyObject *Py_UNUSED(m), PyObject *args)
         return NULL;
 
     where = value;
-
-    signal(SIGQUIT, where ? sigquit_handler : SIG_DFL);
 
     Py_RETURN_NONE;
 }
