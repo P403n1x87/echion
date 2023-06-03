@@ -58,7 +58,7 @@ like the [Austin VS Code][austin-vscode] extension.
 
 Supported platforms: Linux (amd64), Darwin (amd64)
 
-Supported interpreters: CPython 3.7-3.11
+Supported interpreters: CPython 3.7-3.12
 
 
 ## Why Echion?

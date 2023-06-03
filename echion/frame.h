@@ -215,5 +215,10 @@ Frame::~Frame()
 
 bool Frame::is_valid()
 {
+#if PY_VERSION_HEX >= 0x030c0000
+    // Shim frames might not have location information
+    return this->filename != NULL && this->name != NULL;
+#else
     return this->filename != NULL && this->name != NULL && this->location.line != 0;
+#endif
 }
