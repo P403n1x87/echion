@@ -32,13 +32,11 @@ public:
     void update_cpu_time();
     bool is_running();
 
-    ~ThreadInfo();
+    ~ThreadInfo()
+    {
+        delete[] name;
+    };
 };
-
-ThreadInfo::~ThreadInfo()
-{
-    delete[] name;
-}
 
 void ThreadInfo::update_cpu_time()
 {

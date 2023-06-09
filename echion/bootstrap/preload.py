@@ -55,6 +55,7 @@ atexit.register(echion.stop)
 # Configure Echion
 echion.set_interval(int(os.getenv("ECHION_INTERVAL", 1000)))
 echion.set_cpu(int(os.getenv("ECHION_CPU", 0)))
+echion.set_native(int(os.getenv("ECHION_NATIVE", 0)))
 
 # Start sampling
 start_echion()

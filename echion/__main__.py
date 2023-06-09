@@ -32,6 +32,12 @@ def main():
         action="store_true",
     )
     parser.add_argument(
+        "-n",
+        "--native",
+        help="Sample native stacks",
+        action="store_true",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         help="output location (can use %%(pid) to insert the process ID)",
@@ -71,6 +77,7 @@ def main():
 
     env["ECHION_INTERVAL"] = str(args.interval)
     env["ECHION_CPU"] = str(int(bool(args.cpu)))
+    env["ECHION_NATIVE"] = str(int(bool(args.native)))
     env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
     env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
 

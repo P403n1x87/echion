@@ -12,6 +12,12 @@
 #endif
 
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+
+#include <cxxabi.h>
+#include <libunwind.h>
 
 #include <echion/strings.h>
 #include <echion/vm.h>
@@ -19,18 +25,27 @@
 class Frame
 {
 public:
-    const char *filename;
-    const char *name;
+    const char *filename = NULL;
+    const char *name = NULL;
     struct _location
     {
-        int line;
-        int line_end;
-        int column;
-        int column_end;
+        int line = 0;
+        int line_end = 0;
+        int column = 0;
+        int column_end = 0;
     } location;
+#if PY_VERSION_HEX >= 0x030b0000
+    bool is_entry = false;
+#endif
+
+    void render(std::ostream &stream)
+    {
+        stream << ";" << this->filename << ":" << this->name << ":" << this->location.line;
+    }
 
     Frame(PyCodeObject &, int);
     Frame(const char *);
+    Frame(unw_word_t, const char *, unw_word_t);
     ~Frame();
 
     bool is_valid();
@@ -38,6 +53,7 @@ public:
     static uintptr_t key(PyCodeObject &, int);
 
 private:
+    bool is_special = false;
     int infer_location(PyCodeObject *, int);
 };
 
@@ -193,6 +209,8 @@ Frame::Frame(const char *name)
     this->location.line_end = 0;
     this->location.column = 0;
     this->location.column_end = 0;
+
+    this->is_special = true;
 }
 
 // ----------------------------------------------------------------------------
@@ -207,8 +225,39 @@ Frame::Frame(PyCodeObject &code, int lasti)
     this->infer_location(&code, lasti);
 }
 
+Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
+{
+    // convert pc to char*
+    char *pc_str = new char[32];
+    std::snprintf(pc_str, 32, "native@%lx", (void *)pc);
+    this->filename = pc_str;
+
+    // Try to demangle C++ names
+    char *demangled = NULL;
+    if (name[0] == '_' && name[1] == 'Z')
+    {
+        int status;
+        demangled = abi::__cxa_demangle(name, NULL, NULL, &status);
+        if (status == 0)
+            name = demangled;
+    }
+
+    // Make a copy
+    char *_name = new char[strlen(name) + 1];
+    std::strcpy(_name, name);
+    this->name = _name;
+
+    if (demangled != NULL)
+        std::free(demangled);
+
+    this->location.line = offset;
+}
+
 Frame::~Frame()
 {
+    if (this->is_special)
+        return;
+
     delete[] this->filename;
     delete[] this->name;
 }

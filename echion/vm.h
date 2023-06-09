@@ -5,8 +5,6 @@
 #pragma once
 
 #if defined PL_LINUX
-#include <errno.h>
-#include <stdio.h>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <unistd.h>

@@ -8,29 +8,23 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
-#include <stack>
 #include <thread>
 #include <unordered_set>
 
 #include <fcntl.h>
 #include <sched.h>
-#include <stdio.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <echion/config.h>
 #include <echion/frame.h>
+#include <echion/render.h>
+#include <echion/stacks.h>
 #include <echion/threadinfo.h>
 #include <echion/timing.h>
 #include <echion/vm.h>
-
-// ----------------------------------------------------------------------------
-// Configuration
-// ----------------------------------------------------------------------------
-
-static unsigned int interval = 1000;
-static int cpu = 0;
-static std::ofstream output;
 
 // ----------------------------------------------------------------------------
 
@@ -54,7 +48,20 @@ get_native_id()
 }
 
 // ----------------------------------------------------------------------------
-void thread__unwind(PyThreadState *tstate, microsecond_t delta)
+
+static std::mutex sigprof_handler_lock;
+
+void sigprof_handler(int signum)
+{
+    unwind_native_stack();
+    unwind_python_stack(current_tstate);
+    // std::cout << "Thread " << get_native_id() << " has " << native_stack.size() << " frames" << std::endl;
+
+    sigprof_handler_lock.unlock();
+}
+
+// ----------------------------------------------------------------------------
+static void thread__unwind(PyThreadState *tstate, microsecond_t delta)
 {
     unsigned long native_id = 0;
     const char *thread_name = NULL;
@@ -66,6 +73,30 @@ void thread__unwind(PyThreadState *tstate, microsecond_t delta)
             return;
 
         ThreadInfo *info = thread_info_map[tstate->thread_id];
+
+        if (native)
+        {
+            // Lock on the signal handler. Will get unlocked once the handler is
+            // done unwinding the native stack.
+            const std::lock_guard<std::mutex> guard(sigprof_handler_lock);
+
+            // Pass the current thread state to the signal handler. This is needed
+            // to unwind the Python stack from within it.
+            current_tstate = tstate;
+
+            // Send a signal to the thread to unwind its native stack.
+            pthread_kill((pthread_t)info->thread_id, SIGPROF);
+
+            // Lock to wait for the signal handler to finish unwinding the native
+            // stack. Release the lock immediately after so that it is available
+            // for the next thread.
+            sigprof_handler_lock.lock();
+        }
+        else
+        {
+            // Unwind just the Python stack
+            unwind_python_stack(tstate);
+        }
 
         native_id = info->native_id;
         if (native_id == 0)
@@ -94,81 +125,17 @@ void thread__unwind(PyThreadState *tstate, microsecond_t delta)
     // Print the PID and thread name
     output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
 
-    std::stack<Frame *> frames;
-    std::unordered_set<void *> seen_frames; // Used to detect cycles in the stack
-
-#if PY_VERSION_HEX >= 0x030b0000
-    _PyCFrame cframe;
-    _PyCFrame *cframe_addr = tstate->cframe;
-    if (copy_type(cframe_addr, cframe))
-        // TODO: Invalid frame
-        return;
-    _PyInterpreterFrame *iframe_addr = cframe.current_frame;
-
-    while (iframe_addr != NULL)
-    {
-        _PyInterpreterFrame iframe;
-        PyCodeObject code;
-
-        if (seen_frames.find((void *)iframe_addr) != seen_frames.end() || copy_type(iframe_addr, iframe) || copy_type(iframe.f_code, code))
-        {
-            frames.push(new Frame("INVALID"));
-            break;
-        }
-
-        // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
-        // from the code object.
-        const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-        Frame *frame = new Frame(code, lasti);
-        if (!frame->is_valid())
-        {
-            frames.push(new Frame("INVALID"));
-            break;
-        }
-        frames.push(frame);
-
-        seen_frames.insert((void *)iframe_addr);
-        iframe_addr = iframe.previous;
-    }
-
-#else // Python < 3.11
-    PyFrameObject *frame_addr = tstate->frame;
-
-    // Unwind the stack from leaf to root and store it in a stack. This way we
-    // can print it from root to leaf.
-    while (frame_addr != NULL)
-    {
-        PyFrameObject py_frame;
-        PyCodeObject code;
-
-        if (seen_frames.find((void *)frame_addr) != seen_frames.end() || copy_type(frame_addr, py_frame) || copy_type(py_frame.f_code, code))
-        {
-            frames.push(new Frame("INVALID"));
-            break;
-        }
-
-        Frame *frame = new Frame(code, py_frame.f_lasti);
-        if (!frame->is_valid())
-        {
-            frames.push(new Frame("INVALID"));
-            break;
-        }
-        frames.push(frame);
-
-        seen_frames.insert((void *)frame_addr);
-        frame_addr = py_frame.f_back;
-    }
-
-#endif
+    // TODO: Make this conditional on the configuration
+    // unwind_python_stack(tstate);
 
     // Print the stack
-    while (!frames.empty())
+    if (native)
     {
-        auto frame = frames.top();
-        frames.pop();
-
-        output << ";" << frame->filename << ":" << frame->name << ":" << frame->location.line;
+        interleave_stacks();
+        render(interleaved_stack, output);
     }
+    else
+        render(python_stack, output);
 
     // Print the metric
     output << " " << delta << std::endl;
@@ -198,9 +165,19 @@ static void sampler()
     }
 
     output.open(std::getenv("ECHION_OUTPUT"));
+    if (!output.is_open())
+    {
+        std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
+        return;
+    }
 
     output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
     output << "# interval: " << interval << std::endl;
+
+    // Install the signal handler if we are sampling the native stacks.
+    if (native)
+        // We use SIGPROF to sample the stacks within each thread.
+        signal(SIGPROF, sigprof_handler);
 
     while (running)
     {
@@ -351,7 +328,7 @@ track_thread(PyObject *m, PyObject *args)
             // Thread is already tracked so we update its info
             info = thread_info_map[thread_id];
             if (info->name != NULL)
-                free((void *)info->name);
+                std::free((void *)info->name);
         }
         else
         {
@@ -400,32 +377,6 @@ untrack_thread(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-set_interval(PyObject *m, PyObject *args)
-{
-    unsigned int new_interval;
-    if (!PyArg_ParseTuple(args, "I", &new_interval))
-        return NULL;
-
-    interval = new_interval;
-
-    Py_RETURN_NONE;
-}
-
-// ----------------------------------------------------------------------------
-static PyObject *
-set_cpu(PyObject *m, PyObject *args)
-{
-    int new_cpu;
-    if (!PyArg_ParseTuple(args, "p", &new_cpu))
-        return NULL;
-
-    cpu = new_cpu;
-
-    Py_RETURN_NONE;
-}
-
-// ----------------------------------------------------------------------------
-static PyObject *
 init(PyObject *m, PyObject *args)
 {
     _init();
@@ -444,6 +395,7 @@ static PyMethodDef echion_core_methods[] = {
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
+    {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 

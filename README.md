@@ -11,7 +11,8 @@
 
 Echion is an in-process CPython frame stack sampler. It can achieve
 near-zero-overhead, similar to [Austin][austin], by sampling the frame stack of
-each thread without holding the GIL.
+each thread without holding the GIL. Native stacks can be sampled too, but the
+overhead is higher.
 
 
 ## Installation
@@ -30,7 +31,7 @@ Compilation requires a C++ compiler.
 The following is the output of the `echion --help` command.
 
 ```
-usage: echion [-h] [-i INTERVAL] [-c] [-v] [-V] ...
+usage: echion [-h] [-i INTERVAL] [-c] [-n] [-o OUTPUT] [-s] [-v] [-V] ...
 
 In-process CPython frame stack sampler
 
@@ -42,6 +43,7 @@ options:
   -i INTERVAL, --interval INTERVAL
                         sampling interval in microseconds
   -c, --cpu             sample stacks on CPU only
+  -n, --native          Sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
   -s, --stealth         stealth mode (sampler thread is not accounted for)
