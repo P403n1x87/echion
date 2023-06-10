@@ -31,7 +31,7 @@ Compilation requires a C++ compiler.
 The following is the output of the `echion --help` command.
 
 ```
-usage: echion [-h] [-i INTERVAL] [-c] [-n] [-o OUTPUT] [-s] [-v] [-V] ...
+usage: echion [-h] [-i INTERVAL] [-c] [-n] [-o OUTPUT] [-s] [-w] [-v] [-V] ...
 
 In-process CPython frame stack sampler
 
@@ -43,10 +43,11 @@ options:
   -i INTERVAL, --interval INTERVAL
                         sampling interval in microseconds
   -c, --cpu             sample stacks on CPU only
-  -n, --native          Sample native stacks
+  -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
   -s, --stealth         stealth mode (sampler thread is not accounted for)
+  -w, --where           where mode: display thread stacks on SIGQUIT (usually CTRL+\)
   -v, --verbose         verbose logging
   -V, --version         show program's version number and exit
 ```
@@ -61,6 +62,17 @@ like the [Austin VS Code][austin-vscode] extension.
 Supported platforms: Linux (amd64), Darwin (amd64)
 
 Supported interpreters: CPython 3.7-3.12
+
+
+## Where mode
+
+The where mode is similar to [Austin][austin]'s where mode. Since Echion cannot
+attach a running process, it instead relies on the user to send a SIGQUIT to a
+process that has been started with the `echion` wrapper command. On most
+terminals, this is done by pressing <kbd>CTRL</kbd>+<kbd>\\</kbd>. This will
+cause Echion to dump the stacks of all running threads to standard error. This
+is useful for debugging deadlocks and other issues that may occur in a running
+process.
 
 
 ## Why Echion?

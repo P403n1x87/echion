@@ -34,7 +34,7 @@ def main():
     parser.add_argument(
         "-n",
         "--native",
-        help="Sample native stacks",
+        help="sample native stacks",
         action="store_true",
     )
     parser.add_argument(
@@ -48,6 +48,12 @@ def main():
         "-s",
         "--stealth",
         help="stealth mode (sampler thread is not accounted for)",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-w",
+        "--where",
+        help="where mode: display thread stacks on SIGQUIT (usually CTRL+\\)",
         action="store_true",
     )
     parser.add_argument(
@@ -80,6 +86,7 @@ def main():
     env["ECHION_NATIVE"] = str(int(bool(args.native)))
     env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
     env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
+    env["ECHION_WHERE"] = str(int(bool(args.where)))
 
     python_path = os.getenv("PYTHONPATH")
     env["PYTHONPATH"] = (

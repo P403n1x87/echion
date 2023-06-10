@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+#define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 #include <echion/frame.h>
@@ -127,6 +128,14 @@ interleave_stacks()
     {
         Frame *native_frame = native_stack.top();
         native_stack.pop();
+
+        if (native_stack.size() < 2)
+        {
+            // The last two frames are usually the signal trampoline and the
+            // signal handler. We skip them.
+            delete native_frame;
+            continue;
+        }
 
         if (strstr(native_frame->name, "PyEval_EvalFrameDefault") != NULL)
         {

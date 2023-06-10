@@ -5,7 +5,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include <condition_variable>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <mutex>
 #include <thread>
@@ -21,18 +23,12 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/render.h>
+#include <echion/signals.h>
 #include <echion/stacks.h>
+#include <echion/state.h>
 #include <echion/threadinfo.h>
 #include <echion/timing.h>
 #include <echion/vm.h>
-
-// ----------------------------------------------------------------------------
-
-static PyThreadState *main_thread = NULL;
-
-static std::thread *sampler_thread = nullptr;
-
-static int running = 0;
 
 // ----------------------------------------------------------------------------
 static inline unsigned long
@@ -48,85 +44,114 @@ get_native_id()
 }
 
 // ----------------------------------------------------------------------------
-
-static std::mutex sigprof_handler_lock;
-
-void sigprof_handler(int signum)
+static void unwind_thread(PyThreadState *tstate)
 {
-    unwind_native_stack();
-    unwind_python_stack(current_tstate);
-    // std::cout << "Thread " << get_native_id() << " has " << native_stack.size() << " frames" << std::endl;
+    if (native)
+    {
+        // Lock on the signal handler. Will get unlocked once the handler is
+        // done unwinding the native stack.
+        const std::lock_guard<std::mutex> guard(sigprof_handler_lock);
 
-    sigprof_handler_lock.unlock();
+        // Pass the current thread state to the signal handler. This is needed
+        // to unwind the Python stack from within it.
+        current_tstate = tstate;
+
+        // Send a signal to the thread to unwind its native stack.
+        pthread_kill((pthread_t)tstate->thread_id, SIGPROF);
+
+        // Lock to wait for the signal handler to finish unwinding the native
+        // stack. Release the lock immediately after so that it is available
+        // for the next thread.
+        sigprof_handler_lock.lock();
+    }
+    else
+    {
+        // Unwind just the Python stack
+        unwind_python_stack(tstate);
+    }
 }
 
 // ----------------------------------------------------------------------------
-static void thread__unwind(PyThreadState *tstate, microsecond_t delta)
+static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> callback)
+{
+    std::unordered_set<PyThreadState *> threads;
+    std::unordered_set<PyThreadState *> seen_threads;
+
+    threads.clear();
+    seen_threads.clear();
+
+    // Start from the main thread
+    threads.insert(main_thread);
+
+    while (!threads.empty())
+    {
+        // Pop the next thread
+        PyThreadState *tstate_addr = *threads.begin();
+        threads.erase(threads.begin());
+
+        // Mark the thread as seen
+        seen_threads.insert(tstate_addr);
+
+        // Since threads can be created and destroyed at any time, we make
+        // a copy of the structure before trying to read its fields.
+        PyThreadState tstate;
+        if (copy_type(tstate_addr, tstate))
+            // We failed to copy the thread so we skip it.
+            continue;
+
+        {
+            const std::lock_guard<std::mutex> guard(thread_info_map_lock);
+
+            if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
+                return;
+
+            ThreadInfo *info = thread_info_map[tstate.thread_id];
+
+            // Call back with the thread state and thread info.
+            callback(&tstate, info);
+        }
+
+        // Enqueue the unseen threads that we can reach from this thread.
+        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
+            threads.insert(tstate.next);
+        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
+            threads.insert(tstate.prev);
+    }
+}
+
+// ----------------------------------------------------------------------------
+static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t delta)
 {
     unsigned long native_id = 0;
     const char *thread_name = NULL;
 
+    native_id = info->native_id;
+    if (native_id == 0)
+        // If we fail to retrieve the native thread ID, then quite likely the
+        // pthread structure has been destroyed and we should stop trying to
+        // resolve any more memory addresses.
+        return;
+
+    if (cpu)
     {
-        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
+        microsecond_t previous_cpu_time = info->cpu_time;
+        info->update_cpu_time();
 
-        if (thread_info_map.find(tstate->thread_id) == thread_info_map.end())
+        if (!info->is_running())
+            // If the thread is not running, then we skip it.
             return;
 
-        ThreadInfo *info = thread_info_map[tstate->thread_id];
-
-        if (native)
-        {
-            // Lock on the signal handler. Will get unlocked once the handler is
-            // done unwinding the native stack.
-            const std::lock_guard<std::mutex> guard(sigprof_handler_lock);
-
-            // Pass the current thread state to the signal handler. This is needed
-            // to unwind the Python stack from within it.
-            current_tstate = tstate;
-
-            // Send a signal to the thread to unwind its native stack.
-            pthread_kill((pthread_t)info->thread_id, SIGPROF);
-
-            // Lock to wait for the signal handler to finish unwinding the native
-            // stack. Release the lock immediately after so that it is available
-            // for the next thread.
-            sigprof_handler_lock.lock();
-        }
-        else
-        {
-            // Unwind just the Python stack
-            unwind_python_stack(tstate);
-        }
-
-        native_id = info->native_id;
-        if (native_id == 0)
-            // If we fail to retrieve the native thread ID, then quite likely the
-            // pthread structure has been destroyed and we should stop trying to
-            // resolve any more memory addresses.
-            return;
-
-        if (cpu)
-        {
-            microsecond_t previous_cpu_time = info->cpu_time;
-            info->update_cpu_time();
-
-            if (!info->is_running())
-                // If the thread is not running, then we skip it.
-                return;
-
-            delta = info->cpu_time - previous_cpu_time;
-        }
-
-        thread_name = info->name;
-        if (thread_name == NULL)
-            return;
+        delta = info->cpu_time - previous_cpu_time;
     }
+
+    thread_name = info->name;
+    if (thread_name == NULL)
+        return;
 
     // Print the PID and thread name
     output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
 
-    // TODO: Make this conditional on the configuration
-    // unwind_python_stack(tstate);
+    unwind_thread(tstate);
 
     // Print the stack
     if (native)
@@ -141,15 +166,67 @@ static void thread__unwind(PyThreadState *tstate, microsecond_t delta)
     output << " " << delta << std::endl;
 }
 
+static void where_listener()
+{
+    for (;;)
+    {
+        std::unique_lock<std::mutex> lock(where_lock);
+        where_cv.wait(lock);
+
+        if (!running)
+            break;
+
+        std::cerr << "\r"
+                  << "🐴 Echion reporting for duty" << std::endl
+                  << std::endl;
+
+        for_each_thread(
+            [](PyThreadState *tstate, ThreadInfo *info) -> void
+            {
+                unwind_thread(tstate);
+                if (native)
+                {
+                    interleave_stacks();
+                    render_where(info, interleaved_stack, std::cerr);
+                }
+                else
+                    render_where(info, python_stack, std::cerr);
+                std::cout << std::endl;
+            });
+    }
+}
+
+// ----------------------------------------------------------------------------
+static void setup_where()
+{
+    running = 1;
+
+    where_thread = new std::thread(where_listener);
+}
+
+static void teardown_where()
+{
+    if (where_thread != nullptr)
+    {
+        {
+            std::lock_guard<std::mutex> lock(where_lock);
+
+            running = 0;
+            where_cv.notify_one();
+        }
+
+        where_thread->join();
+
+        where_thread = nullptr;
+    }
+}
+
 // ----------------------------------------------------------------------------
 static void sampler()
 {
     // This thread can run without the GIL on the basis that these assumptions
     // hold:
     // 1. The main thread lives as long as the process itself.
-
-    std::unordered_set<PyThreadState *> threads;
-    std::unordered_set<PyThreadState *> seen_threads;
 
     last_time = gettime();
 
@@ -185,37 +262,9 @@ static void sampler()
         microsecond_t end_time = now + interval;
         microsecond_t wall_time = now - last_time;
 
-        threads.clear();
-        seen_threads.clear();
-
-        // Start from the main thread
-        threads.insert(main_thread);
-
-        while (!threads.empty())
-        {
-            // Pop the next thread
-            PyThreadState *tstate_addr = *threads.begin();
-            threads.erase(threads.begin());
-
-            // Mark the thread as seen
-            seen_threads.insert(tstate_addr);
-
-            // Since threads can be created and destroyed at any time, we make
-            // a copy of the structure before trying to read its fields.
-            PyThreadState tstate;
-            if (copy_type(tstate_addr, tstate))
-                // We failed to copy the thread so we skip it.
-                continue;
-
-            // Unwind the thread stack.
-            thread__unwind(&tstate, wall_time);
-
-            // Enqueue the unseen threads that we can reach from this thread.
-            if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
-                threads.insert(tstate.next);
-            if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
-                threads.insert(tstate.prev);
-        }
+        for_each_thread(
+            [=](PyThreadState *tstate, ThreadInfo *info)
+            { sample_thread(tstate, info, wall_time); });
 
         while (gettime() < end_time)
             sched_yield();
@@ -236,8 +285,16 @@ static void _init()
 
 // ----------------------------------------------------------------------------
 static PyObject *
-start_async(PyObject *m, PyObject *args)
+start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
+    if (where)
+    {
+        // In where mode we don't sample but we install the SIGQUIT handler
+        setup_where();
+
+        Py_RETURN_NONE;
+    }
+
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -254,8 +311,16 @@ start_async(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-start(PyObject *m, PyObject *args)
+start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
+    if (where)
+    {
+        // In where mode we don't sample but we install the SIGQUIT handler
+        setup_where();
+
+        Py_RETURN_NONE;
+    }
+
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -273,9 +338,12 @@ start(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-stop(PyObject *m, PyObject *args)
+stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     running = 0;
+
+    if (where)
+        teardown_where();
 
     // Stop the sampling thread
     if (sampler_thread != nullptr)
@@ -301,12 +369,14 @@ stop(PyObject *m, PyObject *args)
     mach_port_deallocate(mach_task_self(), cclock);
 #endif
 
+    restore_signals();
+
     Py_RETURN_NONE;
 }
 
 // ----------------------------------------------------------------------------
 static PyObject *
-track_thread(PyObject *m, PyObject *args)
+track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 {
     uintptr_t thread_id; // map key
     const char *thread_name;
@@ -352,7 +422,7 @@ track_thread(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-untrack_thread(PyObject *m, PyObject *args)
+untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
 {
     unsigned long thread_id;
     if (!PyArg_ParseTuple(args, "l", &thread_id))
@@ -377,7 +447,7 @@ untrack_thread(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-init(PyObject *m, PyObject *args)
+init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     _init();
 
@@ -396,6 +466,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
+    {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 

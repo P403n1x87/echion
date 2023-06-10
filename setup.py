@@ -6,11 +6,19 @@ from pathlib import Path
 import sys
 from setuptools import find_packages, setup, Extension
 
+PLATFORM = sys.platform.lower()
+
+LDADD = {
+    "linux": ["-l:libunwind.a", "-l:liblzma.a"],
+}
+
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
     include_dirs=["."],
-    define_macros=[(f"PL_{sys.platform.upper()}", None)],
+    define_macros=[(f"PL_{PLATFORM.upper()}", None)],
+    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"],
+    extra_link_args=LDADD.get(PLATFORM, []),
 )
 
 setup(

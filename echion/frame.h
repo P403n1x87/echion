@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include <cxxabi.h>
+#define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 #include <echion/strings.h>
@@ -41,6 +42,20 @@ public:
     void render(std::ostream &stream)
     {
         stream << ";" << this->filename << ":" << this->name << ":" << this->location.line;
+    }
+
+    void render_where(std::ostream &stream)
+    {
+        if (std::strstr(this->filename, "native@"))
+            stream << "          \033[38;5;248;1m" << this->name
+                   << "\033[0m \033[38;5;246m(" << this->filename
+                   << "\033[0m:\033[38;5;246m" << this->location.line
+                   << ")\033[0m" << std::endl;
+        else
+            stream << "          \033[33;1m" << this->name
+                   << "\033[0m (\033[36m" << this->filename
+                   << "\033[0m:\033[32m" << this->location.line
+                   << "\033[0m)" << std::endl;
     }
 
     Frame(PyCodeObject &, int);
@@ -229,7 +244,7 @@ Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
 {
     // convert pc to char*
     char *pc_str = new char[32];
-    std::snprintf(pc_str, 32, "native@%lx", (void *)pc);
+    std::snprintf(pc_str, 32, "native@%p", (void *)pc);
     this->filename = pc_str;
 
     // Try to demangle C++ names

@@ -59,7 +59,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
 
 #elif defined PL_DARWIN
     kern_return_t kr = mach_vm_read_overwrite(
-        mach_task_self(),
+        proc_ref,
         (mach_vm_address_t)addr,
         len,
         (mach_vm_address_t)buf,

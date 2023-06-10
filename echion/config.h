@@ -9,6 +9,10 @@
 
 #include <iostream>
 
+#include <signal.h>
+
+#include <echion/signals.h>
+
 // Sampling interval
 static unsigned int interval = 1000;
 
@@ -21,9 +25,12 @@ static std::ofstream output;
 // Native stack sampling
 static int native = 0;
 
+// Where mode
+static int where = 0;
+
 // ----------------------------------------------------------------------------
 static PyObject *
-set_interval(PyObject *m, PyObject *args)
+set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 {
     unsigned int new_interval;
     if (!PyArg_ParseTuple(args, "I", &new_interval))
@@ -36,7 +43,7 @@ set_interval(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-set_cpu(PyObject *m, PyObject *args)
+set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
 {
     int new_cpu;
     if (!PyArg_ParseTuple(args, "p", &new_cpu))
@@ -49,13 +56,30 @@ set_cpu(PyObject *m, PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyObject *
-set_native(PyObject *m, PyObject *args)
+set_native(PyObject *Py_UNUSED(m), PyObject *args)
 {
     int new_native;
     if (!PyArg_ParseTuple(args, "p", &new_native))
         return NULL;
 
     native = new_native;
+
+    signal(SIGPROF, native ? sigprof_handler : SIG_DFL);
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+set_where(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    int value;
+    if (!PyArg_ParseTuple(args, "p", &value))
+        return NULL;
+
+    where = value;
+
+    signal(SIGQUIT, where ? sigquit_handler : SIG_DFL);
 
     Py_RETURN_NONE;
 }
