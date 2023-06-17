@@ -12,12 +12,18 @@ LDADD = {
     "linux": ["-l:libunwind.a", "-l:liblzma.a"],
 }
 
+# add option to colorize compiler output
+
+COLORS = [
+    "-fdiagnostics-color=always" if PLATFORM == "linux" else "-fcolor-diagnostics"
+]
+
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
-    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"],
+    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
 )
 
