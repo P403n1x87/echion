@@ -284,9 +284,17 @@ static void _init()
 }
 
 // ----------------------------------------------------------------------------
+static void _start()
+{
+    init_frame_cache(MAX_FRAMES * (1 + native));
+}
+
+// ----------------------------------------------------------------------------
 static PyObject *
 start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
+    _start();
+
     if (where)
     {
         // In where mode we don't sample but we install the SIGQUIT handler
@@ -313,6 +321,8 @@ start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 static PyObject *
 start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
+    _start();
+
     if (where)
     {
         // In where mode we don't sample but we install the SIGQUIT handler
@@ -370,6 +380,8 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 #endif
 
     restore_signals();
+
+    destroy_frame_cache();
 
     Py_RETURN_NONE;
 }

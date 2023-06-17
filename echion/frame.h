@@ -20,8 +20,11 @@
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
+#include <echion/cache.h>
 #include <echion/strings.h>
 #include <echion/vm.h>
+
+#define MOJO_INT32 ((uintptr_t)(1 << (6 + 7 * 3)) - 1)
 
 class Frame
 {
@@ -58,16 +61,21 @@ public:
                    << "\033[0m)" << std::endl;
     }
 
-    Frame(PyCodeObject &, int);
     Frame(const char *);
-    Frame(unw_word_t, const char *, unw_word_t);
     ~Frame();
 
     bool is_valid();
 
-    static uintptr_t key(PyCodeObject &, int);
+    static Frame *get(PyCodeObject *code, int lasti);
+    static Frame *get(unw_word_t pc, const char *name, unw_word_t offset);
 
 private:
+    Frame(PyCodeObject *, int);
+    Frame(unw_word_t, const char *, unw_word_t);
+    static inline uintptr_t key(PyCodeObject *code, int lasti)
+    {
+        return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
+    }
     bool is_special = false;
     int infer_location(PyCodeObject *, int);
 };
@@ -229,15 +237,15 @@ Frame::Frame(const char *name)
 }
 
 // ----------------------------------------------------------------------------
-Frame::Frame(PyCodeObject &code, int lasti)
+Frame::Frame(PyCodeObject *code, int lasti)
 {
-    this->filename = pyunicode_to_utf8(code.co_filename);
+    this->filename = pyunicode_to_utf8(code->co_filename);
 #if PY_VERSION_HEX >= 0x030b0000
-    this->name = pyunicode_to_utf8(code.co_qualname);
+    this->name = pyunicode_to_utf8(code->co_qualname);
 #else
-    this->name = pyunicode_to_utf8(code.co_name);
+    this->name = pyunicode_to_utf8(code->co_name);
 #endif
-    this->infer_location(&code, lasti);
+    this->infer_location(code, lasti);
 }
 
 Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
@@ -285,4 +293,58 @@ bool Frame::is_valid()
 #else
     return this->filename != NULL && this->name != NULL && this->location.line != 0;
 #endif
+}
+
+// ----------------------------------------------------------------------------
+
+static Frame *INVALID_FRAME = new Frame("INVALID");
+static Frame *UNKNOWN_FRAME = new Frame("<unknown>");
+
+static LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
+
+static void init_frame_cache(size_t capacity)
+{
+    frame_cache = new LRUCache<uintptr_t, Frame>(capacity);
+}
+
+static void destroy_frame_cache()
+{
+    delete frame_cache;
+}
+
+Frame *Frame::get(PyCodeObject *code_addr, int lasti)
+{
+    PyCodeObject code;
+    if (copy_type(code_addr, code))
+        return INVALID_FRAME;
+
+    uintptr_t frame_key = Frame::key(code_addr, lasti);
+    Frame *frame = frame_cache->lookup(frame_key);
+
+    if (frame == nullptr)
+    {
+        frame = new Frame(&code, lasti);
+        if (!frame->is_valid())
+        {
+            delete frame;
+            return INVALID_FRAME;
+        }
+        frame_cache->store(frame_key, frame);
+    }
+
+    return frame;
+}
+
+Frame *Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
+{
+    uintptr_t frame_key = (uintptr_t)pc;
+    Frame *frame = frame_cache->lookup(frame_key);
+
+    if (frame == nullptr)
+    {
+        frame = new Frame(frame_key, name, offset);
+        frame_cache->store(frame_key, frame);
+    }
+
+    return frame;
 }
