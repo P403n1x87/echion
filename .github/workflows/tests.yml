@@ -12,20 +12,24 @@ concurrency:
 
 jobs:
   tests-linux:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
-        os: [ubuntu-latest, macos-latest]
 
-    name: Tests with Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    name: Tests with Python ${{ matrix.python-version }} on ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
 
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}-dev
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libunwind-dev lzma-dev
 
       - name: Run tests
         run: |
@@ -40,3 +44,23 @@ jobs:
       #   if: matrix.python-version == '3.10'
       #   env:
       #     CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
+
+  tests-macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    name: Tests with Python ${{ matrix.python-version }} on macos-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}-dev
+
+      - name: Run tests
+        run: |
+          pip install hatch
+          hatch -e "tests.py${{ matrix.python-version }}" run tests

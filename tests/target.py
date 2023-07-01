@@ -1,9 +1,16 @@
 from time import sleep
+from time import monotonic as time
 from threading import Thread
 
 
+def cpu_sleep(t):
+    end = time() + t
+    while time() <= end:
+        pass
+
+
 def foo():
-    sleep(0.5)
+    cpu_sleep(0.5)
 
 
 def bar():
