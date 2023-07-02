@@ -5,8 +5,9 @@
 # #0  0x00000000005af3c8 in PyUnicode_AsUTF8AndSize ()
 
 from threading import Thread
-from bytecode import Bytecode
 from time import time
+
+from bytecode import Bytecode
 
 
 def foo(n):

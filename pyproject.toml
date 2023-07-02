@@ -39,6 +39,7 @@ template = "tests"
 dependencies = [
   "pytest>=5.4.2",
   "pytest-cov>=2.8.1",
+  "austin-python",
   "bytecode",
 ]
 [tool.hatch.envs.tests.scripts]
@@ -104,6 +105,5 @@ profile = "black"
 ignore_missing_imports = true
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
-
