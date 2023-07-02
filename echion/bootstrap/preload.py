@@ -2,10 +2,14 @@
 #
 # Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
-import echion.core as echion
 import atexit
 import os
-from threading import current_thread, Thread
+import typing as t
+from threading import Thread
+from threading import current_thread
+
+import echion.core as echion
+
 
 main_thread = current_thread()
 echion.track_thread(main_thread.ident, main_thread.name)
@@ -14,7 +18,7 @@ _thread_set_ident = Thread._set_ident
 _thread_bootstrap_inner = Thread._bootstrap_inner
 
 
-def thread_set_ident(self, *args, **kwargs):
+def thread_set_ident(self, *args: t.Any, **kwargs: t.Any):
     _thread_set_ident(self, *args, **kwargs)
     # This is the point when the thread identifier is set, so we can map it to
     # the thread name.

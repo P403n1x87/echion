@@ -10,12 +10,12 @@ import sys
 LOADED_MODULES = frozenset(set(sys.modules.keys()) | {"sitecustomize", "atexit"})
 
 
-import preload  # noqa
-
-
 # Make sure to unload all that was loaded during the preload phase, but only
 # when necessary.
-from importlib.util import find_spec
+from importlib.util import find_spec  # noqa
+
+import preload  # noqa
+
 
 for module in frozenset(["gevent"]):
     if getattr(find_spec(module), "loader", None) is not None:
