@@ -4,13 +4,13 @@
 
 import argparse
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from echion import __version__
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="In-process CPython frame stack sampler",
         prog="echion",
@@ -97,7 +97,7 @@ def main():
 
     try:
         os.execvpe(executable, args.command, env)  # TODO: Cross-platform?
-    except (OSError, PermissionError):
+    except OSError:
         print(
             "echion: executable '%s' does not have executable permissions.\n"
             % executable

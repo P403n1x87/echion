@@ -1,14 +1,15 @@
 import sys
+import typing as t
 from pathlib import Path
 from shutil import which
 from subprocess import PIPE
+from subprocess import CompletedProcess
 from subprocess import Popen
 from subprocess import run
 from tempfile import TemporaryDirectory
 from time import sleep
 
 import pytest
-
 from austin.stats import AustinFileReader
 from austin.stats import MetricType
 from austin.stats import Sample
@@ -18,7 +19,7 @@ PY = sys.version_info[:2]
 
 
 class Data:
-    def __init__(self, file: Path):
+    def __init__(self, file: Path) -> None:
         self.source = file
         self.samples = []
 
@@ -30,7 +31,7 @@ class Data:
 
 
 class DataSummary:
-    def __init__(self, data: Data):
+    def __init__(self, data: Data) -> None:
         self.data = data
         self.metadata = data.metadata
 
@@ -72,15 +73,15 @@ class DataSummary:
             if thread not in self.threads:
                 raise AssertionError(
                     f"Expected thread {thread}, found {self.threads.keys()}"
-                )
+                ) from None
             raise AssertionError(
                 f"Expected stack {frames}, found {self.threads[thread].keys()}"
-            )
+            ) from None
 
         assert predicate(stack), stack
 
 
-def run_target(target: Path, *args):
+def run_target(target: Path, *args: t.List[str]) -> t.Tuple[CompletedProcess, Data]:
     with TemporaryDirectory(prefix="echion") as td:
         output_file = Path(td) / "output.echion"
 
@@ -101,7 +102,9 @@ def run_target(target: Path, *args):
         return result, (Data(output_file) if output_file.is_file() else None)
 
 
-def run_with_signal(target: Path, signal, delay, *args):
+def run_with_signal(
+    target: Path, signal: int, delay: float, *args: t.List[str]
+) -> CompletedProcess:
     p = Popen(
         [
             which("echion"),

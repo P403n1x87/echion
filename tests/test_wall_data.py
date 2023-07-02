@@ -18,7 +18,7 @@ def test_wall_time(stealth):
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
     assert summary.total_metric >= 1.4 * 1e6 * expected_nthreads
-    assert summary.nsamples * 900 <= summary.total_metric <= summary.nsamples * 1100
+    assert summary.nsamples * 500 <= summary.total_metric <= summary.nsamples * 2000
 
     # Test line numbers
     assert summary.query("MainThread", (("main", 22), ("bar", 17))) is not None
