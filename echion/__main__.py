@@ -92,7 +92,7 @@ def main() -> None:
     env["PYTHONPATH"] = (
         os.path.pathsep.join((str(bootstrap_dir), python_path))
         if python_path
-        else bootstrap_dir
+        else str(bootstrap_dir)
     )
 
     try:
