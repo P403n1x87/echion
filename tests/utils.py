@@ -35,7 +35,7 @@ class DataSummary:
         self.data = data
         self.metadata = data.metadata
 
-        self.threads = {}
+        self.threads: t.Dict[str, dict] = {}
         self.total_metric = 0
         self.nsamples = 0
 
@@ -81,7 +81,7 @@ class DataSummary:
         assert predicate(stack), stack
 
 
-def run_target(target: Path, *args: t.List[str]) -> t.Tuple[CompletedProcess, Data]:
+def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional[Data]]:
     with TemporaryDirectory(prefix="echion") as td:
         output_file = Path(td) / "output.echion"
 
@@ -102,12 +102,10 @@ def run_target(target: Path, *args: t.List[str]) -> t.Tuple[CompletedProcess, Da
         return result, (Data(output_file) if output_file.is_file() else None)
 
 
-def run_with_signal(
-    target: Path, signal: int, delay: float, *args: t.List[str]
-) -> CompletedProcess:
+def run_with_signal(target: Path, signal: int, delay: float, *args: str) -> Popen:
     p = Popen(
         [
-            which("echion"),
+            t.cast(str, which("echion")),
             *args,
             sys.executable,
             "-m",

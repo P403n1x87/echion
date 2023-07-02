@@ -63,7 +63,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.checks.scripts]
-typing = "mypy --show-error-codes {args} echion/ tests/"
+typing = "mypy --install-types --non-interactive --show-error-codes {args} echion/ tests/"
 linting = "flake8 {args} echion/ tests/ "
 
 [tool.hatch.envs.coverage]
