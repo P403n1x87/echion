@@ -59,6 +59,7 @@ options:
   -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
+  -p PID, --pid PID     Attach to the process with the given PID
   -s, --stealth         stealth mode (sampler thread is not accounted for)
   -w, --where           where mode: display thread stacks on SIGQUIT (usually CTRL+\)
   -v, --verbose         verbose logging
@@ -79,13 +80,9 @@ Supported interpreters: CPython 3.8-3.11
 
 ## Where mode
 
-The where mode is similar to [Austin][austin]'s where mode. Since Echion cannot
-attach a running process, it instead relies on the user to send a SIGQUIT to a
-process that has been started with the `echion` wrapper command. On most
-terminals, this is done by pressing <kbd>CTRL</kbd>+<kbd>\\</kbd>. This will
-cause Echion to dump the stacks of all running threads to standard error. This
-is useful for debugging deadlocks and other issues that may occur in a running
-process.
+The where mode is similar to [Austin][austin]'s where mode, that is Echion will
+dump the stacks of all running threads to standard error. This is useful for
+debugging deadlocks and other issues that may occur in a running process.
 
 
 ## Why Echion?
@@ -102,10 +99,9 @@ CPython.
 Echion relies on some assumptions to collect and sample all the running threads
 without holding the GIL. This makes Echion very similar to tools like
 [Austin][austin]. However, some features, like multiprocess support, are more
-complicated to handle and would require the use of e.g. IPC solutions. Attaching
-to a running CPython process is also equally challenging, and this is where
-out-of-process tools like Austin provide a better, zero-instrumentation
-alternative.
+complicated to handle and would require the use of e.g. IPC solutions.
+Furthermore, Echion normally requires that you install it within your
+environment, wheareas [Austin][austin] can be installed indepdendently.
 
 
 ## How it works

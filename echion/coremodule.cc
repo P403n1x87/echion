@@ -198,6 +198,30 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     }
 }
 
+// ----------------------------------------------------------------------------
+static void do_where(std::ostream &stream)
+{
+    stream << "\r"
+           << "🐴 Echion reporting for duty" << std::endl
+           << std::endl;
+
+    // TODO: Add support for tasks
+    for_each_thread(
+        [&stream](PyThreadState *tstate, ThreadInfo *info) -> void
+        {
+            unwind_thread(tstate, info);
+            if (native)
+            {
+                interleave_stacks();
+                render_where(info, interleaved_stack, stream);
+            }
+            else
+                render_where(info, python_stack, stream);
+            stream << std::endl;
+        });
+}
+
+// ----------------------------------------------------------------------------
 static void where_listener()
 {
     for (;;)
@@ -208,24 +232,7 @@ static void where_listener()
         if (!running)
             break;
 
-        std::cerr << "\r"
-                  << "🐴 Echion reporting for duty" << std::endl
-                  << std::endl;
-
-        // TODO: Add support for tasks
-        for_each_thread(
-            [](PyThreadState *tstate, ThreadInfo *info) -> void
-            {
-                unwind_thread(tstate, info);
-                if (native)
-                {
-                    interleave_stacks();
-                    render_where(info, interleaved_stack, std::cerr);
-                }
-                else
-                    render_where(info, python_stack, std::cerr);
-                std::cout << std::endl;
-            });
+        do_where(std::cerr);
     }
 }
 
@@ -260,6 +267,23 @@ static void sampler()
     // This thread can run without the GIL on the basis that these assumptions
     // hold:
     // 1. The main thread lives as long as the process itself.
+
+    if (where)
+    {
+        auto pipe_name = "/tmp/echion-" + std::to_string(getpid());
+        std::ofstream pipe(pipe_name, std::ios::out);
+        if (!pipe)
+        {
+            std::cerr << "Failed to open pipe " << pipe_name << std::endl;
+            return;
+        }
+
+        do_where(pipe);
+
+        running = 0;
+
+        return;
+    }
 
     last_time = gettime();
 
@@ -304,6 +328,8 @@ static void sampler()
 
         last_time = now;
     }
+
+    output.close();
 }
 
 // ----------------------------------------------------------------------------
@@ -330,14 +356,6 @@ start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     _start();
 
-    if (where)
-    {
-        // In where mode we don't sample but we install the SIGQUIT handler
-        setup_where();
-
-        Py_RETURN_NONE;
-    }
-
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -357,14 +375,6 @@ static PyObject *
 start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     _start();
-
-    if (where)
-    {
-        // In where mode we don't sample but we install the SIGQUIT handler
-        setup_where();
-
-        Py_RETURN_NONE;
-    }
 
     if (!running)
     {
@@ -386,9 +396,6 @@ static PyObject *
 stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     running = 0;
-
-    if (where)
-        teardown_where();
 
     // Stop the sampling thread
     if (sampler_thread != nullptr)

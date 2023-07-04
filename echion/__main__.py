@@ -6,8 +6,70 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from textwrap import dedent
 
 from echion._version import __version__
+
+
+def detach(pid: int) -> None:
+    from hypno import inject_py
+
+    script = dedent(
+        f"""
+        from echion.bootstrap.attach import detach
+        detach()
+        """
+    ).strip()
+
+    inject_py(
+        pid,
+        script,
+    )
+
+
+def attach(args: argparse.Namespace) -> None:
+    from hypno import inject_py
+
+    script = dedent(
+        f"""
+        from echion.bootstrap.attach import attach
+        attach({args.__dict__!r})
+        """
+    ).strip()
+
+    pid = args.pid or args.where
+
+    if args.where:
+        os.mkfifo(f"/tmp/echion-{pid}")
+
+    inject_py(pid, script)
+
+    try:
+        end = None
+        if args.exposure:
+            from time import monotonic as time
+
+            end = time() + args.exposure
+        while not args.where:
+            if os.kill(pid, 0) is not None:
+                break
+            if end is not None and time() > end:
+                break
+            os.sched_yield()
+    except (KeyboardInterrupt, ProcessLookupError):
+        pass
+
+    # Read the output
+    if args.where:
+        with open(f"/tmp/echion-{pid}", "r") as f:
+            while True:
+                line = f.readline()
+                print(line, end="")
+                if not line:
+                    break
+        os.remove(f"/tmp/echion-{pid}")
+
+    detach(pid)
 
 
 def main() -> None:
@@ -32,6 +94,12 @@ def main() -> None:
         action="store_true",
     )
     parser.add_argument(
+        "-x",
+        "--exposure",
+        help="exposure time, in seconds",
+        type=int,
+    )
+    parser.add_argument(
         "-n",
         "--native",
         help="sample native stacks",
@@ -45,6 +113,12 @@ def main() -> None:
         default="%%(pid).echion",
     )
     parser.add_argument(
+        "-p",
+        "--pid",
+        help="Attach to the process with the given PID",
+        type=int,
+    )
+    parser.add_argument(
         "-s",
         "--stealth",
         help="stealth mode (sampler thread is not accounted for)",
@@ -53,8 +127,8 @@ def main() -> None:
     parser.add_argument(
         "-w",
         "--where",
-        help="where mode: display thread stacks on SIGQUIT (usually CTRL+\\)",
-        action="store_true",
+        help="where mode: display thread stacks of the given process",
+        type=int,
     )
     parser.add_argument(
         "-v",
@@ -70,6 +144,21 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # TODO: Validate arguments
+
+    env = os.environ.copy()
+
+    env["ECHION_INTERVAL"] = str(args.interval)
+    env["ECHION_CPU"] = str(int(bool(args.cpu)))
+    env["ECHION_NATIVE"] = str(int(bool(args.native)))
+    env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
+    env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
+    env["ECHION_WHERE"] = str(args.where or "")
+
+    if args.pid or args.where:
+        attach(args)
+        return
+
     root_dir = Path(__file__).parent
 
     bootstrap_dir = root_dir / "bootstrap"
@@ -79,14 +168,6 @@ def main() -> None:
         sys.exit(1)
 
     executable = args.command[0]
-    env = dict(os.environ)
-
-    env["ECHION_INTERVAL"] = str(args.interval)
-    env["ECHION_CPU"] = str(int(bool(args.cpu)))
-    env["ECHION_NATIVE"] = str(int(bool(args.native)))
-    env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
-    env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
-    env["ECHION_WHERE"] = str(int(bool(args.where)))
 
     python_path = os.getenv("PYTHONPATH")
     env["PYTHONPATH"] = (

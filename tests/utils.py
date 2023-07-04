@@ -97,6 +97,7 @@ def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional
             ],
             capture_output=True,
             check=True,
+            timeout=30,
         )
 
         return result, (Data(output_file) if output_file.is_file() else None)

@@ -9,16 +9,14 @@ import echion.core as echion
 
 # -----------------------------------------------------------------------------
 
-set_event_loop = BaseDefaultEventLoopPolicy.set_event_loop
+_set_event_loop = BaseDefaultEventLoopPolicy.set_event_loop
 
 
-@wraps(set_event_loop)
-def _set_event_loop(self, loop) -> None:
+@wraps(_set_event_loop)
+def set_event_loop(self, loop) -> None:
     echion.track_asyncio_loop(t.cast(int, current_thread().ident), loop)
-    return set_event_loop(self, loop)
+    return _set_event_loop(self, loop)
 
-
-BaseDefaultEventLoopPolicy.set_event_loop = _set_event_loop  # type: ignore[method-assign]
 
 # -----------------------------------------------------------------------------
 
@@ -36,8 +34,16 @@ def gather(self, children, *, loop):
             echion.link_tasks(parent, child)
 
 
-tasks._GatheringFuture.__init__ = gather  # type: ignore[attr-defined]
-
 # -----------------------------------------------------------------------------
 
-echion.init_asyncio(tasks._current_tasks, tasks._all_tasks.data)  # type: ignore[attr-defined]
+
+def patch():
+    BaseDefaultEventLoopPolicy.set_event_loop = set_event_loop  # type: ignore[method-assign]
+    tasks._GatheringFuture.__init__ = gather  # type: ignore[attr-defined]
+
+    echion.init_asyncio(tasks._current_tasks, tasks._all_tasks.data)  # type: ignore[attr-defined]
+
+
+def unpatch():
+    BaseDefaultEventLoopPolicy.set_event_loop = _set_event_loop  # type: ignore[method-assign]
+    tasks._GatheringFuture.__init__ = _gather  # type: ignore[attr-defined]
