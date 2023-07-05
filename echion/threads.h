@@ -29,6 +29,8 @@ public:
 #endif
     microsecond_t cpu_time;
 
+    uintptr_t asyncio_loop;
+
     void update_cpu_time();
     bool is_running();
 
@@ -109,5 +111,7 @@ bool ThreadInfo::is_running()
 #endif
 }
 
-static std::unordered_map<uintptr_t, ThreadInfo *> thread_info_map;
+static std::unordered_map<uintptr_t, ThreadInfo *> thread_info_map; // indexed by thread_id
 static std::mutex thread_info_map_lock;
+
+static ThreadInfo *current_thread_info = NULL;

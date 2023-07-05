@@ -15,14 +15,13 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3.7",
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
 ]
 
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 
 dynamic = ["version"]
 
@@ -46,7 +45,7 @@ dependencies = [
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
 
 [[tool.hatch.envs.tests.matrix]]
-python = ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
 [tool.hatch.envs.checks]
 python = "3.10"

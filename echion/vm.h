@@ -16,6 +16,7 @@ ssize_t process_vm_readv(
     const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags);
 
 #define copy_type(addr, dest) (copy_memory(pid, addr, sizeof(dest), &dest))
+#define copy_type_p(addr, dest) (copy_memory(pid, addr, sizeof(*dest), dest))
 #define copy_generic(addr, dest, size) (copy_memory(pid, (void *)(addr), size, (void *)(dest)))
 
 #elif defined PL_DARWIN
@@ -28,6 +29,7 @@ ssize_t process_vm_readv(
 typedef mach_port_t proc_ref_t;
 
 #define copy_type(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(dest), &dest))
+#define copy_type_p(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(*dest), dest))
 #define copy_generic(addr, dest, size) (copy_memory(mach_task_self(), (void *)(addr), size, (void *)(dest)))
 #endif
 

@@ -14,6 +14,9 @@ near-zero-overhead, similar to [Austin][austin], by sampling the frame stack of
 each thread without holding the GIL. Native stacks can be sampled too, but the
 overhead is higher.
 
+Echion is also the first example of a high-performance sampling async profiler
+for CPython.
+
 
 ## Installation
 
@@ -61,7 +64,7 @@ like the [Austin VS Code][austin-vscode] extension.
 
 Supported platforms: Linux (amd64), Darwin (amd64)
 
-Supported interpreters: CPython 3.7-3.12
+Supported interpreters: CPython 3.8-3.12
 
 
 ## Where mode
@@ -81,6 +84,10 @@ Sampling in-process comes with some benefits. One has easier access to more
 information, like thread names, and potentially the task abstraction of async
 frameworks, like `asyncio`, `gevent`, ... . Also available is more accurate
 per-thread CPU timing information.
+
+Currently, Echion supports sampling asyncio-based applications, but not in
+native mode. This makes Echion the very first example of an async profiler for
+CPython.
 
 Echion relies on some assumptions to collect and sample all the running threads
 without holding the GIL. This makes Echion very similar to tools like

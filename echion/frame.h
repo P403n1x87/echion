@@ -64,6 +64,13 @@ public:
     Frame(const char *);
     ~Frame();
 
+    static Frame *read(PyObject *, PyObject **);
+    static Frame *read(PyObject *frame_addr)
+    {
+        PyObject *unused;
+        return Frame::read(frame_addr, &unused);
+    }
+
     bool is_valid();
 
     static Frame *get(PyCodeObject *code, int lasti);
@@ -342,9 +349,42 @@ Frame *Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
 
     if (frame == nullptr)
     {
-        frame = new Frame(frame_key, name, offset);
+        frame = new Frame(pc, name, offset);
         frame_cache->store(frame_key, frame);
     }
+
+    return frame;
+}
+
+Frame *Frame::read(PyObject *frame_addr, PyObject **prev_addr)
+{
+#if PY_VERSION_HEX >= 0x030b0000
+    _PyInterpreterFrame iframe;
+
+    if (copy_type(frame_addr, iframe))
+        return NULL;
+
+    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
+    // from the code object.
+    const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    Frame *frame = Frame::get(iframe.f_code, lasti);
+
+    frame->is_entry = iframe.is_entry;
+
+    *prev_addr = frame == INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
+
+#else // Python < 3.11
+    // Unwind the stack from leaf to root and store it in a stack. This way we
+    // can print it from root to leaf.
+    PyFrameObject py_frame;
+
+    if (copy_type(frame_addr, py_frame))
+        return NULL;
+
+    Frame *frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
+
+    *prev_addr = (frame == INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
+#endif
 
     return frame;
 }
