@@ -2,9 +2,13 @@
 #
 # Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
-from pathlib import Path
 import sys
-from setuptools import find_packages, setup, Extension
+from pathlib import Path
+
+from setuptools import Extension
+from setuptools import find_packages
+from setuptools import setup
+
 
 PLATFORM = sys.platform.lower()
 
@@ -30,7 +34,6 @@ echionmodule = Extension(
 setup(
     name="echion",
     author="Gabriele N. Tornetta",
-    version="0.1.0",
     description="In-process Python sampling profiler",
     long_description=Path("README.md").read_text(),
     ext_modules=[echionmodule],

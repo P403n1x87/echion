@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from echion import __version__
+from echion._version import __version__
 
 
 def main() -> None:

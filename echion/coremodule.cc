@@ -37,7 +37,9 @@ static inline unsigned long
 get_native_id()
 {
 #if defined PL_LINUX
-    return gettid();
+#include <unistd.h>
+#include <sys/syscall.h>
+    return syscall(SYS_gettid);
 #elif defined PL_DARWIN
     uint64_t tid;
     pthread_threadid_np(NULL, &tid);

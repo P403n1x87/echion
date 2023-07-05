@@ -103,6 +103,9 @@ profile = "black"
 [tool.mypy]
 ignore_missing_imports = true
 
+[tool.setuptools_scm]
+write_to = "echion/_version.py"
+
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
