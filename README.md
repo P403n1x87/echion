@@ -4,7 +4,9 @@
 
 <h1 align="center">Echion</h1>
 
-<p align="center">Near-zero-overhead, in-process CPython frame stack sampler</p>
+<p align="center">
+Near-zero-overhead, in-process CPython frame stack sampler with async support
+</p>
 
 
 ## Synopsis
@@ -20,13 +22,21 @@ for CPython.
 
 ## Installation
 
-Currently Echion is available to install from sources via this repository.
+Currently Echion is available to install from PyPI with
 
 ```console
-pipx install git+https://github.com/p403n1x87/echion
+pip install echion
 ```
 
-Compilation requires a C++ compiler.
+Alternativey, if a wheel is not available for your combination of platform and
+architecture, it can be installed from sources with
+
+```console
+pip install git+https://github.com/p403n1x87/echion
+```
+
+Compilation requires a C++ compiler and static versions of the `libunwind` and
+`lzma` libraries.
 
 
 ## Usage
@@ -45,7 +55,7 @@ options:
   -h, --help            show this help message and exit
   -i INTERVAL, --interval INTERVAL
                         sampling interval in microseconds
-  -c, --cpu             sample stacks on CPU only
+  -c, --cpu             sample on-CPU stacks only
   -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
@@ -62,9 +72,9 @@ like the [Austin VS Code][austin-vscode] extension.
 
 ## Compatibility
 
-Supported platforms: Linux (amd64), Darwin (amd64)
+Supported platforms: Linux (amd64, i686), Darwin (amd64, aarch64)
 
-Supported interpreters: CPython 3.8-3.12
+Supported interpreters: CPython 3.8-3.11
 
 
 ## Where mode

@@ -28,7 +28,7 @@ def main() -> None:
     parser.add_argument(
         "-c",
         "--cpu",
-        help="sample stacks on CPU only",
+        help="sample on-CPU stacks only",
         action="store_true",
     )
     parser.add_argument(

@@ -17,7 +17,6 @@ LDADD = {
 }
 
 # add option to colorize compiler output
-
 COLORS = [
     "-fdiagnostics-color=always" if PLATFORM == "linux" else "-fcolor-diagnostics"
 ]
@@ -35,7 +34,11 @@ setup(
     name="echion",
     author="Gabriele N. Tornetta",
     description="In-process Python sampling profiler",
-    long_description=Path("README.md").read_text(),
+    long_description=Path("README.md")
+    .read_text()
+    .replace(
+        'src="art/', 'src="https://raw.githubusercontent.com/P403n1x87/echion/main/art/'
+    ),
     ext_modules=[echionmodule],
     entry_points={
         "console_scripts": ["echion=echion.__main__:main"],
