@@ -142,3 +142,6 @@ protoc*
 
 # VS Code
 .vscode/
+
+# setuptools-scm
+_version.py

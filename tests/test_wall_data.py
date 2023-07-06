@@ -1,3 +1,5 @@
+import sys
+
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
@@ -156,5 +158,6 @@ def test_wall_time_native(stealth):
         assert summary.query("SecondaryThread", (("foo", 13),)) is not None
 
     # Test stacks and expected values
-    assert summary.query("MainThread", ("time_sleep",)) is not None
-    assert summary.query("SecondaryThread", ("time_sleep",)) is not None
+    sleep_name = "time_sleep" if sys.platform == "darwin" else "clock_nanosleep"
+    assert summary.query("MainThread", (sleep_name,)) is not None
+    assert summary.query("SecondaryThread", (sleep_name,)) is not None
