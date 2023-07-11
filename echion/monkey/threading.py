@@ -9,15 +9,15 @@ from threading import _active
 import echion.core as echion
 
 
-_thread_set_ident = Thread._set_ident  # type: ignore[attr-defined]
+_thread_set_native_id = Thread._set_native_id  # type: ignore[attr-defined]
 _thread_bootstrap_inner = Thread._bootstrap_inner  # type: ignore[attr-defined]
 
 
-def thread_set_ident(self, *args: t.Any, **kwargs: t.Any) -> None:
-    _thread_set_ident(self, *args, **kwargs)
+def thread_set_native_id(self, *args: t.Any, **kwargs: t.Any) -> None:
+    _thread_set_native_id(self, *args, **kwargs)
     # This is the point when the thread identifier is set, so we can map it to
     # the thread name.
-    echion.track_thread(self.ident, self.name)
+    echion.track_thread(self.ident, self.name, self.native_id)
 
 
 def thread_bootstrap_inner(self) -> None:
@@ -28,11 +28,17 @@ def thread_bootstrap_inner(self) -> None:
 
 
 def patch():
-    Thread._set_ident = thread_set_ident  # type: ignore[attr-defined]
+    # Thread._set_native_id is called after Thread._set_ident, so we patch this
+    # to ensure we have both available.
+    Thread._set_native_id = thread_set_native_id  # type: ignore[attr-defined]
+
+    # The thread terminates when Thread._bootstrap_inner returns, so we patch
+    # this to ensure we can untrack the thread.
     Thread._bootstrap_inner = thread_bootstrap_inner  # type: ignore[attr-defined]
 
+    # Track any threads that are already active.
     for thread_id, thread in _active.items():
-        echion.track_thread(thread_id, thread.name)
+        echion.track_thread(thread_id, thread.name, thread.native_id)
 
     # TODO: Patch Thread.name.fset to set the thread name in echion
     # TODO: Patching needs to happen on module import, in case we need to perform
@@ -40,5 +46,5 @@ def patch():
 
 
 def unpatch():
-    Thread._set_ident = _thread_set_ident  # type: ignore[attr-defined]
+    Thread._set_native_id = _thread_set_native_id  # type: ignore[attr-defined]
     Thread._bootstrap_inner = _thread_bootstrap_inner  # type: ignore[attr-defined]

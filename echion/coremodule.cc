@@ -33,21 +33,6 @@
 #include <echion/vm.h>
 
 // ----------------------------------------------------------------------------
-static inline unsigned long
-get_native_id()
-{
-#if defined PL_LINUX
-#include <unistd.h>
-#include <sys/syscall.h>
-    return syscall(SYS_gettid);
-#elif defined PL_DARWIN
-    uint64_t tid;
-    pthread_threadid_np(NULL, &tid);
-    return tid;
-#endif
-}
-
-// ----------------------------------------------------------------------------
 static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
 {
     if (native)
@@ -434,8 +419,9 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 {
     uintptr_t thread_id; // map key
     const char *thread_name;
+    pid_t native_id;
 
-    if (!PyArg_ParseTuple(args, "ls", &thread_id, &thread_name))
+    if (!PyArg_ParseTuple(args, "lsi", &thread_id, &thread_name, &native_id))
         return NULL;
 
     const char *name = strdup(thread_name);
@@ -462,7 +448,7 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 
         info->thread_id = thread_id;
         info->name = name;
-        info->native_id = get_native_id();
+        info->native_id = native_id;
 #if defined PL_DARWIN
         info->mach_port = mach_thread_self();
 #endif
