@@ -40,7 +40,7 @@ dependencies = [
   "pytest-cov>=2.8.1",
   "austin-python",
   "bytecode",
-  "hypno",
+  "hypno>=1.0.3",
 ]
 [tool.hatch.envs.tests.scripts]
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"

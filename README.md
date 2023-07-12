@@ -84,6 +84,11 @@ The where mode is similar to [Austin][austin]'s where mode, that is Echion will
 dump the stacks of all running threads to standard error. This is useful for
 debugging deadlocks and other issues that may occur in a running process.
 
+When running or attaching to a process, you can also send a `SIGQUIT` signal to
+dump the stacks of all running threads. The result is similar to the where mode.
+You can normally send a `SIGQUIT` signal with the <kbd>CTRL</kbd>+<kbd>\\</kbd>
+key combination.
+
 
 ## Why Echion?
 

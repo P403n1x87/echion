@@ -39,8 +39,8 @@ void sigquit_handler(int signum)
 // ----------------------------------------------------------------------------
 void install_signals()
 {
-    if (where)
-        signal(SIGQUIT, sigquit_handler);
+    signal(SIGQUIT, sigquit_handler);
+
     if (native)
         signal(SIGPROF, sigprof_handler);
 }

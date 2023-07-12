@@ -224,8 +224,6 @@ static void where_listener()
 // ----------------------------------------------------------------------------
 static void setup_where()
 {
-    running = 1;
-
     where_thread = new std::thread(where_listener);
 }
 
@@ -236,7 +234,6 @@ static void teardown_where()
         {
             std::lock_guard<std::mutex> lock(where_lock);
 
-            running = 0;
             where_cv.notify_one();
         }
 
@@ -269,6 +266,8 @@ static void sampler()
 
         return;
     }
+
+    setup_where();
 
     last_time = gettime();
 
@@ -315,6 +314,8 @@ static void sampler()
     }
 
     output.close();
+
+    teardown_where();
 }
 
 // ----------------------------------------------------------------------------
