@@ -94,7 +94,25 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
             const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
             if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
+            {
+#if defined PL_DARWIN
+                // If the threading module was not imported in the target then
+                // we mistakenly take the hypno thread as the main thread. We
+                // assume that any missing thread is the actual main thread.
+                auto new_info = new ThreadInfo();
+                new_info->thread_id = tstate.thread_id;
+
+                auto name = std::string("MainThread");
+                new_info->name = new char[name.length() + 1];
+                std::strcpy((char *)new_info->name, name.c_str());
+
+                new_info->native_id = 1; // Not important as it is not used.
+
+                thread_info_map[tstate.thread_id] = new_info;
+#else
                 return;
+#endif
+            }
 
             ThreadInfo *info = thread_info_map[tstate.thread_id];
 
@@ -145,7 +163,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+        output << "P" << pid << ";T" << thread_name;
 
         // Print the stack
         if (native)
@@ -163,7 +181,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     {
         for (auto task_pair : current_tasks)
         {
-            output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+            output << "P" << pid << ";T" << thread_name;
 
             FrameStack *task_stack = task_pair->second;
             if (native)
@@ -271,17 +289,6 @@ static void sampler()
 
     last_time = gettime();
 
-    // The main thread has likely done some work already, so we prime the per-
-    // thread CPU time mapping with the current CPU time.
-    if (cpu)
-    {
-        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
-
-        // TODO: Check that the main thread has been tracked!
-        ThreadInfo *info = thread_info_map[main_thread->thread_id];
-        info->update_cpu_time();
-    }
-
     output.open(std::getenv("ECHION_OUTPUT"));
     if (!output.is_open())
     {
@@ -307,7 +314,7 @@ static void sampler()
             [=](PyThreadState *tstate, ThreadInfo *info)
             { sample_thread(tstate, info, wall_time); });
 
-        while (gettime() < end_time)
+        while (gettime() < end_time && running)
             sched_yield();
 
         last_time = now;
