@@ -323,9 +323,6 @@ static void _init()
 {
     main_thread = PyThreadState_Get();
     pid = getpid();
-#if defined PL_DARWIN
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -334,6 +331,11 @@ static void _start()
     init_frame_cache(MAX_FRAMES * (1 + native));
 
     install_signals();
+
+#if defined PL_DARWIN
+    // Get the wall time clock resource.
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+#endif
 }
 
 // ----------------------------------------------------------------------------
