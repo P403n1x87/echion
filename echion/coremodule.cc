@@ -72,7 +72,7 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
     seen_threads.clear();
 
     // Start from the main thread
-    threads.insert(main_thread);
+    threads.insert(PyInterpreterState_ThreadHead(interp));
 
     while (!threads.empty())
     {
@@ -321,7 +321,7 @@ static void sampler()
 // ----------------------------------------------------------------------------
 static void _init()
 {
-    main_thread = PyThreadState_Get();
+    interp = PyInterpreterState_Get();
     pid = getpid();
 }
 

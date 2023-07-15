@@ -19,7 +19,6 @@ def bar():
 def main():
     while True:
         bar()
-        print(os.getpid())
 
 
 if __name__ == "__main__":

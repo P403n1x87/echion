@@ -11,7 +11,7 @@
 #include <mutex>
 #include <thread>
 
-static PyThreadState *main_thread = NULL;
+static PyInterpreterState *interp = NULL;
 
 static std::thread *sampler_thread = nullptr;
 
