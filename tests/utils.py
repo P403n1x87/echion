@@ -3,6 +3,7 @@ import typing as t
 from pathlib import Path
 from shutil import which
 from subprocess import PIPE
+from subprocess import CalledProcessError
 from subprocess import CompletedProcess
 from subprocess import Popen
 from subprocess import run
@@ -85,20 +86,25 @@ def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional
     with TemporaryDirectory(prefix="echion") as td:
         output_file = Path(td) / "output.echion"
 
-        result = run(
-            [
-                "echion",
-                "-o",
-                str(output_file),
-                *args,
-                sys.executable,
-                "-m",
-                f"tests.{target}",
-            ],
-            capture_output=True,
-            check=True,
-            timeout=30,
-        )
+        try:
+            result = run(
+                [
+                    "echion",
+                    "-o",
+                    str(output_file),
+                    *args,
+                    sys.executable,
+                    "-m",
+                    f"tests.{target}",
+                ],
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
+        except CalledProcessError as e:
+            print(e.stdout.decode())
+            print(e.stderr.decode())
+            raise
 
         return result, (Data(output_file) if output_file.is_file() else None)
 

@@ -273,7 +273,7 @@ static void sampler()
 
     // The main thread has likely done some work already, so we prime the per-
     // thread CPU time mapping with the current CPU time.
-
+    if (cpu)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
@@ -475,9 +475,6 @@ untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             ThreadInfo *info = thread_info_map[thread_id];
-#if defined PL_DARWIN
-            mach_port_deallocate(mach_task_self(), info->mach_port);
-#endif
             thread_info_map.erase(thread_id);
             delete info;
         }

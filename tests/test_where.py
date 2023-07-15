@@ -1,13 +1,24 @@
+import sys
 from signal import SIGQUIT
+from subprocess import PIPE
+from subprocess import Popen
+from time import sleep
 
-from tests.utils import run_with_signal
+from tests.utils import run_target
 
 
 def test_where():
-    p = run_with_signal("target_where", SIGQUIT, 1.5, "-w")
-    assert p.returncode == 0
+    target = Popen(
+        [sys.executable, "-m", "tests.target_where"], stdout=PIPE, stderr=PIPE
+    )
+    sleep(0.5)
 
-    err = p.stderr.read().decode()
+    result, _ = run_target("target_where", "-w", str(target.pid))
+    assert result.returncode == 0
+
+    target.wait()
+
+    err = result.stdout.decode()
 
     assert "🐴 Echion reporting for duty" in err
     assert "🧵 MainThread:" in err
