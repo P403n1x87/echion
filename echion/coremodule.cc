@@ -19,6 +19,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined PL_DARWIN
+#include <pthread.h>
+#endif
 
 #include <echion/config.h>
 #include <echion/frame.h>
@@ -106,7 +109,10 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
                 new_info->name = new char[name.length() + 1];
                 std::strcpy((char *)new_info->name, name.c_str());
 
-                new_info->native_id = 1; // Not important as it is not used.
+                pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
+                new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
+
+                new_info->update_cpu_time();
 
                 thread_info_map[tstate.thread_id] = new_info;
 #else
@@ -460,7 +466,7 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         info->name = name;
         info->native_id = native_id;
 #if defined PL_DARWIN
-        info->mach_port = mach_thread_self();
+        info->mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         info->update_cpu_time();
 
