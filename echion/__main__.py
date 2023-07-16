@@ -5,6 +5,7 @@
 import argparse
 import os
 import sys
+import tempfile
 from pathlib import Path
 from textwrap import dedent
 
@@ -40,7 +41,8 @@ def attach(args: argparse.Namespace) -> None:
     pid = args.pid or args.where
 
     if args.where:
-        os.mkfifo(f"/tmp/echion-{pid}")
+        pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
+        os.mkfifo(pipe_name)
 
     inject_py(pid, script)
 
@@ -61,13 +63,13 @@ def attach(args: argparse.Namespace) -> None:
 
     # Read the output
     if args.where:
-        with open(f"/tmp/echion-{pid}", "r") as f:
+        with pipe_name.open("r") as f:
             while True:
                 line = f.readline()
                 print(line, end="")
                 if not line:
                     break
-        os.remove(f"/tmp/echion-{pid}")
+        pipe_name.unlink()
 
     detach(pid)
 

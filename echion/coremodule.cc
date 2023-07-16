@@ -6,6 +6,7 @@
 #include <Python.h>
 
 #include <condition_variable>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -276,7 +277,7 @@ static void sampler()
 
     if (where)
     {
-        auto pipe_name = "/tmp/echion-" + std::to_string(getpid());
+        auto pipe_name = std::filesystem::temp_directory_path() / ("echion-" + std::to_string(getpid()));
         std::ofstream pipe(pipe_name, std::ios::out);
         if (!pipe)
         {
