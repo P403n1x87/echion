@@ -74,7 +74,7 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
     threads.clear();
     seen_threads.clear();
 
-    // Start from the main thread
+    // Start from the thread list head
     threads.insert(PyInterpreterState_ThreadHead(interp));
 
     while (!threads.empty())
@@ -270,9 +270,9 @@ static void teardown_where()
 // ----------------------------------------------------------------------------
 static void sampler()
 {
-    // This thread can run without the GIL on the basis that these assumptions
+    // This function can run without the GIL on the basis that these assumptions
     // hold:
-    // 1. The main thread lives as long as the process itself.
+    // 1. The interpreter state object lives as long as the process itself.
 
     if (where)
     {

@@ -56,12 +56,15 @@ options:
   -i INTERVAL, --interval INTERVAL
                         sampling interval in microseconds
   -c, --cpu             sample on-CPU stacks only
+  -x EXPOSURE, --exposure EXPOSURE
+                        exposure time, in seconds
   -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
   -p PID, --pid PID     Attach to the process with the given PID
   -s, --stealth         stealth mode (sampler thread is not accounted for)
-  -w, --where           where mode: display thread stacks on SIGQUIT (usually CTRL+\)
+  -w WHERE, --where WHERE
+                        where mode: display thread stacks of the given process
   -v, --verbose         verbose logging
   -V, --version         show program's version number and exit
 ```
@@ -76,6 +79,14 @@ like the [Austin VS Code][austin-vscode] extension.
 Supported platforms: Linux (amd64, i686), Darwin (amd64, aarch64)
 
 Supported interpreters: CPython 3.8-3.11
+
+### Notes
+
+Attaching to a process (including in where mode) requires extra permissions. On
+Unix, you can attach to a running process with `sudo`. On Linux, one may also
+set the ptrace scope to `0` with `sudo sysctl kernel.yama.ptrace_scope=0` to
+allow attaching to any process. However, this is not recommended for security
+reasons.
 
 
 ## Where mode
@@ -113,12 +124,16 @@ environment, wheareas [Austin][austin] can be installed indepdendently.
 
 On a fundamental level, there is one key assumption that Echion relies upon:
 
-> The main thread lives as long as the CPython process itself.
+> The interpreter state object lives as long as the CPython process itself.
 
 All unsafe memory reads are performed indirectly via copies of data structure
 obtained with the use of system calls like `process_vm_readv`. This is
 essentially what allows Echion to run its sampling thread without the GIL.
 
+As for attaching to a running process, we make use of the [hypno][hypno] library
+to inject Python code that bootstraps Echion into the target process.
+
 
 [austin]: http://github.com/p403n1x87/austin
 [austin-vscode]: https://marketplace.visualstudio.com/items?itemName=p403n1x87.austin-vscode
+[hypno]: https://github.com/kmaork/hypno
