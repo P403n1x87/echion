@@ -21,12 +21,17 @@ COLORS = [
     "-fdiagnostics-color=always" if PLATFORM == "linux" else "-fcolor-diagnostics"
 ]
 
+if PLATFORM == "darwin":
+    CFLAGS = ["-mmacosx-version-min=10.15"]
+else:
+    CFLAGS = []
+
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
-    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + COLORS,
+    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
 )
 

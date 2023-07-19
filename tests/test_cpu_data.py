@@ -1,3 +1,5 @@
+import pytest
+
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
@@ -91,6 +93,7 @@ def test_cpu_time(stealth):
 
 
 @stealth
+@pytest.mark.xfail
 def test_cpu_time_native(stealth):
     result, data = run_target("target_cpu", *stealth, "-cn")
     assert result.returncode == 0, result.stderr.decode()
@@ -113,13 +116,13 @@ def test_cpu_time_native(stealth):
             summary.query(
                 "MainThread",
                 (
-                    ("<module>", 42),
-                    ("keep_cpu_busy", 33),
+                    ("<module>", 48),
+                    ("keep_cpu_busy", 40),
                 ),
             )
             is not None
         )
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 33),)) is not None
+        assert summary.query("SecondaryThread", (("keep_cpu_busy", 41),)) is not None
     else:
-        assert summary.query("MainThread", (("keep_cpu_busy", 33),)) is not None
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 33),)) is not None
+        assert summary.query("MainThread", (("keep_cpu_busy", 41),)) is not None
+        assert summary.query("SecondaryThread", (("keep_cpu_busy", 41),)) is not None

@@ -4,7 +4,7 @@
 
 import typing as t
 from threading import Thread
-from threading import _active
+from threading import _active  # type: ignore[attr-defined]
 
 import echion.core as echion
 

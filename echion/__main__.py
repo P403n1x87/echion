@@ -16,7 +16,7 @@ def detach(pid: int) -> None:
     from hypno import inject_py
 
     script = dedent(
-        f"""
+        """
         from echion.bootstrap.attach import detach
         detach()
         """
@@ -53,7 +53,9 @@ def attach(args: argparse.Namespace) -> None:
 
             end = time() + args.exposure
         while not args.where:
-            if os.kill(pid, 0) is not None:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
                 break
             if end is not None and time() > end:
                 break
@@ -158,7 +160,11 @@ def main() -> None:
     env["ECHION_WHERE"] = str(args.where or "")
 
     if args.pid or args.where:
-        attach(args)
+        try:
+            attach(args)
+        except Exception as e:
+            print("Failed to attach to process %d: %s" % (args.pid or args.where, e))
+            sys.exit(1)
         return
 
     root_dir = Path(__file__).parent

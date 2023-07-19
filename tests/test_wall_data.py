@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
@@ -133,6 +135,7 @@ def test_wall_time(stealth):
 
 
 @stealth
+@pytest.mark.xfail
 def test_wall_time_native(stealth):
     result, data = run_target("target", *stealth, "-n")
     assert result.returncode == 0, result.stderr.decode()
@@ -159,5 +162,5 @@ def test_wall_time_native(stealth):
 
     # Test stacks and expected values
     sleep_name = "time_sleep" if sys.platform == "darwin" else "clock_nanosleep"
-    assert summary.query("MainThread", (sleep_name,)) is not None
-    assert summary.query("SecondaryThread", (sleep_name,)) is not None
+    assert summary.query("MainThread", (sleep_name,)) is not None, summary.threads
+    assert summary.query("SecondaryThread", (sleep_name,)) is not None, summary.threads

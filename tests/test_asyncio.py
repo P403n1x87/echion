@@ -16,7 +16,7 @@ def test_asyncio_gather_wall_time():
     summary = DataSummary(data)
 
     expected_nthreads = 2
-    assert summary.nthreads == expected_nthreads
+    assert summary.nthreads == expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
 
     # Test line numbers

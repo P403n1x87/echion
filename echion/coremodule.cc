@@ -335,7 +335,11 @@ static void sampler()
 // ----------------------------------------------------------------------------
 static void _init()
 {
+#if PY_VERSION_HEX >= 0x03090000
     interp = PyInterpreterState_Get();
+#else
+    interp = _PyInterpreterState_Get();
+#endif
     pid = getpid();
 }
 
