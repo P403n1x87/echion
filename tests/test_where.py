@@ -1,15 +1,29 @@
-from signal import SIGQUIT
+import sys
+from subprocess import PIPE
+from subprocess import Popen
+from time import sleep
 
-from tests.utils import run_with_signal
+from tests.utils import run_echion
 
 
 def test_where():
-    p = run_with_signal("target_where", SIGQUIT, 1, "-w")
-    assert p.returncode == 0
+    with Popen(
+        [sys.executable, "-m", "tests.target_attach"], stdout=PIPE, stderr=PIPE
+    ) as target:
+        sleep(0.5)
+        try:
+            # attach multiple times
+            for _ in range(10):
+                result = run_echion("-w", str(target.pid))
+                assert result.returncode == 0
 
-    err = p.stderr.read().decode()
+                err = result.stdout.decode()
 
-    assert "🐴 Echion reporting for duty" in err
-    assert "🧵 MainThread:" in err
-    assert "_run_module_as_main" in err
-    assert "main" in err
+                assert "🐴 Echion reporting for duty" in err
+                assert "🧵 MainThread:" in err
+                assert "_run_module_as_main" in err
+                assert "main" in err
+
+                sleep(0.1)
+        finally:
+            target.kill()

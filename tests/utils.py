@@ -3,6 +3,7 @@ import typing as t
 from pathlib import Path
 from shutil import which
 from subprocess import PIPE
+from subprocess import CalledProcessError
 from subprocess import CompletedProcess
 from subprocess import Popen
 from subprocess import run
@@ -45,8 +46,7 @@ class DataSummary:
             v = sample.metric.value
 
             self.total_metric += v
-            thread_name, _, _ = sample.thread.rpartition(" (")
-            stacks = self.threads.setdefault(thread_name, {})
+            stacks = self.threads.setdefault(sample.thread, {})
 
             stack = tuple((f.function, f.line) for f in frames)
             stacks[stack] = stacks.get(stack, 0) + v
@@ -81,22 +81,34 @@ class DataSummary:
         assert predicate(stack), stack
 
 
+def run_echion(*args: str) -> CompletedProcess:
+    try:
+        return run(
+            [
+                "echion",
+                *args,
+            ],
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+    except CalledProcessError as e:
+        print(e.stdout.decode())
+        print(e.stderr.decode())
+        raise
+
+
 def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional[Data]]:
     with TemporaryDirectory(prefix="echion") as td:
         output_file = Path(td) / "output.echion"
 
-        result = run(
-            [
-                "echion",
-                "-o",
-                str(output_file),
-                *args,
-                sys.executable,
-                "-m",
-                f"tests.{target}",
-            ],
-            capture_output=True,
-            check=True,
+        result = run_echion(
+            "-o",
+            str(output_file),
+            *args,
+            sys.executable,
+            "-m",
+            f"tests.{target}",
         )
 
         return result, (Data(output_file) if output_file.is_file() else None)

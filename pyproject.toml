@@ -40,6 +40,7 @@ dependencies = [
   "pytest-cov>=2.8.1",
   "austin-python",
   "bytecode",
+  "hypno>=1.0.3",
 ]
 [tool.hatch.envs.tests.scripts]
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
@@ -99,6 +100,12 @@ show_missing = true
 force_single_line = true
 lines_after_imports = 2
 profile = "black"
+
+[tool.black]
+line-length = 88
+exclude = [
+  "echion/_version.py",
+]
 
 [tool.mypy]
 ignore_missing_imports = true

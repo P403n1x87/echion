@@ -56,11 +56,15 @@ options:
   -i INTERVAL, --interval INTERVAL
                         sampling interval in microseconds
   -c, --cpu             sample on-CPU stacks only
+  -x EXPOSURE, --exposure EXPOSURE
+                        exposure time, in seconds
   -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
+  -p PID, --pid PID     Attach to the process with the given PID
   -s, --stealth         stealth mode (sampler thread is not accounted for)
-  -w, --where           where mode: display thread stacks on SIGQUIT (usually CTRL+\)
+  -w WHERE, --where WHERE
+                        where mode: display thread stacks of the given process
   -v, --verbose         verbose logging
   -V, --version         show program's version number and exit
 ```
@@ -76,16 +80,25 @@ Supported platforms: Linux (amd64, i686), Darwin (amd64, aarch64)
 
 Supported interpreters: CPython 3.8-3.11
 
+### Notes
+
+Attaching to a process (including in where mode) requires extra permissions. On
+Unix, you can attach to a running process with `sudo`. On Linux, one may also
+set the ptrace scope to `0` with `sudo sysctl kernel.yama.ptrace_scope=0` to
+allow attaching to any process. However, this is not recommended for security
+reasons.
+
 
 ## Where mode
 
-The where mode is similar to [Austin][austin]'s where mode. Since Echion cannot
-attach a running process, it instead relies on the user to send a SIGQUIT to a
-process that has been started with the `echion` wrapper command. On most
-terminals, this is done by pressing <kbd>CTRL</kbd>+<kbd>\\</kbd>. This will
-cause Echion to dump the stacks of all running threads to standard error. This
-is useful for debugging deadlocks and other issues that may occur in a running
-process.
+The where mode is similar to [Austin][austin]'s where mode, that is Echion will
+dump the stacks of all running threads to standard error. This is useful for
+debugging deadlocks and other issues that may occur in a running process.
+
+When running or attaching to a process, you can also send a `SIGQUIT` signal to
+dump the stacks of all running threads. The result is similar to the where mode.
+You can normally send a `SIGQUIT` signal with the <kbd>CTRL</kbd>+<kbd>\\</kbd>
+key combination.
 
 
 ## Why Echion?
@@ -102,22 +115,25 @@ CPython.
 Echion relies on some assumptions to collect and sample all the running threads
 without holding the GIL. This makes Echion very similar to tools like
 [Austin][austin]. However, some features, like multiprocess support, are more
-complicated to handle and would require the use of e.g. IPC solutions. Attaching
-to a running CPython process is also equally challenging, and this is where
-out-of-process tools like Austin provide a better, zero-instrumentation
-alternative.
+complicated to handle and would require the use of e.g. IPC solutions.
+Furthermore, Echion normally requires that you install it within your
+environment, wheareas [Austin][austin] can be installed indepdendently.
 
 
 ## How it works
 
 On a fundamental level, there is one key assumption that Echion relies upon:
 
-> The main thread lives as long as the CPython process itself.
+> The interpreter state object lives as long as the CPython process itself.
 
 All unsafe memory reads are performed indirectly via copies of data structure
 obtained with the use of system calls like `process_vm_readv`. This is
 essentially what allows Echion to run its sampling thread without the GIL.
 
+As for attaching to a running process, we make use of the [hypno][hypno] library
+to inject Python code that bootstraps Echion into the target process.
+
 
 [austin]: http://github.com/p403n1x87/austin
 [austin-vscode]: https://marketplace.visualstudio.com/items?itemName=p403n1x87.austin-vscode
+[hypno]: https://github.com/kmaork/hypno

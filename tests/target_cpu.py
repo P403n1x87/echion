@@ -24,11 +24,17 @@
 
 import threading
 from time import monotonic as time
+from time import sleep
+
+
+def idle():
+    sleep(0.5)
 
 
 def keep_cpu_busy():
     a = []
     i = 0
+    idle()
     end = time() + 1
     while time() <= end:
         i += 1

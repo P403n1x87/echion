@@ -6,6 +6,7 @@
 #include <Python.h>
 
 #include <condition_variable>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -19,6 +20,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined PL_DARWIN
+#include <pthread.h>
+#endif
 
 #include <echion/config.h>
 #include <echion/frame.h>
@@ -31,21 +35,6 @@
 #include <echion/threads.h>
 #include <echion/timing.h>
 #include <echion/vm.h>
-
-// ----------------------------------------------------------------------------
-static inline unsigned long
-get_native_id()
-{
-#if defined PL_LINUX
-#include <unistd.h>
-#include <sys/syscall.h>
-    return syscall(SYS_gettid);
-#elif defined PL_DARWIN
-    uint64_t tid;
-    pthread_threadid_np(NULL, &tid);
-    return tid;
-#endif
-}
 
 // ----------------------------------------------------------------------------
 static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
@@ -86,8 +75,8 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
     threads.clear();
     seen_threads.clear();
 
-    // Start from the main thread
-    threads.insert(main_thread);
+    // Start from the thread list head
+    threads.insert(PyInterpreterState_ThreadHead(interp));
 
     while (!threads.empty())
     {
@@ -109,7 +98,28 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
             const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
             if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
+            {
+#if defined PL_DARWIN
+                // If the threading module was not imported in the target then
+                // we mistakenly take the hypno thread as the main thread. We
+                // assume that any missing thread is the actual main thread.
+                auto new_info = new ThreadInfo();
+                new_info->thread_id = tstate.thread_id;
+
+                auto name = std::string("MainThread");
+                new_info->name = new char[name.length() + 1];
+                std::strcpy((char *)new_info->name, name.c_str());
+
+                pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
+                new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
+
+                new_info->update_cpu_time();
+
+                thread_info_map[tstate.thread_id] = new_info;
+#else
                 return;
+#endif
+            }
 
             ThreadInfo *info = thread_info_map[tstate.thread_id];
 
@@ -160,7 +170,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+        output << "P" << pid << ";T" << thread_name;
 
         // Print the stack
         if (native)
@@ -178,7 +188,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     {
         for (auto task_pair : current_tasks)
         {
-            output << "P" << pid << ";T" << thread_name << " (" << native_id << ")";
+            output << "P" << pid << ";T" << thread_name;
 
             FrameStack *task_stack = task_pair->second;
             if (native)
@@ -198,6 +208,30 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     }
 }
 
+// ----------------------------------------------------------------------------
+static void do_where(std::ostream &stream)
+{
+    stream << "\r"
+           << "🐴 Echion reporting for duty" << std::endl
+           << std::endl;
+
+    // TODO: Add support for tasks
+    for_each_thread(
+        [&stream](PyThreadState *tstate, ThreadInfo *info) -> void
+        {
+            unwind_thread(tstate, info);
+            if (native)
+            {
+                interleave_stacks();
+                render_where(info, interleaved_stack, stream);
+            }
+            else
+                render_where(info, python_stack, stream);
+            stream << std::endl;
+        });
+}
+
+// ----------------------------------------------------------------------------
 static void where_listener()
 {
     for (;;)
@@ -208,32 +242,13 @@ static void where_listener()
         if (!running)
             break;
 
-        std::cerr << "\r"
-                  << "🐴 Echion reporting for duty" << std::endl
-                  << std::endl;
-
-        // TODO: Add support for tasks
-        for_each_thread(
-            [](PyThreadState *tstate, ThreadInfo *info) -> void
-            {
-                unwind_thread(tstate, info);
-                if (native)
-                {
-                    interleave_stacks();
-                    render_where(info, interleaved_stack, std::cerr);
-                }
-                else
-                    render_where(info, python_stack, std::cerr);
-                std::cout << std::endl;
-            });
+        do_where(std::cerr);
     }
 }
 
 // ----------------------------------------------------------------------------
 static void setup_where()
 {
-    running = 1;
-
     where_thread = new std::thread(where_listener);
 }
 
@@ -244,7 +259,6 @@ static void teardown_where()
         {
             std::lock_guard<std::mutex> lock(where_lock);
 
-            running = 0;
             where_cv.notify_one();
         }
 
@@ -257,22 +271,30 @@ static void teardown_where()
 // ----------------------------------------------------------------------------
 static void sampler()
 {
-    // This thread can run without the GIL on the basis that these assumptions
+    // This function can run without the GIL on the basis that these assumptions
     // hold:
-    // 1. The main thread lives as long as the process itself.
+    // 1. The interpreter state object lives as long as the process itself.
+
+    if (where)
+    {
+        auto pipe_name = std::filesystem::temp_directory_path() / ("echion-" + std::to_string(getpid()));
+        std::ofstream pipe(pipe_name, std::ios::out);
+        if (!pipe)
+        {
+            std::cerr << "Failed to open pipe " << pipe_name << std::endl;
+            return;
+        }
+
+        do_where(pipe);
+
+        running = 0;
+
+        return;
+    }
+
+    setup_where();
 
     last_time = gettime();
-
-    // The main thread has likely done some work already, so we prime the per-
-    // thread CPU time mapping with the current CPU time.
-
-    {
-        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
-
-        // TODO: Check that the main thread has been tracked!
-        ThreadInfo *info = thread_info_map[main_thread->thread_id];
-        info->update_cpu_time();
-    }
 
     output.open(std::getenv("ECHION_OUTPUT"));
     if (!output.is_open())
@@ -299,21 +321,26 @@ static void sampler()
             [=](PyThreadState *tstate, ThreadInfo *info)
             { sample_thread(tstate, info, wall_time); });
 
-        while (gettime() < end_time)
+        while (gettime() < end_time && running)
             sched_yield();
 
         last_time = now;
     }
+
+    output.close();
+
+    teardown_where();
 }
 
 // ----------------------------------------------------------------------------
 static void _init()
 {
-    main_thread = PyThreadState_Get();
-    pid = getpid();
-#if defined PL_DARWIN
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+#if PY_VERSION_HEX >= 0x03090000
+    interp = PyInterpreterState_Get();
+#else
+    interp = _PyInterpreterState_Get();
 #endif
+    pid = getpid();
 }
 
 // ----------------------------------------------------------------------------
@@ -322,6 +349,11 @@ static void _start()
     init_frame_cache(MAX_FRAMES * (1 + native));
 
     install_signals();
+
+#if defined PL_DARWIN
+    // Get the wall time clock resource.
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -329,14 +361,6 @@ static PyObject *
 start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     _start();
-
-    if (where)
-    {
-        // In where mode we don't sample but we install the SIGQUIT handler
-        setup_where();
-
-        Py_RETURN_NONE;
-    }
 
     if (!running)
     {
@@ -358,14 +382,6 @@ start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     _start();
 
-    if (where)
-    {
-        // In where mode we don't sample but we install the SIGQUIT handler
-        setup_where();
-
-        Py_RETURN_NONE;
-    }
-
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -386,9 +402,6 @@ static PyObject *
 stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
     running = 0;
-
-    if (where)
-        teardown_where();
 
     // Stop the sampling thread
     if (sampler_thread != nullptr)
@@ -427,8 +440,9 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 {
     uintptr_t thread_id; // map key
     const char *thread_name;
+    pid_t native_id;
 
-    if (!PyArg_ParseTuple(args, "ls", &thread_id, &thread_name))
+    if (!PyArg_ParseTuple(args, "lsi", &thread_id, &thread_name, &native_id))
         return NULL;
 
     const char *name = strdup(thread_name);
@@ -455,9 +469,9 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 
         info->thread_id = thread_id;
         info->name = name;
-        info->native_id = get_native_id();
+        info->native_id = native_id;
 #if defined PL_DARWIN
-        info->mach_port = mach_thread_self();
+        info->mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         info->update_cpu_time();
 
@@ -481,9 +495,6 @@ untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             ThreadInfo *info = thread_info_map[thread_id];
-#if defined PL_DARWIN
-            mach_port_deallocate(mach_task_self(), info->mach_port);
-#endif
             thread_info_map.erase(thread_id);
             delete info;
         }

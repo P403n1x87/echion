@@ -30,11 +30,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libunwind-dev lzma-dev
+          pip install hatch
 
       - name: Run tests
-        run: |
-          pip install hatch
-          hatch -e "tests.py${{ matrix.python-version }}" run tests
+        run: sudo -E env PATH="$PATH" hatch -e "tests.py${{ matrix.python-version }}" run tests
 
       # - name: Publish coverage metrics
       #   run: |
@@ -60,7 +59,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}-dev
 
+      - name: Install test dependencies
+        run: pip install hatch
+  
       - name: Run tests
-        run: |
-          pip install hatch
-          hatch -e "tests.py${{ matrix.python-version }}" run tests
+        run: sudo -E hatch -e "tests.py${{ matrix.python-version }}" run tests
