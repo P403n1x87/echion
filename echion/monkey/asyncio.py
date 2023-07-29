@@ -47,3 +47,7 @@ def patch():
 def unpatch():
     BaseDefaultEventLoopPolicy.set_event_loop = _set_event_loop  # type: ignore[method-assign]
     tasks._GatheringFuture.__init__ = _gather  # type: ignore[attr-defined]
+
+
+def track():
+    pass

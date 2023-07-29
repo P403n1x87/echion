@@ -21,6 +21,7 @@ def test_where():
 
                 assert "🐴 Echion reporting for duty" in err
                 assert "🧵 MainThread:" in err
+                assert "🧵 echion.core.sampler" in err
                 assert "_run_module_as_main" in err
                 assert "main" in err
 

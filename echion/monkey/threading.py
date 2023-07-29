@@ -36,10 +36,6 @@ def patch():
     # this to ensure we can untrack the thread.
     Thread._bootstrap_inner = thread_bootstrap_inner  # type: ignore[attr-defined]
 
-    # Track any threads that are already active.
-    for thread_id, thread in _active.items():
-        echion.track_thread(thread_id, thread.name, thread.native_id)
-
     # TODO: Patch Thread.name.fset to set the thread name in echion
     # TODO: Patching needs to happen on module import, in case we need to perform
     #       module clean-up on start-up (e.g. gevent support).
@@ -48,3 +44,9 @@ def patch():
 def unpatch():
     Thread._set_native_id = _thread_set_native_id  # type: ignore[attr-defined]
     Thread._bootstrap_inner = _thread_bootstrap_inner  # type: ignore[attr-defined]
+
+
+def track():
+    # Track any threads that are already active.
+    for thread_id, thread in _active.items():
+        echion.track_thread(thread_id, thread.name, thread.native_id)
