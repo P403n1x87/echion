@@ -304,7 +304,7 @@ bool Frame::is_valid()
 
 // ----------------------------------------------------------------------------
 
-static Frame *INVALID_FRAME = new Frame("INVALID");
+static Frame *INVALID_FRAME = nullptr;
 static Frame *UNKNOWN_FRAME = new Frame("<unknown>");
 
 static LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
@@ -369,7 +369,8 @@ Frame *Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     Frame *frame = Frame::get(iframe.f_code, lasti);
 
-    frame->is_entry = iframe.is_entry;
+    if (frame != INVALID_FRAME)
+        frame->is_entry = iframe.is_entry;
 
     *prev_addr = frame == INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 

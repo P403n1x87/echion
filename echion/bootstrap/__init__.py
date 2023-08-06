@@ -5,9 +5,10 @@
 import atexit
 import os
 import sys
-from threading import Thread
+from types import ModuleType
 
 import echion.core as ec
+from echion.module import ModuleWatchdog
 
 
 # We cannot unregister the fork hook, so we use this flag instead
@@ -34,10 +35,26 @@ def start():
     ec.set_native(bool(int(os.getenv("ECHION_NATIVE", 0))))
     ec.set_where(bool(int(os.getenv("ECHION_WHERE", 0) or 0)))
 
-    # Monkey-patch the standard library
-    for module in ("echion.monkey.asyncio", "echion.monkey.threading"):
-        __import__(module)
-        sys.modules[module].patch()
+    # Monkey-patch the standard library on import
+    try:
+        ModuleWatchdog.install()
+        atexit.register(ModuleWatchdog.uninstall)
+    except RuntimeError:
+        # If ModuleWatchdog we have already registered the import hooks.
+        pass
+    else:
+        for module in ("asyncio", "threading"):
+
+            @ModuleWatchdog.after_module_imported(module)
+            def _(module: ModuleType) -> None:
+                echion_module = f"echion.monkey.{module.__name__}"
+                __import__(echion_module)
+                sys.modules[echion_module].patch()
+
+            try:
+                sys.modules[f"echion.monkey.{module}"].track()
+            except KeyError:
+                pass
 
     do_on_fork = True
     os.register_at_fork(after_in_child=restart_on_fork)
@@ -46,6 +63,8 @@ def start():
     if int(os.getenv("ECHION_STEALTH", 0)):
         ec.start_async()
     else:
+        from threading import Thread
+
         Thread(target=ec.start, name="echion.core.sampler", daemon=True).start()
 
 
@@ -54,8 +73,16 @@ def stop():
 
     ec.stop()
 
-    for module in ("echion.monkey.asyncio", "echion.monkey.threading"):
-        sys.modules[module].unpatch()
+    for module in ("asyncio", "threading"):
+        echion_module = f"echion.monkey.{module}"
+        try:
+            sys.modules[echion_module].unpatch()
+        except KeyError:
+            pass
+
+    ModuleWatchdog.uninstall()
 
     atexit.unregister(stop)
+    atexit.unregister(ModuleWatchdog.uninstall)
+
     do_on_fork = False

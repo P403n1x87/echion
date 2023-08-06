@@ -90,7 +90,7 @@ def run_echion(*args: str) -> CompletedProcess:
             ],
             capture_output=True,
             check=True,
-            timeout=10,
+            timeout=30,
         )
     except CalledProcessError as e:
         print(e.stdout.decode())

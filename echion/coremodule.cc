@@ -99,7 +99,6 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
 
             if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
             {
-#if defined PL_DARWIN
                 // If the threading module was not imported in the target then
                 // we mistakenly take the hypno thread as the main thread. We
                 // assume that any missing thread is the actual main thread.
@@ -110,15 +109,14 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
                 new_info->name = new char[name.length() + 1];
                 std::strcpy((char *)new_info->name, name.c_str());
 
+#if defined PL_DARWIN
                 pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
                 new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
+#endif
 
                 new_info->update_cpu_time();
 
                 thread_info_map[tstate.thread_id] = new_info;
-#else
-                return;
-#endif
             }
 
             ThreadInfo *info = thread_info_map[tstate.thread_id];

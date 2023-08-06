@@ -66,7 +66,6 @@ unwind_frame(PyObject *frame_addr, FrameStack *stack)
     {
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
         {
-            stack->push_back(new Frame("INVALID"));
             count++;
             break;
         }
@@ -75,7 +74,6 @@ unwind_frame(PyObject *frame_addr, FrameStack *stack)
         Frame *frame = Frame::read(current_frame_addr, &current_frame_addr);
         if (frame == NULL)
         {
-            stack->push_back(new Frame("INVALID"));
             count++;
             break;
         }
