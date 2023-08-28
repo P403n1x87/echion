@@ -7,6 +7,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <frameobject.h>
+#if PY_VERSION_HEX >= 0x030d0000
+#define Py_BUILD_CORE
+#endif
 #if PY_VERSION_HEX >= 0x030b0000
 #include <internal/pycore_frame.h>
 #endif
