@@ -5,9 +5,7 @@
 [project]
 name = "echion"
 description = "In-process CPython frame stack sampler"
-authors = [
-  {name = "Gabriele N. Tornetta", email="phoenix1987@gmail.com"},
-]
+authors = [{ name = "Gabriele N. Tornetta", email = "phoenix1987@gmail.com" }]
 readme = "README.md"
 
 keywords = ["performance", "profiling", "testing", "development"]
@@ -46,7 +44,7 @@ dependencies = [
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
 
 [[tool.hatch.envs.tests.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 
 [tool.hatch.envs.checks]
 python = "3.10"
@@ -69,10 +67,7 @@ linting = "flake8 {args} echion/ tests/ "
 [tool.hatch.envs.coverage]
 python = "3.10"
 template = "coverage"
-dependencies = [
-  "coverage[toml]",
-  "codecov",
-]
+dependencies = ["coverage[toml]", "codecov"]
 
 [tool.hatch.envs.coverage.scripts]
 cov = "coverage xml --fail-under=50"
@@ -81,10 +76,7 @@ cov = "coverage xml --fail-under=50"
 source = "vcs"
 
 [tool.hatch.build.targets.sdist]
-exclude = [
-  "/.github",
-  "/docs",
-]
+exclude = ["/.github", "/docs"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["echion"]
@@ -103,9 +95,7 @@ profile = "black"
 
 [tool.black]
 line-length = 88
-exclude = [
-  "echion/_version.py",
-]
+exclude = ["echion/_version.py"]
 
 [tool.mypy]
 ignore_missing_imports = true

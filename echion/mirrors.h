@@ -9,7 +9,10 @@
 #include <dictobject.h>
 #include <setobject.h>
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+#define Py_BUILD_CORE
+#include <internal/pycore_dict_struct.h>
+#elif PY_VERSION_HEX >= 0x030b0000
 #define Py_BUILD_CORE
 #include <internal/pycore_dict.h>
 #else

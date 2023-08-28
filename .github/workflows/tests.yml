@@ -44,6 +44,38 @@ jobs:
       #   env:
       #     CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
 
+  tests-linux-python-src:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+
+    name: Tests with Python 3.13 on ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Checkout Python repository
+        uses: actions/checkout@v2
+        with:
+          repository: vstinner/cpython
+          ref: dict_struct
+          path: cpython
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libunwind-dev lzma-dev
+          pip install hatch
+
+      - name: Compile and install Python
+        run: |
+          cd cpython
+          ./configure
+          make -j 2
+          sudo make install
+
+      - name: Run tests
+        run: sudo -E env PATH="$PATH" hatch -e "tests.py3.13" run tests
+
   tests-macos:
     runs-on: macos-latest
     strategy:
