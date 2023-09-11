@@ -11,6 +11,9 @@
 
 #if PY_VERSION_HEX >= 0x030b0000
 #define Py_BUILD_CORE
+#if defined __GNUC__ && defined HAVE_STD_ATOMIC
+#undef HAVE_STD_ATOMIC
+#endif
 #include <internal/pycore_dict.h>
 #else
 typedef struct
