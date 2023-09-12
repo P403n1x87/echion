@@ -109,6 +109,12 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
                 new_info->name = new char[name.length() + 1];
                 std::strcpy((char *)new_info->name, name.c_str());
 
+#if PY_VERSION_HEX >= 0x030b0000
+                new_info->native_id = tstate.native_thread_id;
+#else
+                new_info->native_id = getpid();
+#endif
+
 #if defined PL_DARWIN
                 pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
                 new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
@@ -136,15 +142,7 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
 // ----------------------------------------------------------------------------
 static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t delta)
 {
-    unsigned long native_id = 0;
     const char *thread_name = NULL;
-
-    native_id = info->native_id;
-    if (native_id == 0)
-        // If we fail to retrieve the native thread ID, then quite likely the
-        // pthread structure has been destroyed and we should stop trying to
-        // resolve any more memory addresses.
-        return;
 
     if (cpu)
     {
