@@ -50,11 +50,7 @@ def start():
                 echion_module = f"echion.monkey.{module.__name__}"
                 __import__(echion_module)
                 sys.modules[echion_module].patch()
-
-            try:
-                sys.modules[f"echion.monkey.{module}"].track()
-            except KeyError:
-                pass
+                sys.modules[echion_module].track()
 
     do_on_fork = True
     os.register_at_fork(after_in_child=restart_on_fork)
