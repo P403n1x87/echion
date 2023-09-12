@@ -4,6 +4,10 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#if PY_VERSION_HEX >= 0x030c0000
+// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#undef _PyGC_FINALIZED
+#endif
 
 #include <condition_variable>
 #include <filesystem>
@@ -535,8 +539,11 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
 static PyObject *
 init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
 {
-    if (!PyArg_ParseTuple(args, "OO", &asyncio_current_tasks, &asyncio_all_tasks))
+    if (!PyArg_ParseTuple(args, "OOO", &asyncio_current_tasks, &asyncio_scheduled_tasks, &asyncio_eager_tasks))
         return NULL;
+
+    if (asyncio_eager_tasks == Py_None)
+        asyncio_eager_tasks = NULL;
 
     Py_RETURN_NONE;
 }
@@ -569,7 +576,7 @@ static PyMethodDef echion_core_methods[] = {
     {"init", init, METH_NOARGS, "Initialize the stack sampler (usually after a fork)"},
     // Task support
     {"track_asyncio_loop", track_asyncio_loop, METH_VARARGS, "Map the name of a task with its identifier"},
-    {"init_asyncio", init_asyncio, METH_VARARGS, "Enter a task"},
+    {"init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking"},
     {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},

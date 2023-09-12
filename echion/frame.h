@@ -370,7 +370,13 @@ Frame *Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     Frame *frame = Frame::get(iframe.f_code, lasti);
 
     if (frame != INVALID_FRAME)
+    {
+#if PY_VERSION_HEX >= 0x030c0000
+        frame->is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+#else
         frame->is_entry = iframe.is_entry;
+#endif
+    }
 
     *prev_addr = frame == INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
