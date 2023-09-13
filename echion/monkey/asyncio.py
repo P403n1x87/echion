@@ -1,3 +1,4 @@
+import sys
 import typing as t
 from asyncio import tasks
 from asyncio.events import BaseDefaultEventLoopPolicy
@@ -41,8 +42,6 @@ def patch():
     BaseDefaultEventLoopPolicy.set_event_loop = set_event_loop  # type: ignore[method-assign]
     tasks._GatheringFuture.__init__ = gather  # type: ignore[attr-defined]
 
-    echion.init_asyncio(tasks._current_tasks, tasks._all_tasks.data)  # type: ignore[attr-defined]
-
 
 def unpatch():
     BaseDefaultEventLoopPolicy.set_event_loop = _set_event_loop  # type: ignore[method-assign]
@@ -50,4 +49,11 @@ def unpatch():
 
 
 def track():
-    pass
+    if sys.hexversion >= 0x030C0000:
+        scheduled_tasks = tasks._scheduled_tasks.data
+        eager_tasks = tasks._eager_tasks
+    else:
+        scheduled_tasks = tasks._all_tasks.data
+        eager_tasks = None
+
+    echion.init_asyncio(tasks._current_tasks, scheduled_tasks, eager_tasks)  # type: ignore[attr-defined]

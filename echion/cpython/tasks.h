@@ -137,6 +137,10 @@ extern "C"
 
     // ---- cr_await ----
 
+#if PY_VERSION_HEX >= 0x030c0000
+#define RESUME_QUICK INSTRUMENTED_RESUME
+#endif
+
 #if PY_VERSION_HEX >= 0x030b0000
     PyObject *
     PyGen_yf(PyGenObject *gen, PyObject *frame_addr)

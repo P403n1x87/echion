@@ -130,7 +130,19 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 
     origin = (PyObject *)task_addr;
 
+#if PY_VERSION_HEX >= 0x030c0000
+    // The task name might hold a PyLong for deferred task name formatting.
+    PyLongObject name_obj;
+    if (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
+    {
+        name = new char[32]; // Should be safe with small IDs.
+        std::sprintf((char *)name, "Task-%ld", PyLong_AsLong((PyObject *)&name_obj));
+    }
+    else
+        name = pyunicode_to_utf8(task.task_name);
+#else
     name = pyunicode_to_utf8(task.task_name);
+#endif
     loop = task.task_loop;
 
     waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
@@ -168,14 +180,15 @@ TaskInfo TaskInfo::current(PyObject *loop)
 // TODO: Make this a "for_each_task" function?
 static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
 {
-    MirrorSet mirror(asyncio_all_tasks);
-    auto all_tasks = mirror.as_unordered_set();
+    MirrorSet mirror(asyncio_scheduled_tasks);
+    auto scheduled_tasks = mirror.as_unordered_set();
 
-    if (all_tasks == nullptr)
+    if (scheduled_tasks == nullptr)
         return NULL;
 
     std::vector<TaskInfo *> *tasks = new std::vector<TaskInfo *>();
-    for (auto task_wr_addr : *all_tasks)
+
+    for (auto task_wr_addr : *scheduled_tasks)
     {
         PyWeakReference task_wr;
         if (copy_type(task_wr_addr, task_wr))
@@ -189,6 +202,27 @@ static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
         }
 
         tasks->push_back(task_info);
+    }
+
+    if (asyncio_eager_tasks != NULL)
+    {
+        MirrorSet mirror(asyncio_eager_tasks);
+        auto eager_tasks = mirror.as_unordered_set();
+
+        if (eager_tasks == nullptr)
+            return NULL;
+
+        for (auto task_addr : *eager_tasks)
+        {
+            TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+            if (loop != NULL && task_info->loop != loop)
+            {
+                delete task_info;
+                continue;
+            }
+
+            tasks->push_back(task_info);
+        }
     }
 
     return tasks;

@@ -22,4 +22,5 @@ static std::condition_variable where_cv;
 static std::mutex where_lock;
 
 static PyObject *asyncio_current_tasks = NULL;
-static PyObject *asyncio_all_tasks = NULL;
+static PyObject *asyncio_scheduled_tasks = NULL; // WeakSet
+static PyObject *asyncio_eager_tasks = NULL;     // set

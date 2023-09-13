@@ -15,7 +15,14 @@
 static void render(FrameStack &stack, std::ostream &output)
 {
     for (auto it = stack.rbegin(); it != stack.rend(); ++it)
+    {
+#if PY_VERSION_HEX >= 0x030c0000
+        if ((*it)->is_entry)
+            // This is a shim frame so we skip it.
+            continue;
+#endif
         (*it)->render(output);
+    }
 }
 
 // ----------------------------------------------------------------------------
