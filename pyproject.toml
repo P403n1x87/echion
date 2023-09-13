@@ -49,6 +49,7 @@ tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
 python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
 [tool.hatch.envs.checks]
+detached = true
 python = "3.10"
 template = "checks"
 dependencies = [
@@ -67,6 +68,7 @@ typing = "mypy --install-types --non-interactive --show-error-codes {args} echio
 linting = "flake8 {args} echion/ tests/ "
 
 [tool.hatch.envs.coverage]
+detached = true
 python = "3.10"
 template = "coverage"
 dependencies = [
