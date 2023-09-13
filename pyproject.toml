@@ -22,6 +22,9 @@ classifiers = [
 ]
 
 requires-python = ">=3.8"
+dependencies = [
+  "hypno~=1.0",
+]
 
 dynamic = ["version"]
 
@@ -40,8 +43,8 @@ dependencies = [
   "pytest-cov>=2.8.1",
   "austin-python",
   "bytecode",
-  "hypno>=1.0.3",
 ]
+
 [tool.hatch.envs.tests.scripts]
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
 
