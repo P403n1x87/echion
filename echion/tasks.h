@@ -92,7 +92,7 @@ class TaskInfo
 {
 public:
     PyObject *origin = NULL;
-    const char *name = NULL;
+    std::optional<std::string> name = std::nullopt; // TODO: Change to string and raise instead
     PyObject *loop = NULL;
     GenInfo *coro = NULL;
 
@@ -102,7 +102,6 @@ public:
     TaskInfo(TaskObj *);
     ~TaskInfo()
     {
-        delete[] name;
         delete waiter;
         delete coro;
     }
@@ -133,20 +132,16 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 #if PY_VERSION_HEX >= 0x030c0000
     // The task name might hold a PyLong for deferred task name formatting.
     PyLongObject name_obj;
-    if (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
-    {
-        name = new char[32]; // Should be safe with small IDs.
-        std::sprintf((char *)name, "Task-%ld", PyLong_AsLong((PyObject *)&name_obj));
-    }
-    else
-        name = pyunicode_to_utf8(task.task_name);
+    name = (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
+               ? std::optional("Task-" + std::to_string(PyLong_AsLong((PyObject *)&name_obj)))
+               : pyunicode_to_utf8(task.task_name);
 #else
     name = pyunicode_to_utf8(task.task_name);
 #endif
     loop = task.task_loop;
 
     waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
-    if (waiter->name == NULL)
+    if (waiter->name == std::nullopt)
     {
         // Probably not a task (best to check on coro?)
         delete waiter;
@@ -346,7 +341,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
             }
 
             // Add the task name frame
-            stack->push_back(new Frame(current_task->name));
+            stack->push_back(new Frame(*(current_task->name)));
 
             // Get the next task in the chain
             PyObject *task_origin = current_task->origin;

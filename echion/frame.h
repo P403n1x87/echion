@@ -29,8 +29,8 @@
 class Frame
 {
 public:
-    const char *filename = NULL;
-    const char *name = NULL;
+    std::optional<std::string> filename = std::nullopt;
+    std::optional<std::string> name = std::nullopt;
     struct _location
     {
         int line = 0;
@@ -44,25 +44,25 @@ public:
 
     void render(std::ostream &stream)
     {
-        stream << ";" << this->filename << ":" << this->name << ":" << this->location.line;
+        stream << ";" << *filename << ":" << *name << ":" << location.line;
     }
 
     void render_where(std::ostream &stream)
     {
-        if (std::strstr(this->filename, "native@"))
-            stream << "          \033[38;5;248;1m" << this->name
-                   << "\033[0m \033[38;5;246m(" << this->filename
-                   << "\033[0m:\033[38;5;246m" << this->location.line
+        if ((*filename).rfind("native@", 0) == 0)
+            stream << "          \033[38;5;248;1m" << *name
+                   << "\033[0m \033[38;5;246m(" << *filename
+                   << "\033[0m:\033[38;5;246m" << location.line
                    << ")\033[0m" << std::endl;
         else
-            stream << "          \033[33;1m" << this->name
-                   << "\033[0m (\033[36m" << this->filename
-                   << "\033[0m:\033[32m" << this->location.line
+            stream << "          \033[33;1m" << *name
+                   << "\033[0m (\033[36m" << *filename
+                   << "\033[0m:\033[32m" << location.line
                    << "\033[0m)" << std::endl;
     }
 
-    Frame(const char *);
-    ~Frame();
+    Frame(const char *name) : name({std::string(name)}){};
+    Frame(std::string &name) : name(name){};
 
     static Frame *read(PyObject *, PyObject **);
     static Frame *read(PyObject *frame_addr)
@@ -83,7 +83,6 @@ private:
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
-    bool is_special = false;
     int infer_location(PyCodeObject *, int);
 };
 
@@ -231,18 +230,6 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
     return 0;
 }
 
-Frame::Frame(const char *name)
-{
-    this->filename = "";
-    this->name = name;
-    this->location.line = 0;
-    this->location.line_end = 0;
-    this->location.column = 0;
-    this->location.column_end = 0;
-
-    this->is_special = true;
-}
-
 // ----------------------------------------------------------------------------
 Frame::Frame(PyCodeObject *code, int lasti)
 {
@@ -283,22 +270,13 @@ Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
     this->location.line = offset;
 }
 
-Frame::~Frame()
-{
-    if (this->is_special)
-        return;
-
-    delete[] this->filename;
-    delete[] this->name;
-}
-
 bool Frame::is_valid()
 {
 #if PY_VERSION_HEX >= 0x030c0000
     // Shim frames might not have location information
-    return this->filename != NULL && this->name != NULL;
+    return filename != std::nullopt && name != std::nullopt;
 #else
-    return this->filename != NULL && this->name != NULL && this->location.line != 0;
+    return filename != std::nullopt && name != std::nullopt && location.line != 0;
 #endif
 }
 

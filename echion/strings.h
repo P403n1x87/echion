@@ -9,6 +9,8 @@
 #include <unicodeobject.h>
 
 #include <cstdint>
+#include <optional>
+#include <string>
 
 #include <echion/vm.h>
 
@@ -36,34 +38,29 @@ pybytes_to_bytes_and_size(PyObject *bytes_addr, Py_ssize_t *size)
 }
 
 // ----------------------------------------------------------------------------
-static const char *
+static std::optional<std::string>
 pyunicode_to_utf8(PyObject *str_addr)
 {
     PyUnicodeObject str;
     if (copy_type(str_addr, str))
-        return NULL;
+        return {};
 
     PyASCIIObject &ascii = str._base._base;
 
     if (ascii.state.kind != 1)
-        return NULL;
+        return {};
 
     const char *data = ascii.state.compact ? (const char *)(((uint8_t *)str_addr) + sizeof(ascii)) : (const char *)str._base.utf8;
     if (data == NULL)
-        return NULL;
+        return {};
 
     Py_ssize_t size = ascii.state.compact ? ascii.length : str._base.utf8_length;
     if (size < 0 || size > 1024)
-        return NULL;
+        return {};
 
-    char *dest = new char[size + 1];
-    if (copy_generic(data, dest, size))
-    {
-        delete[] dest;
-        return NULL;
-    }
+    auto dest = std::string(size, '\0');
+    if (copy_generic(data, dest.c_str(), size))
+        return {};
 
-    dest[size] = '\0';
-
-    return dest;
+    return {dest};
 }
