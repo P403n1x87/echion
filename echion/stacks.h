@@ -91,7 +91,7 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     std::unordered_set<void *> seen_frames; // Used to detect cycles in the stack
 
-    python_stack.clear();
+    stack.clear();
 
 #if PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
