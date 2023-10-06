@@ -24,7 +24,9 @@ public:
     uintptr_t thread_id;
     unsigned long native_id;
     const char *name;
-#if defined PL_DARWIN
+#if defined PL_LINUX
+    clockid_t cpu_clock_id;
+#elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
     microsecond_t cpu_time;
@@ -43,12 +45,8 @@ public:
 void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
-    clockid_t cid;
-    if (pthread_getcpuclockid((pthread_t)this->thread_id, &cid))
-        return;
-
     struct timespec ts;
-    if (clock_gettime(cid, &ts))
+    if (clock_gettime(cpu_clock_id, &ts))
         return;
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
