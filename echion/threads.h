@@ -24,7 +24,9 @@ public:
     uintptr_t thread_id;
     unsigned long native_id;
     const char *name;
-#if defined PL_DARWIN
+#if defined PL_LINUX
+    clockid_t cpu_clock_id;
+#elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
     microsecond_t cpu_time;
@@ -42,29 +44,23 @@ public:
 
 void ThreadInfo::update_cpu_time()
 {
-  return;
+#if defined PL_LINUX
+    struct timespec ts;
+    if (clock_gettime(cpu_clock_id, &ts))
+        return;
+
+    this->cpu_time = TS_TO_MICROSECOND(ts);
+#elif defined PL_DARWIN
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    kern_return_t kr = thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
+
+    if (kr != KERN_SUCCESS || (info.flags & TH_FLAGS_IDLE))
+        return;
+
+    this->cpu_time = TV_TO_MICROSECOND(info.user_time) + TV_TO_MICROSECOND(info.system_time);
+#endif
 }
-//#if defined PL_LINUX
-//    clockid_t cid;
-//    if (pthread_getcpuclockid((pthread_t)this->thread_id, &cid))
-//        return;
-//
-//    struct timespec ts;
-//    if (clock_gettime(cid, &ts))
-//        return;
-//
-//    this->cpu_time = TS_TO_MICROSECOND(ts);
-//#elif defined PL_DARWIN
-//    thread_basic_info_data_t info;
-//    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-//    kern_return_t kr = thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
-//
-//    if (kr != KERN_SUCCESS || (info.flags & TH_FLAGS_IDLE))
-//        return;
-//
-//    this->cpu_time = TV_TO_MICROSECOND(info.user_time) + TV_TO_MICROSECOND(info.system_time);
-//#endif
-//}
 
 bool ThreadInfo::is_running()
 {
