@@ -14,6 +14,7 @@
 #include <libunwind.h>
 
 #include <echion/frame.h>
+#include "interface.hpp"
 
 #define MAX_FRAMES 2048
 
@@ -55,17 +56,29 @@ void unwind_native_stack()
 }
 
 // ----------------------------------------------------------------------------
+static inline const char *get_or_default(const std::optional<std::string> &str, const char *base) {
+  return str.has_value() ? str->c_str() : base;
+}
+
 static size_t
 unwind_frame(PyObject *frame_addr, FrameStack *stack)
 {
+    (void)stack;
+
     std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
     int count = 0;
 
     PyObject *current_frame_addr = frame_addr;
-    while (current_frame_addr != NULL && stack->size() < MAX_FRAMES)
+    while (current_frame_addr != NULL && count < MAX_FRAMES)
     {
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
         {
+            ddup_push_frame(
+                "[BROKEN]",
+                "lol_nofile.py",
+                0,
+                0
+            );
             count++;
             break;
         }
@@ -74,11 +87,23 @@ unwind_frame(PyObject *frame_addr, FrameStack *stack)
         Frame *frame = Frame::read(current_frame_addr, &current_frame_addr);
         if (frame == NULL)
         {
+            ddup_push_frame(
+                "[BROKEN]",
+                "lol_nofile.py",
+                0,
+                0
+            );
             count++;
             break;
         }
+        ddup_push_frame(
+            get_or_default(frame->name, "unknown_func"),
+            get_or_default(frame->filename, "unknown_file"),
+            0,
+            frame->location.line
+        );
 
-        stack->push_back(frame);
+//        stack->push_back(frame);
         count++;
     }
 
@@ -86,25 +111,76 @@ unwind_frame(PyObject *frame_addr, FrameStack *stack)
 }
 
 // ----------------------------------------------------------------------------
+const char *get_env_or_default(const char *name, const char *default_value) {
+  char *value = getenv(name);
+  if (value == NULL || strlen(value) == 0)
+    return default_value;
+  return value;
+}
 static void
 unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
+    static bool ddup_initialized = false;
+    if (!ddup_initialized) {
+        std::cout << "Initializing ddup" << std::endl;
+        ddup_initialized = true;
+        ddup_config_env(get_env_or_default("DD_ENV", "prod"));
+        ddup_config_version(get_env_or_default("DD_VERSION", ""));
+        ddup_config_service(get_env_or_default("DD_SERVICE", "echion_service"));
+        ddup_config_url(get_env_or_default("DD_TRACE_AGENT_URL", "http://localhost:8126"));
+        ddup_config_runtime("python");
+        ddup_config_runtime_version(Py_GetVersion());
+        ddup_config_profiler_version("echion_v0.1");
+        ddup_config_max_nframes(MAX_FRAMES);
+        ddup_init();
+    }
+
     std::unordered_set<void *> seen_frames; // Used to detect cycles in the stack
 
-    python_stack.clear();
+//    stack.clear();
 
 #if PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
-    if (copy_type(cframe_addr, cframe))
-        // TODO: Invalid frame
+    if (copy_type(cframe_addr, cframe)) {
+        ddup_start_sample(2);
+        ddup_push_walltime(10000, 1);
+        ddup_push_cputime(10000, 1);
+        ddup_push_frame(
+            "[DROPPED]",
+            "nofile.py",
+            0,
+            0
+        );
+        ddup_flush_sample();
         return;
+    }
 
     PyObject *frame_addr = (PyObject *)cframe.current_frame;
 #else // Python < 3.11
     PyObject *frame_addr = (PyObject *)tstate->frame;
 #endif
+
+    // Lies, damned lies, and statistics
+    ddup_start_sample(MAX_FRAMES);
+    ddup_push_walltime(100, 1);
+    ddup_push_cputime(100, 1);
+
     unwind_frame(frame_addr, &stack);
+
+    ddup_flush_sample();
+
+    // Use a static timer for now
+    static auto lastTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastTime);
+
+    if (duration.count() >= 60) {
+        std::cout << "Uploading!" << std::endl;
+        ddup_upload();
+        lastTime = currentTime;
+    }
 }
 
 // ----------------------------------------------------------------------------

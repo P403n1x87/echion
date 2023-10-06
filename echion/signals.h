@@ -21,7 +21,7 @@ static std::mutex sigprof_handler_lock;
 // ----------------------------------------------------------------------------
 void sigprof_handler(int signum)
 {
-    unwind_native_stack();
+//    unwind_native_stack();
     unwind_python_stack(current_tstate);
     // NOTE: Native stacks for tasks is non-trivial, so we skip it for now.
 
