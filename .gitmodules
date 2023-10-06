@@ -1,0 +1,3 @@
+[submodule "vendored/dd-trace-py"]
+	path = vendored/dd-trace-py
+	url = git@github.com:DataDog/dd-trace-py.git
