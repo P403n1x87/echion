@@ -2,6 +2,9 @@
 //
 // Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
+#pragma once
+
+#include <exception>
 #include <list>
 #include <optional>
 #include <unordered_map>
@@ -12,13 +15,18 @@ class LRUCache
 public:
     LRUCache(size_t capacity) : capacity(capacity) {}
 
-    V *lookup(const K &k);
+    V &lookup(const K &k);
 
     void store(const K &k, std::unique_ptr<V> v);
-    void store(const K &k, V *v)
+
+    class LookupError : public std::exception
     {
-        return store(k, std::unique_ptr<V>(v));
-    }
+    public:
+        const char *what() const noexcept override
+        {
+            return "Key not found in cache";
+        }
+    };
 
 private:
     size_t capacity;
@@ -44,14 +52,14 @@ void LRUCache<K, V>::store(const K &k, std::unique_ptr<V> v)
 }
 
 template <typename K, typename V>
-V *LRUCache<K, V>::lookup(const K &k)
+V &LRUCache<K, V>::lookup(const K &k)
 {
     auto itr = index.find(k);
     if (itr == index.end())
-        return nullptr;
+        throw LookupError();
 
     // Move to the front of the list
     items.splice(items.begin(), items, itr->second);
 
-    return itr->second->second.get();
+    return *(itr->second->second.get());
 }

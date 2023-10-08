@@ -66,7 +66,7 @@ static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
     {
         unwind_python_stack(tstate);
         if (info->asyncio_loop != 0)
-            unwind_tasks(tstate, info);
+            unwind_tasks(info);
     }
 }
 
@@ -431,7 +431,7 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 
     restore_signals();
 
-    destroy_frame_cache();
+    reset_frame_cache();
 
     Py_RETURN_NONE;
 }

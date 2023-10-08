@@ -96,6 +96,8 @@ public:
     PyObject *loop = NULL;
     GenInfo *coro = NULL;
 
+    Frame::Ptr root_frame = nullptr;
+
     // Information to reconstruct the async stack as best as we can
     TaskInfo *waiter = NULL;
 
@@ -138,6 +140,7 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 #else
     name = pyunicode_to_utf8(task.task_name);
 #endif
+    root_frame = name != std::nullopt ? std::make_unique<Frame>(*name) : nullptr;
     loop = task.task_loop;
 
     waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
@@ -262,7 +265,7 @@ static size_t unwind_task(TaskInfo *info, FrameStack *stack)
 }
 
 // ----------------------------------------------------------------------------
-static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
+static void unwind_tasks(ThreadInfo *info)
 {
     std::unordered_set<TaskInfo *> leaf_tasks;
     std::unordered_set<PyObject *> parent_tasks;
@@ -327,7 +330,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
                 FrameStack temp_stack;
                 size_t nframes = python_stack.size() - stack_size + 1;
                 // TODO: assert nframe >= 0
-                for (int i = 0; i < nframes; i++)
+                for (size_t i = 0; i < nframes; i++)
                 {
                     auto python_frame = python_stack.front();
                     temp_stack.push_front(python_frame);
@@ -341,7 +344,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
             }
 
             // Add the task name frame
-            stack->push_back(new Frame(*(current_task->name)));
+            stack->push_back(*current_task->root_frame);
 
             // Get the next task in the chain
             PyObject *task_origin = current_task->origin;

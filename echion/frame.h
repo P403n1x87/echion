@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <exception>
+#include <functional>
 #include <iostream>
 
 #include <cxxabi.h>
@@ -29,6 +31,18 @@
 class Frame
 {
 public:
+    typedef std::reference_wrapper<Frame> Ref;
+    typedef std::unique_ptr<Frame> Ptr;
+
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot read frame";
+        }
+    };
+
     std::optional<std::string> filename = std::nullopt;
     std::optional<std::string> name = std::nullopt;
     struct _location
@@ -64,8 +78,8 @@ public:
     Frame(const char *name) : name({std::string(name)}){};
     Frame(std::string &name) : name(name){};
 
-    static Frame *read(PyObject *, PyObject **);
-    static Frame *read(PyObject *frame_addr)
+    static Frame &read(PyObject *, PyObject **);
+    static Frame &read(PyObject *frame_addr)
     {
         PyObject *unused;
         return Frame::read(frame_addr, &unused);
@@ -73,12 +87,13 @@ public:
 
     bool is_valid();
 
-    static Frame *get(PyCodeObject *code, int lasti);
-    static Frame *get(unw_word_t pc, const char *name, unw_word_t offset);
+    static Frame &get(PyCodeObject *code, int lasti);
+    static Frame &get(unw_word_t pc, const char *name, unw_word_t offset);
 
-private:
     Frame(PyCodeObject *, int);
     Frame(unw_word_t, const char *, unw_word_t);
+
+private:
     static inline uintptr_t key(PyCodeObject *code, int lasti)
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
@@ -89,7 +104,7 @@ private:
 #if PY_VERSION_HEX >= 0x030b0000
 // ----------------------------------------------------------------------------
 static inline int
-_read_varint(unsigned char *table, size_t *i)
+_read_varint(unsigned char *table, ssize_t *i)
 {
     int val = table[++*i] & 63;
     int shift = 0;
@@ -103,7 +118,7 @@ _read_varint(unsigned char *table, size_t *i)
 
 // ----------------------------------------------------------------------------
 static inline int
-_read_signed_varint(unsigned char *table, size_t *i)
+_read_signed_varint(unsigned char *table, ssize_t *i)
 {
     int val = _read_varint(table, i);
     return (val & 1) ? -(val >> 1) : (val >> 1);
@@ -122,7 +137,7 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
     if (table == NULL)
         return 1;
 
-    for (size_t i = 0, bc = 0; i < len; i++)
+    for (Py_ssize_t i = 0, bc = 0; i < len; i++)
     {
         bc += (table[i] & 7) + 1;
         int code = (table[i] >> 3) & 15;
@@ -282,81 +297,86 @@ bool Frame::is_valid()
 
 // ----------------------------------------------------------------------------
 
-static Frame *INVALID_FRAME = nullptr;
-static Frame *UNKNOWN_FRAME = new Frame("<unknown>");
+static Frame INVALID_FRAME("<invalid>");
+static Frame UNKNOWN_FRAME("<unknown>");
 
-static LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
+static std::unique_ptr<LRUCache<uintptr_t, Frame>> frame_cache = nullptr;
 
 static void init_frame_cache(size_t capacity)
 {
-    frame_cache = new LRUCache<uintptr_t, Frame>(capacity);
+    frame_cache = std::make_unique<LRUCache<uintptr_t, Frame>>(capacity);
 }
 
-static void destroy_frame_cache()
+static void reset_frame_cache()
 {
-    delete frame_cache;
+    frame_cache.reset();
 }
 
-Frame *Frame::get(PyCodeObject *code_addr, int lasti)
+Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 {
     PyCodeObject code;
     if (copy_type(code_addr, code))
         return INVALID_FRAME;
 
     uintptr_t frame_key = Frame::key(code_addr, lasti);
-    Frame *frame = frame_cache->lookup(frame_key);
 
-    if (frame == nullptr)
+    try
     {
-        frame = new Frame(&code, lasti);
-        if (!frame->is_valid())
-        {
-            delete frame;
-            return INVALID_FRAME;
-        }
-        frame_cache->store(frame_key, frame);
+        return frame_cache->lookup(frame_key);
     }
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
 
-    return frame;
+        auto new_frame = std::make_unique<Frame>(&code, lasti);
+        if (!new_frame->is_valid())
+            return INVALID_FRAME;
+
+        auto &f = *new_frame;
+        frame_cache->store(frame_key, std::move(new_frame));
+
+        return f;
+    }
 }
 
-Frame *Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
+Frame &Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
 {
     uintptr_t frame_key = (uintptr_t)pc;
-    Frame *frame = frame_cache->lookup(frame_key);
-
-    if (frame == nullptr)
+    try
     {
-        frame = new Frame(pc, name, offset);
-        frame_cache->store(frame_key, frame);
+        return frame_cache->lookup(frame_key);
     }
-
-    return frame;
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
+        auto frame = std::make_unique<Frame>(pc, name, offset);
+        auto &f = *frame;
+        frame_cache->store(frame_key, std::move(frame));
+        return f;
+    }
 }
 
-Frame *Frame::read(PyObject *frame_addr, PyObject **prev_addr)
+Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
 
     if (copy_type(frame_addr, iframe))
-        return NULL;
+        throw Error();
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    Frame *frame = Frame::get(iframe.f_code, lasti);
+    auto &frame = Frame::get(iframe.f_code, lasti);
 
-    if (frame != INVALID_FRAME)
+    if (&frame != &INVALID_FRAME)
     {
 #if PY_VERSION_HEX >= 0x030c0000
-        frame->is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+        frame.is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
 #else
-        frame->is_entry = iframe.is_entry;
+        frame.is_entry = iframe.is_entry;
 #endif
     }
 
-    *prev_addr = frame == INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
+    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
 #else // Python < 3.11
     // Unwind the stack from leaf to root and store it in a stack. This way we
@@ -364,11 +384,11 @@ Frame *Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     PyFrameObject py_frame;
 
     if (copy_type(frame_addr, py_frame))
-        return NULL;
+        throw Error();
 
-    Frame *frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
+    auto &frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
-    *prev_addr = (frame == INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
+    *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
 #endif
 
     return frame;

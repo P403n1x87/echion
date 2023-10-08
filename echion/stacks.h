@@ -17,7 +17,7 @@
 
 #define MAX_FRAMES 2048
 
-typedef std::deque<Frame *> FrameStack;
+typedef std::deque<Frame::Ref> FrameStack;
 
 static FrameStack python_stack;
 static FrameStack native_stack;
@@ -64,22 +64,24 @@ unwind_frame(PyObject *frame_addr, FrameStack *stack)
     PyObject *current_frame_addr = frame_addr;
     while (current_frame_addr != NULL && stack->size() < MAX_FRAMES)
     {
+
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
-        {
-            count++;
             break;
-        }
+
+        count++;
+
         seen_frames.insert(current_frame_addr);
 
-        Frame *frame = Frame::read(current_frame_addr, &current_frame_addr);
-        if (frame == NULL)
+        try
         {
-            count++;
+            Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
+
+            stack->push_back(frame);
+        }
+        catch (Frame::Error &e)
+        {
             break;
         }
-
-        stack->push_back(frame);
-        count++;
     }
 
     return count;
@@ -125,9 +127,9 @@ interleave_stacks(FrameStack *python_stack)
     // handler. We skip them.
     for (auto n = native_stack.rbegin(); n != native_stack.rend() - 2; ++n)
     {
-        Frame *native_frame = *n;
+        auto native_frame = *n;
 
-        if ((*native_frame->name).find("PyEval_EvalFrameDefault") != std::string::npos)
+        if (native_frame.get().name->find("PyEval_EvalFrameDefault") != std::string::npos)
         {
             if (p == python_stack->rend())
             {
@@ -147,7 +149,7 @@ interleave_stacks(FrameStack *python_stack)
                 {
                     // The Python stack will start with an entry frame at the top.
                     // We stop popping at the next entry frame.
-                    cframe_count += (*p)->is_entry;
+                    cframe_count += (*p).get().is_entry;
                     if (cframe_count >= 2)
                         break;
 
