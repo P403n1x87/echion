@@ -43,6 +43,15 @@ public:
         }
     };
 
+    class LocationError : public Error
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot determine frame location information";
+        }
+    };
+
     std::optional<std::string> filename = std::nullopt;
     std::optional<std::string> name = std::nullopt;
     struct _location
@@ -85,8 +94,6 @@ public:
         return Frame::read(frame_addr, &unused);
     }
 
-    bool is_valid();
-
     static Frame &get(PyCodeObject *code, int lasti);
     static Frame &get(unw_word_t pc, const char *name, unw_word_t offset);
 
@@ -94,11 +101,13 @@ public:
     Frame(unw_word_t, const char *, unw_word_t);
 
 private:
+    inline bool is_valid();
+    void infer_location(PyCodeObject *, int);
+
     static inline uintptr_t key(PyCodeObject *code, int lasti)
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
-    int infer_location(PyCodeObject *, int);
 };
 
 #if PY_VERSION_HEX >= 0x030b0000
@@ -126,16 +135,17 @@ _read_signed_varint(unsigned char *table, ssize_t *i)
 #endif
 
 // ----------------------------------------------------------------------------
-int Frame::infer_location(PyCodeObject *code, int lasti)
+void Frame::infer_location(PyCodeObject *code, int lasti)
 {
     unsigned int lineno = code->co_firstlineno;
     Py_ssize_t len = 0;
-    unsigned char *table = NULL;
 
 #if PY_VERSION_HEX >= 0x030b0000
-    table = (unsigned char *)pybytes_to_bytes_and_size(code->co_linetable, &len);
-    if (table == NULL)
-        return 1;
+    auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
+    if (table == nullptr)
+        throw Frame::LocationError();
+
+    auto table_data = table.get();
 
     for (Py_ssize_t i = 0, bc = 0; i < len; i++)
     {
@@ -148,17 +158,17 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
             break;
 
         case 14: // Long form
-            lineno += _read_signed_varint(table, &i);
+            lineno += _read_signed_varint(table_data, &i);
 
             this->location.line = lineno;
-            this->location.line_end = lineno + _read_varint(table, &i);
-            this->location.column = _read_varint(table, &i);
-            this->location.column_end = _read_varint(table, &i);
+            this->location.line_end = lineno + _read_varint(table_data, &i);
+            this->location.column = _read_varint(table_data, &i);
+            this->location.column_end = _read_varint(table_data, &i);
 
             break;
 
         case 13: // No column data
-            lineno += _read_signed_varint(table, &i);
+            lineno += _read_signed_varint(table_data, &i);
 
             this->location.line = lineno;
             this->location.line_end = lineno;
@@ -191,12 +201,10 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
             break;
     }
 
-    return 0;
-
 #elif PY_VERSION_HEX >= 0x030a0000
-    table = (unsigned char *)pybytes_to_bytes_and_size(code->co_linetable, &len);
-    if (table == NULL)
-        return 1;
+    auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
+    if (table == nullptr)
+        throw Frame::LocationError();
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -219,9 +227,9 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
     }
 
 #else
-    table = (unsigned char *)pybytes_to_bytes_and_size(code->co_lnotab, &len);
-    if (table == NULL)
-        return 1;
+    auto table = pybytes_to_bytes_and_size(code->co_lnotab, &len);
+    if (table == nullptr)
+        throw Frame::LocationError();
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -241,8 +249,6 @@ int Frame::infer_location(PyCodeObject *code, int lasti)
     this->location.line_end = lineno;
     this->location.column = 0;
     this->location.column_end = 0;
-
-    return 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -255,6 +261,9 @@ Frame::Frame(PyCodeObject *code, int lasti)
     this->name = pyunicode_to_utf8(code->co_name);
 #endif
     this->infer_location(code, lasti);
+
+    if (!this->is_valid())
+        throw Frame::Error();
 }
 
 Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
@@ -285,7 +294,7 @@ Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
     this->location.line = offset;
 }
 
-bool Frame::is_valid()
+inline bool Frame::is_valid()
 {
 #if PY_VERSION_HEX >= 0x030c0000
     // Shim frames might not have location information
@@ -326,15 +335,17 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
-
-        auto new_frame = std::make_unique<Frame>(&code, lasti);
-        if (!new_frame->is_valid())
+        try
+        {
+            auto new_frame = std::make_unique<Frame>(&code, lasti);
+            auto &f = *new_frame;
+            frame_cache->store(frame_key, std::move(new_frame));
+            return f;
+        }
+        catch (Frame::Error &e)
+        {
             return INVALID_FRAME;
-
-        auto &f = *new_frame;
-        frame_cache->store(frame_key, std::move(new_frame));
-
-        return f;
+        }
     }
 }
 
@@ -379,8 +390,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
 #else // Python < 3.11
-    // Unwind the stack from leaf to root and store it in a stack. This way we
-    // can print it from root to leaf.
+      // Unwind the stack from leaf to root and store it in a stack. This way we
+      // can print it from root to leaf.
     PyFrameObject py_frame;
 
     if (copy_type(frame_addr, py_frame))
