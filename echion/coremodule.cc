@@ -204,7 +204,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                interleave_stacks(task_stack);
+                interleave_stacks(*task_stack);
                 render(interleaved_stack, output);
             }
             else
@@ -232,10 +232,10 @@ static void do_where(std::ostream &stream)
             if (native)
             {
                 interleave_stacks();
-                render_where(info, interleaved_stack, stream);
+                render_where(*info, interleaved_stack, stream);
             }
             else
-                render_where(info, python_stack, stream);
+                render_where(*info, python_stack, stream);
             stream << std::endl;
         });
 }
