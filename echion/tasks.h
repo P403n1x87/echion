@@ -18,6 +18,7 @@
 #include <opcode.h>
 #endif
 
+#include <exception>
 #include <mutex>
 #include <stack>
 #include <unordered_map>
@@ -91,6 +92,15 @@ GenInfo::GenInfo(PyObject *gen_addr)
 class TaskInfo
 {
 public:
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create task info object";
+        }
+    };
+
     PyObject *origin = NULL;
     std::optional<std::string> name = std::nullopt; // TODO: Change to string and raise instead
     PyObject *loop = NULL;
@@ -156,63 +166,42 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 TaskInfo TaskInfo::current(PyObject *loop)
 {
     if (loop == NULL)
-        return TaskInfo(NULL);
+        throw Error();
 
-    MirrorDict mirror(asyncio_current_tasks);
-    PyObject *reflected_dict = mirror.reflect();
-    if (reflected_dict == NULL)
-        return TaskInfo(NULL);
+    try
+    {
+        MirrorDict current_tasks_dict(asyncio_current_tasks);
+        PyObject *task = current_tasks_dict.get_item(loop);
+        if (task == NULL)
+            throw Error();
 
-    if (PyDict_Size(reflected_dict) == 0)
-        return TaskInfo(NULL);
-
-    PyObject *task = PyDict_GetItem(reflected_dict, loop);
-
-    if (task == NULL)
-        return TaskInfo(NULL);
-
-    return TaskInfo((TaskObj *)task);
+        return TaskInfo((TaskObj *)task);
+    }
+    catch (MirrorError &e)
+    {
+        throw Error();
+    }
 }
 
 // ----------------------------------------------------------------------------
 // TODO: Make this a "for_each_task" function?
-static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
+static std::unique_ptr<std::vector<TaskInfo *>>
+get_all_tasks(PyObject *loop)
 {
-    MirrorSet mirror(asyncio_scheduled_tasks);
-    auto scheduled_tasks = mirror.as_unordered_set();
-
-    if (scheduled_tasks == nullptr)
-        return NULL;
-
-    std::vector<TaskInfo *> *tasks = new std::vector<TaskInfo *>();
-
-    for (auto task_wr_addr : *scheduled_tasks)
+    try
     {
-        PyWeakReference task_wr;
-        if (copy_type(task_wr_addr, task_wr))
-            continue;
+        MirrorSet scheduled_tasks_set(asyncio_scheduled_tasks);
+        auto scheduled_tasks = scheduled_tasks_set.as_unordered_set();
 
-        TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
-        if (loop != NULL && task_info->loop != loop)
+        auto tasks = std::make_unique<std::vector<TaskInfo *>>();
+
+        for (auto task_wr_addr : *scheduled_tasks)
         {
-            delete task_info;
-            continue;
-        }
+            PyWeakReference task_wr;
+            if (copy_type(task_wr_addr, task_wr))
+                continue;
 
-        tasks->push_back(task_info);
-    }
-
-    if (asyncio_eager_tasks != NULL)
-    {
-        MirrorSet mirror(asyncio_eager_tasks);
-        auto eager_tasks = mirror.as_unordered_set();
-
-        if (eager_tasks == nullptr)
-            return NULL;
-
-        for (auto task_addr : *eager_tasks)
-        {
-            TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+            TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
             if (loop != NULL && task_info->loop != loop)
             {
                 delete task_info;
@@ -221,9 +210,34 @@ static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
 
             tasks->push_back(task_info);
         }
-    }
 
-    return tasks;
+        if (asyncio_eager_tasks != NULL)
+        {
+            MirrorSet mirror(asyncio_eager_tasks);
+            auto eager_tasks = mirror.as_unordered_set();
+
+            if (eager_tasks == nullptr)
+                return NULL;
+
+            for (auto task_addr : *eager_tasks)
+            {
+                TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+                if (loop != NULL && task_info->loop != loop)
+                {
+                    delete task_info;
+                    continue;
+                }
+
+                tasks->push_back(task_info);
+            }
+        }
+
+        return tasks;
+    }
+    catch (MirrorError &e)
+    {
+        throw TaskInfo::Error();
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -272,7 +286,7 @@ static void unwind_tasks(ThreadInfo *info)
     std::unordered_map<PyObject *, TaskInfo *> waitee_map; // Indexed by task origin
     std::unordered_map<PyObject *, TaskInfo *> origin_map; // Indexed by task origin
 
-    std::vector<TaskInfo *> *all_tasks = get_all_tasks((PyObject *)info->asyncio_loop);
+    auto all_tasks = get_all_tasks((PyObject *)info->asyncio_loop);
 
     {
         std::lock_guard<std::mutex> lock(task_link_map_lock);
@@ -364,6 +378,4 @@ static void unwind_tasks(ThreadInfo *info)
 
         current_tasks.push_back(new TaskStack(task, stack));
     }
-
-    delete all_tasks;
 }
