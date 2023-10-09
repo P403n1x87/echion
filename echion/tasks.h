@@ -248,7 +248,7 @@ static std::vector<TaskStack *> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-static size_t unwind_task(TaskInfo *info, FrameStack *stack)
+static size_t unwind_task(TaskInfo *info, FrameStack &stack)
 {
     // TODO: Check for running task.
     std::stack<PyObject *> coro_frames;
@@ -331,7 +331,7 @@ static void unwind_tasks(ThreadInfo *info)
         TaskInfo *current_task = task;
         while (current_task)
         {
-            int stack_size = unwind_task(current_task, stack);
+            int stack_size = unwind_task(current_task, *stack);
 
             if (current_task->coro->is_running)
             {
