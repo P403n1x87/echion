@@ -66,7 +66,14 @@ static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
     {
         unwind_python_stack(tstate);
         if (info->asyncio_loop != 0)
-            unwind_tasks(info);
+            try
+            {
+                unwind_tasks(info);
+            }
+            catch (TaskInfo::Error &)
+            {
+                // We failed to unwind tasks
+            }
     }
 }
 

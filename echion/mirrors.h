@@ -48,22 +48,32 @@ typedef struct _dictkeysobject
 typedef PyObject *PyDictValues;
 #endif
 
+#include <exception>
 #include <unordered_set>
 
 #include <echion/vm.h>
 
+class MirrorError : public std::exception
+{
+public:
+    const char *what() const noexcept override
+    {
+        return "Cannot create mirror object";
+    }
+};
+
 class MirrorObject
 {
 public:
-    ~MirrorObject() { delete[] data; }
-
-    PyObject *reflect()
+    inline PyObject *reflect()
     {
+        if (reflected == NULL)
+            throw MirrorError();
         return reflected;
     }
 
 protected:
-    char *data = nullptr;
+    std::unique_ptr<char[]> data = nullptr;
     PyObject *reflected = NULL;
 };
 
@@ -73,6 +83,8 @@ class MirrorDict : public MirrorObject
 public:
     MirrorDict(PyObject *);
 
+    PyObject *get_item(PyObject *key) { return PyDict_GetItem(reflect(), key); }
+
 private:
     PyDictObject dict;
 };
@@ -80,11 +92,11 @@ private:
 MirrorDict::MirrorDict(PyObject *dict_addr)
 {
     if (copy_type(dict_addr, dict))
-        return;
+        throw MirrorError();
 
     PyDictKeysObject keys;
     if (copy_type(dict.ma_keys, keys))
-        return;
+        throw MirrorError();
 
         // Compute the full dictionary data size
 #if PY_VERSION_HEX >= 0x030b0000
@@ -98,27 +110,21 @@ MirrorDict::MirrorDict(PyObject *dict_addr)
 
     // Allocate the buffer
     size_t data_size = keys_size + (keys.dk_nentries * entry_size) + values_size;
-    data = new char[data_size];
+    data = std::make_unique<char[]>(data_size);
 
     // Copy the key data and update the pointer
-    if (copy_generic(dict.ma_keys, data, keys_size))
-    {
-        delete[] data;
-        data = nullptr;
-        return;
-    }
-    dict.ma_keys = (PyDictKeysObject *)data;
+    if (copy_generic(dict.ma_keys, data.get(), keys_size))
+        throw MirrorError();
+
+    dict.ma_keys = (PyDictKeysObject *)data.get();
 
     if (dict.ma_values != NULL)
     {
         // Copy the value data and update the pointer
-        char *values_addr = data + keys_size;
+        char *values_addr = data.get() + keys_size;
         if (copy_generic(dict.ma_values, keys_size, values_size))
-        {
-            delete[] data;
-            data = nullptr;
-            return;
-        }
+            throw MirrorError();
+
         dict.ma_values = (PyDictValues *)values_addr;
     }
 
@@ -140,26 +146,24 @@ private:
 MirrorSet::MirrorSet(PyObject *set_addr)
 {
     if (copy_type(set_addr, set))
-        return;
+        throw MirrorError();
 
     size = set.mask + 1;
     size_t table_size = size * sizeof(setentry);
-    data = new char[table_size];
-    if (copy_generic(set.table, data, table_size))
-    {
-        delete[] data;
-        data = nullptr;
-        return;
-    }
-    set.table = (setentry *)data;
+    data = std::make_unique<char[]>(table_size);
+    if (copy_generic(set.table, data.get(), table_size))
+        throw MirrorError();
+
+    set.table = (setentry *)data.get();
 
     reflected = (PyObject *)&set;
 }
 
-std::unique_ptr<std::unordered_set<PyObject *>> MirrorSet::as_unordered_set()
+std::unique_ptr<std::unordered_set<PyObject *>>
+MirrorSet::as_unordered_set()
 {
     if (data == nullptr)
-        return nullptr;
+        throw MirrorError();
 
     auto uset = std::make_unique<std::unordered_set<PyObject *>>();
 
