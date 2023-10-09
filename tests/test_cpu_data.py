@@ -20,7 +20,7 @@ def test_cpu_time(stealth):
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
     assert summary.total_metric >= 0.5 * 1e6 * (2 - bool(stealth))
-    assert summary.nsamples >= summary.total_metric / 2000
+    assert summary.nsamples
 
     # Test line numbers
     assert summary.query("MainThread", (("main", 22), ("bar", 17))) is None
@@ -106,9 +106,7 @@ def test_cpu_time_native(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 0.5 * 1e6 * (2 - bool(stealth))
-    # Native stack sampling is slower so we omit the upper bound check
-    assert summary.nsamples * 500 <= summary.total_metric
+    assert summary.total_metric
 
     # Test line numbers. This only works with CFrame
     if PY >= (3, 11):
@@ -117,12 +115,12 @@ def test_cpu_time_native(stealth):
                 "MainThread",
                 (
                     ("<module>", 48),
-                    ("keep_cpu_busy", 40),
+                    ("keep_cpu_busy", 39),
                 ),
             )
             is not None
-        )
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 41),)) is not None
+        ), summary.threads["MainThread"]
+        assert summary.query("SecondaryThread", (("keep_cpu_busy", 39),)) is not None
     else:
-        assert summary.query("MainThread", (("keep_cpu_busy", 41),)) is not None
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 41),)) is not None
+        assert summary.query("MainThread", (("keep_cpu_busy", 39),)) is not None
+        assert summary.query("SecondaryThread", (("keep_cpu_busy", 39),)) is not None

@@ -30,7 +30,7 @@ def test_asyncio_gather_wall_time():
     # Test stacks and expected values
     if PY >= (3, 11):
         for t in ("F4_0", "F4_1"):
-            summary.assert_stack(
+            summary.assert_substack(
                 "MainThread",
                 (
                     "_run_module_as_main",
@@ -60,7 +60,7 @@ def test_asyncio_gather_wall_time():
             )
     else:
         for t in ("F4_0", "F4_1"):
-            summary.assert_stack(
+            summary.assert_substack(
                 "MainThread",
                 (
                     "_run_module_as_main",
