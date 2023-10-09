@@ -3,9 +3,12 @@ from subprocess import PIPE
 from subprocess import Popen
 from time import sleep
 
+from tests.utils import requires_sudo
 from tests.utils import run_echion
 
 
+# This test requires sudo on unix to work
+@requires_sudo
 def test_where():
     with Popen(
         [sys.executable, "-m", "tests.target_attach"], stdout=PIPE, stderr=PIPE

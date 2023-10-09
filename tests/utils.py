@@ -1,3 +1,4 @@
+import os
 import sys
 import typing as t
 from pathlib import Path
@@ -69,6 +70,7 @@ class DataSummary:
     def assert_stack(self, thread, frames, predicate):
         try:
             stack = self.threads[thread][frames]
+            assert predicate(stack), stack
         except KeyError:
             if thread not in self.threads:
                 raise AssertionError(
@@ -78,7 +80,26 @@ class DataSummary:
                 f"Expected stack {frames}, found {self.threads[thread].keys()}"
             ) from None
 
-        assert predicate(stack), stack
+    def assert_substack(self, thread, frames, predicate):
+        try:
+            stacks = self.threads[thread]
+            for stack in stacks:
+                for i in range(0, len(stack) - len(frames) + 1):
+                    substack = stack[i : i + len(frames)]
+                    if substack == frames:
+                        assert predicate(stacks[stack]), stacks[stack]
+                        return
+            else:
+                raise AssertionError("No matching substack found")
+
+        except KeyError:
+            if thread not in self.threads:
+                raise AssertionError(
+                    f"Expected thread {thread}, found {self.threads.keys()}"
+                ) from None
+            raise AssertionError(
+                f"Expected stack {frames}, found {self.threads[thread].keys()}"
+            ) from None
 
 
 def run_echion(*args: str) -> CompletedProcess:
@@ -137,3 +158,14 @@ def run_with_signal(target: Path, signal: int, delay: float, *args: str) -> Pope
 
 
 stealth = pytest.mark.parametrize("stealth", [tuple(), ("--stealth",)])
+
+
+if sys.platform == "win32":
+    requires_sudo = no_sudo = lambda f: f
+else:
+    requires_sudo = pytest.mark.skipif(
+        os.geteuid() != 0, reason="Requires superuser privileges"
+    )
+    no_sudo = pytest.mark.skipif(
+        os.geteuid() == 0, reason="Must not have superuser privileges"
+    )
