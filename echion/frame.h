@@ -143,7 +143,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #if PY_VERSION_HEX >= 0x030b0000
     auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
     if (table == nullptr)
-        throw Frame::LocationError();
+        return;
 
     auto table_data = table.get();
 
@@ -204,7 +204,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #elif PY_VERSION_HEX >= 0x030a0000
     auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
     if (table == nullptr)
-        throw Frame::LocationError();
+        return;
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -229,7 +229,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #else
     auto table = pybytes_to_bytes_and_size(code->co_lnotab, &len);
     if (table == nullptr)
-        throw Frame::LocationError();
+        return;
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -261,9 +261,6 @@ Frame::Frame(PyCodeObject *code, int lasti)
     this->name = pyunicode_to_utf8(code->co_name);
 #endif
     this->infer_location(code, lasti);
-
-    if (!this->is_valid())
-        throw Frame::Error();
 }
 
 Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
@@ -335,17 +332,15 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
-        try
-        {
-            auto new_frame = std::make_unique<Frame>(&code, lasti);
-            auto &f = *new_frame;
-            frame_cache->store(frame_key, std::move(new_frame));
-            return f;
-        }
-        catch (Frame::Error &e)
-        {
+        auto new_frame = std::make_unique<Frame>(&code, lasti);
+        // DEV: Throwing an exception in the Frame constructor causes a SIGABRT
+        // even when catching it on Linux. So we keep the check like this for
+        // now.
+        if (!new_frame->is_valid())
             return INVALID_FRAME;
-        }
+        auto &f = *new_frame;
+        frame_cache->store(frame_key, std::move(new_frame));
+        return f;
     }
 }
 
@@ -390,8 +385,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
 #else // Python < 3.11
-      // Unwind the stack from leaf to root and store it in a stack. This way we
-      // can print it from root to leaf.
+    // Unwind the stack from leaf to root and store it in a stack. This way we
+    // can print it from root to leaf.
     PyFrameObject py_frame;
 
     if (copy_type(frame_addr, py_frame))
