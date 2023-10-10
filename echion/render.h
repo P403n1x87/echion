@@ -17,19 +17,19 @@ static void render(FrameStack &stack, std::ostream &output)
     for (auto it = stack.rbegin(); it != stack.rend(); ++it)
     {
 #if PY_VERSION_HEX >= 0x030c0000
-        if ((*it)->is_entry)
+        if ((*it).get().is_entry)
             // This is a shim frame so we skip it.
             continue;
 #endif
-        (*it)->render(output);
+        (*it).get().render(output);
     }
 }
 
 // ----------------------------------------------------------------------------
-static void render_where(ThreadInfo *info, FrameStack &stack, std::ostream &output)
+static void render_where(ThreadInfo &info, FrameStack &stack, std::ostream &output)
 {
-    output << "    🧵 " << info->name << ":" << std::endl;
+    output << "    🧵 " << info.name << ":" << std::endl;
 
     for (auto it = stack.rbegin(); it != stack.rend(); ++it)
-        (*it)->render_where(output);
+        (*it).get().render_where(output);
 }

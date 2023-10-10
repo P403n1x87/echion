@@ -66,7 +66,14 @@ static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
     {
         unwind_python_stack(tstate);
         if (info->asyncio_loop != 0)
-            unwind_tasks(tstate, info);
+            try
+            {
+                unwind_tasks(info);
+            }
+            catch (TaskInfo::Error &)
+            {
+                // We failed to unwind tasks
+            }
     }
 }
 
@@ -197,7 +204,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                interleave_stacks(task_stack);
+                interleave_stacks(*task_stack);
                 render(interleaved_stack, output);
             }
             else
@@ -225,10 +232,10 @@ static void do_where(std::ostream &stream)
             if (native)
             {
                 interleave_stacks();
-                render_where(info, interleaved_stack, stream);
+                render_where(*info, interleaved_stack, stream);
             }
             else
-                render_where(info, python_stack, stream);
+                render_where(*info, python_stack, stream);
             stream << std::endl;
         });
 }
@@ -431,7 +438,7 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 
     restore_signals();
 
-    destroy_frame_cache();
+    reset_frame_cache();
 
     Py_RETURN_NONE;
 }

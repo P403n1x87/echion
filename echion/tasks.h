@@ -18,6 +18,7 @@
 #include <opcode.h>
 #endif
 
+#include <exception>
 #include <mutex>
 #include <stack>
 #include <unordered_map>
@@ -91,10 +92,21 @@ GenInfo::GenInfo(PyObject *gen_addr)
 class TaskInfo
 {
 public:
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create task info object";
+        }
+    };
+
     PyObject *origin = NULL;
     std::optional<std::string> name = std::nullopt; // TODO: Change to string and raise instead
     PyObject *loop = NULL;
     GenInfo *coro = NULL;
+
+    Frame::Ptr root_frame = nullptr;
 
     // Information to reconstruct the async stack as best as we can
     TaskInfo *waiter = NULL;
@@ -138,6 +150,7 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 #else
     name = pyunicode_to_utf8(task.task_name);
 #endif
+    root_frame = name != std::nullopt ? std::make_unique<Frame>(*name) : nullptr;
     loop = task.task_loop;
 
     waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
@@ -153,63 +166,42 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 TaskInfo TaskInfo::current(PyObject *loop)
 {
     if (loop == NULL)
-        return TaskInfo(NULL);
+        throw Error();
 
-    MirrorDict mirror(asyncio_current_tasks);
-    PyObject *reflected_dict = mirror.reflect();
-    if (reflected_dict == NULL)
-        return TaskInfo(NULL);
+    try
+    {
+        MirrorDict current_tasks_dict(asyncio_current_tasks);
+        PyObject *task = current_tasks_dict.get_item(loop);
+        if (task == NULL)
+            throw Error();
 
-    if (PyDict_Size(reflected_dict) == 0)
-        return TaskInfo(NULL);
-
-    PyObject *task = PyDict_GetItem(reflected_dict, loop);
-
-    if (task == NULL)
-        return TaskInfo(NULL);
-
-    return TaskInfo((TaskObj *)task);
+        return TaskInfo((TaskObj *)task);
+    }
+    catch (MirrorError &e)
+    {
+        throw Error();
+    }
 }
 
 // ----------------------------------------------------------------------------
 // TODO: Make this a "for_each_task" function?
-static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
+static std::unique_ptr<std::vector<TaskInfo *>>
+get_all_tasks(PyObject *loop)
 {
-    MirrorSet mirror(asyncio_scheduled_tasks);
-    auto scheduled_tasks = mirror.as_unordered_set();
-
-    if (scheduled_tasks == nullptr)
-        return NULL;
-
-    std::vector<TaskInfo *> *tasks = new std::vector<TaskInfo *>();
-
-    for (auto task_wr_addr : *scheduled_tasks)
+    try
     {
-        PyWeakReference task_wr;
-        if (copy_type(task_wr_addr, task_wr))
-            continue;
+        MirrorSet scheduled_tasks_set(asyncio_scheduled_tasks);
+        auto scheduled_tasks = scheduled_tasks_set.as_unordered_set();
 
-        TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
-        if (loop != NULL && task_info->loop != loop)
+        auto tasks = std::make_unique<std::vector<TaskInfo *>>();
+
+        for (auto task_wr_addr : *scheduled_tasks)
         {
-            delete task_info;
-            continue;
-        }
+            PyWeakReference task_wr;
+            if (copy_type(task_wr_addr, task_wr))
+                continue;
 
-        tasks->push_back(task_info);
-    }
-
-    if (asyncio_eager_tasks != NULL)
-    {
-        MirrorSet mirror(asyncio_eager_tasks);
-        auto eager_tasks = mirror.as_unordered_set();
-
-        if (eager_tasks == nullptr)
-            return NULL;
-
-        for (auto task_addr : *eager_tasks)
-        {
-            TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+            TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
             if (loop != NULL && task_info->loop != loop)
             {
                 delete task_info;
@@ -218,9 +210,34 @@ static std::vector<TaskInfo *> *get_all_tasks(PyObject *loop)
 
             tasks->push_back(task_info);
         }
-    }
 
-    return tasks;
+        if (asyncio_eager_tasks != NULL)
+        {
+            MirrorSet mirror(asyncio_eager_tasks);
+            auto eager_tasks = mirror.as_unordered_set();
+
+            if (eager_tasks == nullptr)
+                return NULL;
+
+            for (auto task_addr : *eager_tasks)
+            {
+                TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+                if (loop != NULL && task_info->loop != loop)
+                {
+                    delete task_info;
+                    continue;
+                }
+
+                tasks->push_back(task_info);
+            }
+        }
+
+        return tasks;
+    }
+    catch (MirrorError &e)
+    {
+        throw TaskInfo::Error();
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -231,7 +248,7 @@ static std::vector<TaskStack *> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-static size_t unwind_task(TaskInfo *info, FrameStack *stack)
+static size_t unwind_task(TaskInfo *info, FrameStack &stack)
 {
     // TODO: Check for running task.
     std::stack<PyObject *> coro_frames;
@@ -262,14 +279,14 @@ static size_t unwind_task(TaskInfo *info, FrameStack *stack)
 }
 
 // ----------------------------------------------------------------------------
-static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
+static void unwind_tasks(ThreadInfo *info)
 {
     std::unordered_set<TaskInfo *> leaf_tasks;
     std::unordered_set<PyObject *> parent_tasks;
     std::unordered_map<PyObject *, TaskInfo *> waitee_map; // Indexed by task origin
     std::unordered_map<PyObject *, TaskInfo *> origin_map; // Indexed by task origin
 
-    std::vector<TaskInfo *> *all_tasks = get_all_tasks((PyObject *)info->asyncio_loop);
+    auto all_tasks = get_all_tasks((PyObject *)info->asyncio_loop);
 
     {
         std::lock_guard<std::mutex> lock(task_link_map_lock);
@@ -314,7 +331,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
         TaskInfo *current_task = task;
         while (current_task)
         {
-            int stack_size = unwind_task(current_task, stack);
+            int stack_size = unwind_task(current_task, *stack);
 
             if (current_task->coro->is_running)
             {
@@ -327,7 +344,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
                 FrameStack temp_stack;
                 size_t nframes = python_stack.size() - stack_size + 1;
                 // TODO: assert nframe >= 0
-                for (int i = 0; i < nframes; i++)
+                for (size_t i = 0; i < nframes; i++)
                 {
                     auto python_frame = python_stack.front();
                     temp_stack.push_front(python_frame);
@@ -341,7 +358,7 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
             }
 
             // Add the task name frame
-            stack->push_back(new Frame(*(current_task->name)));
+            stack->push_back(*current_task->root_frame);
 
             // Get the next task in the chain
             PyObject *task_origin = current_task->origin;
@@ -361,6 +378,4 @@ static void unwind_tasks(PyThreadState *tstate, ThreadInfo *info)
 
         current_tasks.push_back(new TaskStack(task, stack));
     }
-
-    delete all_tasks;
 }

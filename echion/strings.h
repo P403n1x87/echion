@@ -15,24 +15,21 @@
 #include <echion/vm.h>
 
 // ----------------------------------------------------------------------------
-static char *
+static std::unique_ptr<unsigned char[]>
 pybytes_to_bytes_and_size(PyObject *bytes_addr, Py_ssize_t *size)
 {
     PyBytesObject bytes;
 
     if (copy_type(bytes_addr, bytes))
-        return NULL;
+        return nullptr;
 
     *size = bytes.ob_base.ob_size;
     if (*size < 0 || *size > (1 << 20))
-        return NULL;
+        return nullptr;
 
-    char *data = new char[*size];
-    if (copy_generic(((char *)bytes_addr) + offsetof(PyBytesObject, ob_sval), data, *size))
-    {
-        delete[] data;
-        return NULL;
-    }
+    auto data = std::make_unique<unsigned char[]>(*size);
+    if (copy_generic(((char *)bytes_addr) + offsetof(PyBytesObject, ob_sval), data.get(), *size))
+        return nullptr;
 
     return data;
 }

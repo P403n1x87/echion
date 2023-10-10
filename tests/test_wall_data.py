@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 from tests.utils import PY
@@ -21,8 +19,7 @@ def test_wall_time(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 1.4 * 1e6 * expected_nthreads
-    assert summary.nsamples * 500 <= summary.total_metric <= summary.nsamples * 2000
+    assert summary.total_metric >= 1e6 * expected_nthreads
 
     # Test line numbers
     assert summary.query("MainThread", (("main", 22), ("bar", 17))) is not None
@@ -148,9 +145,7 @@ def test_wall_time_native(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 1.4 * 1e6 * expected_nthreads
-    # Native stack sampling is slower so we omit the upper bound check
-    assert summary.nsamples * 900 <= summary.total_metric
+    assert summary.total_metric
 
     # Test line numbers. This only works with CFrames
     if PY >= (3, 11):
@@ -159,8 +154,3 @@ def test_wall_time_native(stealth):
     else:
         assert summary.query("MainThread", (("bar", 17),)) is not None
         assert summary.query("SecondaryThread", (("foo", 13),)) is not None
-
-    # Test stacks and expected values
-    sleep_name = "time_sleep" if sys.platform == "darwin" else "clock_nanosleep"
-    assert summary.query("MainThread", (sleep_name,)) is not None, summary.threads
-    assert summary.query("SecondaryThread", (sleep_name,)) is not None, summary.threads

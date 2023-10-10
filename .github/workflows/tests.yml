@@ -20,7 +20,7 @@ jobs:
 
     name: Tests with Python ${{ matrix.python-version }} on ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v4
         with:
@@ -29,11 +29,22 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libunwind-dev lzma-dev
-          pip install hatch
+          sudo apt-get install libunwind-dev lzma-dev gdb
+          pip install hatch pygments
 
       - name: Run tests
-        run: sudo -E env PATH="$PATH" hatch -e "tests.py${{ matrix.python-version }}" run tests
+        run: |
+          ulimit -c unlimited
+          echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
+          sudo -E env PATH="$PATH" hatch run tests.py${{ matrix.python-version }}:tests -svv
+      
+      - name: Print core dumps
+        run: |
+          ls -l core.* || pwd
+          for core in core.*; do
+            gdb -q -batch -ex "bt full" -ex q `which python${{ matrix.python-version }}` ${core} | pygmentize
+          done
+        if: always()
 
       # - name: Publish coverage metrics
       #   run: |
@@ -53,7 +64,7 @@ jobs:
 
     name: Tests with Python ${{ matrix.python-version }} on macos-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v4
         with:
@@ -63,4 +74,4 @@ jobs:
         run: pip install hatch
   
       - name: Run tests
-        run: sudo -E hatch -e "tests.py${{ matrix.python-version }}" run tests
+        run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv

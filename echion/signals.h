@@ -19,7 +19,7 @@
 static std::mutex sigprof_handler_lock;
 
 // ----------------------------------------------------------------------------
-void sigprof_handler(int signum)
+void sigprof_handler([[maybe_unused]] int signum)
 {
 //    unwind_native_stack();
     unwind_python_stack(current_tstate);
@@ -29,7 +29,7 @@ void sigprof_handler(int signum)
 }
 
 // ----------------------------------------------------------------------------
-void sigquit_handler(int signum)
+void sigquit_handler([[maybe_unused]] int signum)
 {
     // Wake up the where thread
     std::lock_guard<std::mutex> lock(where_lock);
