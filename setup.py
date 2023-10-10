@@ -8,6 +8,7 @@ from pathlib import Path
 from setuptools import Extension
 from setuptools import find_packages
 from setuptools import setup
+import subprocess
 
 
 PLATFORM = sys.platform.lower()
@@ -26,10 +27,21 @@ if PLATFORM == "darwin":
 else:
     CFLAGS = []
 
+# hack: build libdatadog stuff
+subprocess.run(['sh', 'build_deps.sh'])
+
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
-    include_dirs=["."],
+    include_dirs=[
+      ".",
+      "vendored/dd-trace-py/ddtrace/internal/datadog/profiling/include",
+      "vendored/dd-trace-py/ddtrace/internal/datadog/libdatadog/include",
+    ],
+    extra_objects=[
+      'libuploader.a',
+      'vendored/dd-trace-py/ddtrace/internal/datadog/libdatadog/lib/libdatadog_profiling.a',
+    ],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
