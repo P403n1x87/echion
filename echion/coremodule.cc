@@ -278,7 +278,48 @@ static void teardown_where()
 }
 
 // ----------------------------------------------------------------------------
-static void sampler()
+static inline void
+_start()
+{
+    init_frame_cache(MAX_FRAMES * (1 + native));
+
+    install_signals();
+
+#if defined PL_DARWIN
+    // Get the wall time clock resource.
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+#endif
+}
+
+// ----------------------------------------------------------------------------
+static inline void
+_stop()
+{
+    // Clean up the thread info map. When not running async, we need to guard
+    // the map lock because we are not in control of the sampling thread.
+    {
+        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
+
+        while (!thread_info_map.empty())
+        {
+            ThreadInfo *info = thread_info_map.begin()->second;
+            thread_info_map.erase(thread_info_map.begin());
+            delete info;
+        }
+    }
+
+#if defined PL_DARWIN
+    mach_port_deallocate(mach_task_self(), cclock);
+#endif
+
+    restore_signals();
+
+    reset_frame_cache();
+}
+
+// ----------------------------------------------------------------------------
+static inline void
+_sampler()
 {
     // This function can run without the GIL on the basis that these assumptions
     // hold:
@@ -341,6 +382,14 @@ static void sampler()
     teardown_where();
 }
 
+static void
+sampler()
+{
+    _start();
+    _sampler();
+    _stop();
+}
+
 // ----------------------------------------------------------------------------
 static void _init()
 {
@@ -353,24 +402,9 @@ static void _init()
 }
 
 // ----------------------------------------------------------------------------
-static void _start()
-{
-    init_frame_cache(MAX_FRAMES * (1 + native));
-
-    install_signals();
-
-#if defined PL_DARWIN
-    // Get the wall time clock resource.
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-#endif
-}
-
-// ----------------------------------------------------------------------------
 static PyObject *
 start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
-    _start();
-
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -389,8 +423,6 @@ start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 static PyObject *
 start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 {
-    _start();
-
     if (!running)
     {
         // TODO: Since we have a global state, we should not allow multiple ways
@@ -418,27 +450,6 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
         sampler_thread->join();
         sampler_thread = nullptr;
     }
-
-    // Clean up the thread info map. When not running async, we need to guard
-    // the map lock because we are not in control of the sampling thread.
-    {
-        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
-
-        while (!thread_info_map.empty())
-        {
-            ThreadInfo *info = thread_info_map.begin()->second;
-            thread_info_map.erase(thread_info_map.begin());
-            delete info;
-        }
-    }
-
-#if defined PL_DARWIN
-    mach_port_deallocate(mach_task_self(), cclock);
-#endif
-
-    restore_signals();
-
-    reset_frame_cache();
 
     Py_RETURN_NONE;
 }
