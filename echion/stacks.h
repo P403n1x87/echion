@@ -90,8 +90,13 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         try
         {
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
-
-            stack.push_back(frame);
+//            stack.push_back(frame);
+            ddup_push_frame(
+                get_or_default(frame.name, "unknown_func"),
+                get_or_default(frame.filename, "unknown_file"),
+                0,
+                frame.location.line
+            );
         }
         catch (Frame::Error &e)
         {
@@ -103,14 +108,6 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
             );
             break;
         }
-        ddup_push_frame(
-            get_or_default(frame->name, "unknown_func"),
-            get_or_default(frame->filename, "unknown_file"),
-            0,
-            frame->location.line
-        );
-
-//        stack->push_back(frame);
     }
 
     return count;
@@ -166,14 +163,11 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 #else // Python < 3.11
     PyObject *frame_addr = (PyObject *)tstate->frame;
 #endif
-    //unwind_frame(frame_addr, stack);
-
     // Lies, damned lies, and statistics
     ddup_start_sample(MAX_FRAMES);
     ddup_push_walltime(100, 1);
     ddup_push_cputime(100, 1);
-
-    unwind_frame(frame_addr, &stack);
+    unwind_frame(frame_addr, stack);
 
     ddup_flush_sample();
 

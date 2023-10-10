@@ -127,13 +127,13 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
 #endif
 
 #if defined PL_LINUX
-                pthread_getcpuclockid((pthread_t)tstate.thread_id, &new_info->cpu_clock_id);
+//                pthread_getcpuclockid((pthread_t)tstate.thread_id, &new_info->cpu_clock_id);
 #elif defined PL_DARWIN
                 pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
                 new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
 #endif
 
-                new_info->update_cpu_time();
+//                new_info->update_cpu_time();
 
                 thread_info_map[tstate.thread_id] = new_info;
             }
@@ -480,11 +480,11 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         info->name = name;
         info->native_id = native_id;
 #if defined PL_LINUX
-        pthread_getcpuclockid((pthread_t)thread_id, &info->cpu_clock_id);
+//        pthread_getcpuclockid((pthread_t)thread_id, &info->cpu_clock_id);
 #elif defined PL_DARWIN
         info->mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
-        info->update_cpu_time();
+//        info->update_cpu_time();
 
         thread_info_map[thread_id] = info;
     }
