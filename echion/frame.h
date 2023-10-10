@@ -52,8 +52,8 @@ public:
         }
     };
 
-    std::string filename;
-    std::string name;
+    std::string filename = "";
+    std::string name = "";
 
     struct _location
     {
@@ -97,6 +97,7 @@ public:
 
     static Frame &get(PyCodeObject *code, int lasti);
     static Frame &get(unw_word_t pc, const char *name, unw_word_t offset);
+    static Frame &get(PyObject *, std::string &);
 
     Frame(PyCodeObject *, int);
     Frame(unw_word_t, const char *, unw_word_t);
@@ -143,7 +144,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #if PY_VERSION_HEX >= 0x030b0000
     auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
     if (table == nullptr)
-        return;
+        throw LocationError();
 
     auto table_data = table.get();
 
@@ -204,7 +205,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #elif PY_VERSION_HEX >= 0x030a0000
     auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
     if (table == nullptr)
-        return;
+        throw LocationError();
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -229,7 +230,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 #else
     auto table = pybytes_to_bytes_and_size(code->co_lnotab, &len);
     if (table == nullptr)
-        return;
+        throw LocationError();
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -350,6 +351,22 @@ Frame &Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
         auto frame = std::make_unique<Frame>(pc, name, offset);
+        auto &f = *frame;
+        frame_cache->store(frame_key, std::move(frame));
+        return f;
+    }
+}
+
+Frame &Frame::get(PyObject *origin, std::string &name)
+{
+    uintptr_t frame_key = (uintptr_t)origin;
+    try
+    {
+        return frame_cache->lookup(frame_key);
+    }
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
+        auto frame = std::make_unique<Frame>(name);
         auto &f = *frame;
         frame_cache->store(frame_key, std::move(frame));
         return f;

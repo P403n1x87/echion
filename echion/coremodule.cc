@@ -211,7 +211,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
 
             output << " " << delta << std::endl;
         }
-        // TODO: Memory leak?
+
         current_tasks.clear();
     }
 }
