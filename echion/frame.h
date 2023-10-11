@@ -52,8 +52,9 @@ public:
         }
     };
 
-    std::optional<std::string> filename = std::nullopt;
-    std::optional<std::string> name = std::nullopt;
+    std::string filename;
+    std::string name;
+
     struct _location
     {
         int line = 0;
@@ -67,19 +68,19 @@ public:
 
     void render(std::ostream &stream)
     {
-        stream << ";" << *filename << ":" << *name << ":" << location.line;
+        stream << ";" << filename << ":" << name << ":" << location.line;
     }
 
     void render_where(std::ostream &stream)
     {
-        if ((*filename).rfind("native@", 0) == 0)
-            stream << "          \033[38;5;248;1m" << *name
-                   << "\033[0m \033[38;5;246m(" << *filename
+        if ((filename).rfind("native@", 0) == 0)
+            stream << "          \033[38;5;248;1m" << name
+                   << "\033[0m \033[38;5;246m(" << filename
                    << "\033[0m:\033[38;5;246m" << location.line
                    << ")\033[0m" << std::endl;
         else
-            stream << "          \033[33;1m" << *name
-                   << "\033[0m (\033[36m" << *filename
+            stream << "          \033[33;1m" << name
+                   << "\033[0m (\033[36m" << filename
                    << "\033[0m:\033[32m" << location.line
                    << "\033[0m)" << std::endl;
     }
@@ -101,7 +102,6 @@ public:
     Frame(unw_word_t, const char *, unw_word_t);
 
 private:
-    inline bool is_valid();
     void infer_location(PyCodeObject *, int);
 
     static inline uintptr_t key(PyCodeObject *code, int lasti)
@@ -254,21 +254,27 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 // ----------------------------------------------------------------------------
 Frame::Frame(PyCodeObject *code, int lasti)
 {
-    this->filename = pyunicode_to_utf8(code->co_filename);
+    try
+    {
+        filename = pyunicode_to_utf8(code->co_filename);
 #if PY_VERSION_HEX >= 0x030b0000
-    this->name = pyunicode_to_utf8(code->co_qualname);
+        name = pyunicode_to_utf8(code->co_qualname);
 #else
-    this->name = pyunicode_to_utf8(code->co_name);
+        name = pyunicode_to_utf8(code->co_name);
 #endif
-    this->infer_location(code, lasti);
+    }
+    catch (StringError &)
+    {
+        throw Error();
+    }
+
+    infer_location(code, lasti);
 }
 
 Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
 {
-    // convert pc to char*
-    char *pc_str = new char[32];
-    std::snprintf(pc_str, 32, "native@%p", (void *)pc);
-    this->filename = pc_str;
+    filename = std::string(32, '\0');
+    std::snprintf((char *)filename.c_str(), 32, "native@%p", (void *)pc);
 
     // Try to demangle C++ names
     char *demangled = NULL;
@@ -281,24 +287,12 @@ Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
     }
 
     // Make a copy
-    char *_name = new char[strlen(name) + 1];
-    std::strcpy(_name, name);
-    this->name = _name;
+    this->name = std::string(name);
 
     if (demangled != NULL)
         std::free(demangled);
 
-    this->location.line = offset;
-}
-
-inline bool Frame::is_valid()
-{
-#if PY_VERSION_HEX >= 0x030c0000
-    // Shim frames might not have location information
-    return filename != std::nullopt && name != std::nullopt;
-#else
-    return filename != std::nullopt && name != std::nullopt && location.line != 0;
-#endif
+    location.line = offset;
 }
 
 // ----------------------------------------------------------------------------
@@ -332,15 +326,17 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
-        auto new_frame = std::make_unique<Frame>(&code, lasti);
-        // DEV: Throwing an exception in the Frame constructor causes a SIGABRT
-        // even when catching it on Linux. So we keep the check like this for
-        // now.
-        if (!new_frame->is_valid())
+        try
+        {
+            auto new_frame = std::make_unique<Frame>(&code, lasti);
+            auto &f = *new_frame;
+            frame_cache->store(frame_key, std::move(new_frame));
+            return f;
+        }
+        catch (Frame::Error &)
+        {
             return INVALID_FRAME;
-        auto &f = *new_frame;
-        frame_cache->store(frame_key, std::move(new_frame));
-        return f;
+        }
     }
 }
 
