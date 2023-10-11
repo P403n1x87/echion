@@ -102,10 +102,10 @@ public:
     };
 
     PyObject *origin = NULL;
-    std::optional<std::string> name = std::nullopt; // TODO: Change to string and raise instead
     PyObject *loop = NULL;
     GenInfo *coro = NULL;
 
+    std::string name;
     Frame::Ptr root_frame = nullptr;
 
     // Information to reconstruct the async stack as best as we can
@@ -129,35 +129,44 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 {
     TaskObj task;
     if (copy_type(task_addr, task))
-        return;
+        throw Error();
 
     coro = new GenInfo(task.task_coro);
     if (coro->frame == NULL)
     {
         delete coro;
-        coro = NULL;
-        return;
+        throw Error();
     }
 
     origin = (PyObject *)task_addr;
 
+    try
+    {
 #if PY_VERSION_HEX >= 0x030c0000
-    // The task name might hold a PyLong for deferred task name formatting.
-    PyLongObject name_obj;
-    name = (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
-               ? std::optional("Task-" + std::to_string(PyLong_AsLong((PyObject *)&name_obj)))
-               : pyunicode_to_utf8(task.task_name);
+        // The task name might hold a PyLong for deferred task name formatting.
+        PyLongObject name_obj;
+        name = (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
+                   ? "Task-" + std::to_string(PyLong_AsLong((PyObject *)&name_obj))
+                   : pyunicode_to_utf8(task.task_name);
 #else
-    name = pyunicode_to_utf8(task.task_name);
+        name = pyunicode_to_utf8(task.task_name);
 #endif
-    root_frame = name != std::nullopt ? std::make_unique<Frame>(*name) : nullptr;
+    }
+    catch (StringError &)
+    {
+        throw Error();
+    }
+
+    root_frame = std::make_unique<Frame>(name);
     loop = task.task_loop;
 
-    waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
-    if (waiter->name == std::nullopt)
+    try
     {
-        // Probably not a task (best to check on coro?)
-        delete waiter;
+        if (task.task_fut_waiter)
+            waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
+    }
+    catch (TaskInfo::Error &)
+    {
         waiter = NULL;
     }
 }
@@ -201,14 +210,21 @@ get_all_tasks(PyObject *loop)
             if (copy_type(task_wr_addr, task_wr))
                 continue;
 
-            TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
-            if (loop != NULL && task_info->loop != loop)
+            try
             {
-                delete task_info;
-                continue;
-            }
+                TaskInfo *task_info = new TaskInfo((TaskObj *)task_wr.wr_object);
+                if (loop != NULL && task_info->loop != loop)
+                {
+                    delete task_info;
+                    continue;
+                }
 
-            tasks->push_back(task_info);
+                tasks->push_back(task_info);
+            }
+            catch (TaskInfo::Error &e)
+            {
+                // We failed to get this task but we keep going
+            }
         }
 
         if (asyncio_eager_tasks != NULL)
@@ -221,14 +237,21 @@ get_all_tasks(PyObject *loop)
 
             for (auto task_addr : *eager_tasks)
             {
-                TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
-                if (loop != NULL && task_info->loop != loop)
+                try
                 {
-                    delete task_info;
-                    continue;
-                }
+                    TaskInfo *task_info = new TaskInfo((TaskObj *)task_addr);
+                    if (loop != NULL && task_info->loop != loop)
+                    {
+                        delete task_info;
+                        continue;
+                    }
 
-                tasks->push_back(task_info);
+                    tasks->push_back(task_info);
+                }
+                catch (TaskInfo::Error &e)
+                {
+                    // We failed to get this task but we keep going
+                }
             }
         }
 
