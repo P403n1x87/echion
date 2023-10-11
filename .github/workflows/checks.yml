@@ -8,7 +8,7 @@ on:
 
 jobs:
   typing:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-latest"
 
     name: Type checking
     steps:
@@ -20,16 +20,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libunwind-dev lzma-dev
           pip install hatch
 
       - name: Type checking
         run: |
-          hatch -e checks run typing
+          hatch run checks:typing
 
   linting:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-latest"
 
     name: Linting
     steps:
@@ -41,10 +39,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libunwind-dev lzma-dev
           pip install hatch
 
       - name: Linting
         run: |
-          hatch -e checks run linting
+          hatch run checks:linting

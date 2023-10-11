@@ -29,7 +29,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libunwind-dev lzma-dev gdb
+          sudo apt-get install -y gdb
+          sudo -E bash scripts/build_libunwind.sh
           pip install hatch pygments
 
       - name: Run tests
