@@ -35,12 +35,23 @@ public:
 #endif
     microsecond_t cpu_time;
 
-    uintptr_t asyncio_loop;
+    uintptr_t asyncio_loop = 0;
 
     void update_cpu_time();
     bool is_running();
 
     void unwind(PyThreadState *);
+
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
+        : thread_id(thread_id), native_id(native_id), name(name)
+    {
+#if defined PL_LINUX
+        pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
+#elif defined PL_DARWIN
+        mach_port = pthread_mach_thread_np((pthread_t)thread_id);
+#endif
+        update_cpu_time();
+    };
 
 private:
     void unwind_tasks();
