@@ -76,26 +76,14 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
                 // If the threading module was not imported in the target then
                 // we mistakenly take the hypno thread as the main thread. We
                 // assume that any missing thread is the actual main thread.
-                auto new_info = new ThreadInfo();
-                new_info->thread_id = tstate.thread_id;
-                new_info->name = "MainThread";
-
 #if PY_VERSION_HEX >= 0x030b0000
-                new_info->native_id = tstate.native_thread_id;
+                auto native_id = tstate.native_thread_id;
 #else
-                new_info->native_id = getpid();
+                auto native_id = getpid();
 #endif
-
-#if defined PL_LINUX
-                pthread_getcpuclockid((pthread_t)tstate.thread_id, &new_info->cpu_clock_id);
-#elif defined PL_DARWIN
-                pthread_threadid_np((pthread_t)tstate.thread_id, (__uint64_t *)&new_info->native_id);
-                new_info->mach_port = pthread_mach_thread_np((pthread_t)tstate.thread_id);
-#endif
-
-                new_info->update_cpu_time();
-
-                thread_info_map.emplace(tstate.thread_id, ThreadInfo::Ptr(new_info));
+                thread_info_map.emplace(
+                    tstate.thread_id,
+                    std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
             }
 
             auto &info = thread_info_map.find(tstate.thread_id)->second;
@@ -422,23 +410,18 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         {
             // Thread is already tracked so we update its info
             info = thread_info_map.find(thread_id)->second.get();
+
+            info->name = thread_name;
+            info->native_id = native_id;
+            info->update_cpu_time();
         }
         else
         {
             // Untracked thread. Create a new info entry.
-            info = new ThreadInfo();
-            thread_info_map.emplace(thread_id, ThreadInfo::Ptr(info));
+            thread_info_map.emplace(
+                thread_id,
+                std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
         }
-
-        info->thread_id = thread_id;
-        info->name = thread_name;
-        info->native_id = native_id;
-#if defined PL_LINUX
-        pthread_getcpuclockid((pthread_t)thread_id, &info->cpu_clock_id);
-#elif defined PL_DARWIN
-        info->mach_port = pthread_mach_thread_np((pthread_t)thread_id);
-#endif
-        info->update_cpu_time();
     }
 
     Py_RETURN_NONE;
