@@ -86,10 +86,8 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
                     std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
             }
 
-            auto &info = thread_info_map.find(tstate.thread_id)->second;
-
             // Call back with the thread state and thread info.
-            callback(&tstate, *info);
+            callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
         }
 
         // Enqueue the unseen threads that we can reach from this thread.
@@ -404,16 +402,14 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        ThreadInfo *info = NULL;
-
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             // Thread is already tracked so we update its info
-            info = thread_info_map.find(thread_id)->second.get();
+            auto &thread = *thread_info_map.find(thread_id)->second;
 
-            info->name = thread_name;
-            info->native_id = native_id;
-            info->update_cpu_time();
+            thread.name = thread_name;
+            thread.native_id = native_id;
+            thread.update_cpu_time();
         }
         else
         {

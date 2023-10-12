@@ -17,6 +17,7 @@
 #endif
 
 #include <echion/signals.h>
+#include <echion/tasks.h>
 #include <echion/timing.h>
 
 class ThreadInfo
@@ -28,6 +29,7 @@ public:
     unsigned long native_id;
 
     std::string name;
+
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
 #elif defined PL_DARWIN
@@ -153,7 +155,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
     else
     {
         unwind_python_stack(tstate);
-        if (asyncio_loop != 0)
+        if (asyncio_loop)
             try
             {
                 unwind_tasks();
@@ -215,8 +217,7 @@ void ThreadInfo::unwind_tasks()
     for (auto &task : leaf_tasks)
     {
         auto stack = std::make_unique<FrameStack>();
-        auto current_task = task;
-        for (;;)
+        for (auto current_task = task;;)
         {
             auto &task = current_task.get();
 
