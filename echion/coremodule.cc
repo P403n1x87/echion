@@ -41,43 +41,6 @@
 #include <echion/vm.h>
 
 // ----------------------------------------------------------------------------
-static void unwind_thread(PyThreadState *tstate, ThreadInfo *info)
-{
-    if (native)
-    {
-        // Lock on the signal handler. Will get unlocked once the handler is
-        // done unwinding the native stack.
-        const std::lock_guard<std::mutex> guard(sigprof_handler_lock);
-
-        // Pass the current thread state to the signal handler. This is needed
-        // to unwind the Python stack from within it.
-        current_tstate = tstate;
-        current_thread_info = info;
-
-        // Send a signal to the thread to unwind its native stack.
-        pthread_kill((pthread_t)tstate->thread_id, SIGPROF);
-
-        // Lock to wait for the signal handler to finish unwinding the native
-        // stack. Release the lock immediately after so that it is available
-        // for the next thread.
-        sigprof_handler_lock.lock();
-    }
-    else
-    {
-        unwind_python_stack(tstate);
-        if (info->asyncio_loop != 0)
-            try
-            {
-                unwind_tasks(info);
-            }
-            catch (TaskInfo::Error &)
-            {
-                // We failed to unwind tasks
-            }
-    }
-}
-
-// ----------------------------------------------------------------------------
 static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> callback)
 {
     std::unordered_set<PyThreadState *> threads;
@@ -173,7 +136,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     if (thread_name == NULL)
         return;
 
-    unwind_thread(tstate, info);
+    info->unwind(tstate);
 
     // Asyncio tasks
     if (current_tasks.empty())
@@ -227,7 +190,7 @@ static void do_where(std::ostream &stream)
     for_each_thread(
         [&stream](PyThreadState *tstate, ThreadInfo *info) -> void
         {
-            unwind_thread(tstate, info);
+            info->unwind(tstate);
             if (native)
             {
                 interleave_stacks();
