@@ -221,10 +221,10 @@ TaskInfo TaskInfo::current(PyObject *loop)
 
 // ----------------------------------------------------------------------------
 // TODO: Make this a "for_each_task" function?
-static std::unique_ptr<std::vector<TaskInfo::Ptr>>
+std::vector<TaskInfo::Ptr>
 get_all_tasks(PyObject *loop)
 {
-    auto tasks = std::make_unique<std::vector<TaskInfo::Ptr>>();
+    std::vector<TaskInfo::Ptr> tasks;
     if (loop == NULL)
         return tasks;
 
@@ -233,7 +233,7 @@ get_all_tasks(PyObject *loop)
         MirrorSet scheduled_tasks_set(asyncio_scheduled_tasks);
         auto scheduled_tasks = scheduled_tasks_set.as_unordered_set();
 
-        for (auto task_wr_addr : *scheduled_tasks)
+        for (auto task_wr_addr : scheduled_tasks)
         {
             PyWeakReference task_wr;
             if (copy_type(task_wr_addr, task_wr))
@@ -243,7 +243,7 @@ get_all_tasks(PyObject *loop)
             {
                 auto task_info = std::make_unique<TaskInfo>((TaskObj *)task_wr.wr_object);
                 if (task_info->loop == loop)
-                    tasks->push_back(std::move(task_info));
+                    tasks.push_back(std::move(task_info));
             }
             catch (TaskInfo::Error &e)
             {
@@ -256,16 +256,13 @@ get_all_tasks(PyObject *loop)
             MirrorSet eager_tasks_set(asyncio_eager_tasks);
             auto eager_tasks = eager_tasks_set.as_unordered_set();
 
-            if (eager_tasks == nullptr)
-                return NULL;
-
-            for (auto task_addr : *eager_tasks)
+            for (auto task_addr : eager_tasks)
             {
                 try
                 {
                     auto task_info = std::make_unique<TaskInfo>((TaskObj *)task_addr);
                     if (task_info->loop == loop)
-                        tasks->push_back(std::move(task_info));
+                        tasks.push_back(std::move(task_info));
                 }
                 catch (TaskInfo::Error &e)
                 {
@@ -331,7 +328,7 @@ static void unwind_tasks(ThreadInfo *info)
         // Clean up the task_link_map. Remove entries associated to tasks that
         // no longer exist.
         std::unordered_set<PyObject *> all_task_origins;
-        std::transform(all_tasks->cbegin(), all_tasks->cend(),
+        std::transform(all_tasks.cbegin(), all_tasks.cend(),
                        std::inserter(all_task_origins, all_task_origins.begin()),
                        [](const TaskInfo::Ptr &task)
                        { return task->origin; });
@@ -352,7 +349,7 @@ static void unwind_tasks(ThreadInfo *info)
                        { return kv.second; });
     }
 
-    for (auto &task : *all_tasks)
+    for (auto &task : all_tasks)
     {
         origin_map.emplace(task->origin, std::ref(*task));
 

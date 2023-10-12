@@ -136,7 +136,7 @@ class MirrorSet : public MirrorObject
 {
 public:
     MirrorSet(PyObject *);
-    std::unique_ptr<std::unordered_set<PyObject *>> as_unordered_set();
+    std::unordered_set<PyObject *> as_unordered_set();
 
 private:
     size_t size;
@@ -159,19 +159,19 @@ MirrorSet::MirrorSet(PyObject *set_addr)
     reflected = (PyObject *)&set;
 }
 
-std::unique_ptr<std::unordered_set<PyObject *>>
+std::unordered_set<PyObject *>
 MirrorSet::as_unordered_set()
 {
     if (data == nullptr)
         throw MirrorError();
 
-    auto uset = std::make_unique<std::unordered_set<PyObject *>>();
+    std::unordered_set<PyObject *> uset;
 
     for (size_t i = 0; i < size; i++)
     {
         auto entry = set.table[i];
         if (entry.key != NULL)
-            uset->insert(entry.key);
+            uset.insert(entry.key);
     }
 
     return uset;
