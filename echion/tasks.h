@@ -38,10 +38,22 @@
 class GenInfo
 {
 public:
-    PyObject *origin = NULL;
+    typedef std::unique_ptr<GenInfo> Ptr;
 
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create generator info object";
+        }
+    };
+
+    PyObject *origin = NULL;
     PyObject *frame = NULL;
-    GenInfo *await = NULL;
+
+    GenInfo::Ptr await = nullptr;
+
     bool is_running = false;
 
     GenInfo(PyObject *gen_addr);
@@ -52,7 +64,7 @@ GenInfo::GenInfo(PyObject *gen_addr)
     PyGenObject gen;
 
     if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
-        return;
+        throw Error();
 
     origin = gen_addr;
 
@@ -63,18 +75,22 @@ GenInfo::GenInfo(PyObject *gen_addr)
                 : (PyObject *)((char *)gen_addr + offsetof(PyGenObject, gi_iframe));
 #else
     frame = (PyObject *)gen.gi_frame;
+#endif
+
     PyFrameObject f;
     if (copy_type(frame, f))
-        return;
-#endif
+        throw Error();
+
     PyObject *yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
     if (yf != NULL && yf != gen_addr)
     {
-        await = new GenInfo(yf);
-        if (await->origin == NULL)
+        try
         {
-            delete await;
-            await = NULL;
+            await = std::make_unique<GenInfo>(yf);
+        }
+        catch (GenInfo::Error &)
+        {
+            await = nullptr;
         }
     }
 
@@ -103,10 +119,11 @@ public:
 
     PyObject *origin = NULL;
     PyObject *loop = NULL;
-    GenInfo *coro = NULL;
+
+    GenInfo::Ptr coro = nullptr;
+    Frame::Ptr root_frame = nullptr;
 
     std::string name;
-    Frame::Ptr root_frame = nullptr;
 
     // Information to reconstruct the async stack as best as we can
     TaskInfo *waiter = NULL;
@@ -115,7 +132,6 @@ public:
     ~TaskInfo()
     {
         delete waiter;
-        delete coro;
     }
 
     static TaskInfo current(PyObject *);
@@ -131,10 +147,12 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
     if (copy_type(task_addr, task))
         throw Error();
 
-    coro = new GenInfo(task.task_coro);
-    if (coro->frame == NULL)
+    try
     {
-        delete coro;
+        coro = std::make_unique<GenInfo>(task.task_coro);
+    }
+    catch (GenInfo::Error &)
+    {
         throw Error();
     }
 
@@ -275,16 +293,12 @@ static size_t unwind_task(TaskInfo *info, FrameStack &stack)
 {
     // TODO: Check for running task.
     std::stack<PyObject *> coro_frames;
-    if (info->coro->frame != NULL)
-        coro_frames.push(info->coro->frame);
 
     // Unwind the coro chain
-    GenInfo *next_coro = info->coro->await;
-    while (next_coro != NULL)
+    for (auto coro = info->coro.get(); coro != NULL; coro = coro->await.get())
     {
-        if (next_coro->frame != NULL)
-            coro_frames.push(next_coro->frame);
-        next_coro = next_coro->await;
+        if (coro->frame != NULL)
+            coro_frames.push(coro->frame);
     }
 
     int count = 0;
