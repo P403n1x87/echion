@@ -41,7 +41,7 @@
 #include <echion/vm.h>
 
 // ----------------------------------------------------------------------------
-static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> callback)
+static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> callback)
 {
     std::unordered_set<PyThreadState *> threads;
     std::unordered_set<PyThreadState *> seen_threads;
@@ -98,13 +98,13 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
 
                 new_info->update_cpu_time();
 
-                thread_info_map[tstate.thread_id] = new_info;
+                thread_info_map[tstate.thread_id] = ThreadInfo::Ptr(new_info);
             }
 
-            ThreadInfo *info = thread_info_map[tstate.thread_id];
+            auto &info = thread_info_map.find(tstate.thread_id)->second;
 
             // Call back with the thread state and thread info.
-            callback(&tstate, info);
+            callback(&tstate, *info);
         }
 
         // Enqueue the unseen threads that we can reach from this thread.
@@ -116,27 +116,27 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo *)> c
 }
 
 // ----------------------------------------------------------------------------
-static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t delta)
+static void sample_thread(PyThreadState *tstate, ThreadInfo &thread, microsecond_t delta)
 {
     const char *thread_name = NULL;
 
     if (cpu)
     {
-        microsecond_t previous_cpu_time = info->cpu_time;
-        info->update_cpu_time();
+        microsecond_t previous_cpu_time = thread.cpu_time;
+        thread.update_cpu_time();
 
-        if (!info->is_running())
+        if (!thread.is_running())
             // If the thread is not running, then we skip it.
             return;
 
-        delta = info->cpu_time - previous_cpu_time;
+        delta = thread.cpu_time - previous_cpu_time;
     }
 
-    thread_name = info->name;
+    thread_name = thread.name;
     if (thread_name == NULL)
         return;
 
-    info->unwind(tstate);
+    thread.unwind(tstate);
 
     // Asyncio tasks
     if (current_tasks.empty())
@@ -188,16 +188,16 @@ static void do_where(std::ostream &stream)
 
     // TODO: Add support for tasks
     for_each_thread(
-        [&stream](PyThreadState *tstate, ThreadInfo *info) -> void
+        [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
         {
-            info->unwind(tstate);
+            thread.unwind(tstate);
             if (native)
             {
                 interleave_stacks();
-                render_where(*info, interleaved_stack, stream);
+                render_where(thread, interleaved_stack, stream);
             }
             else
-                render_where(*info, python_stack, stream);
+                render_where(thread, python_stack, stream);
             stream << std::endl;
         });
 }
@@ -262,12 +262,7 @@ _stop()
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        while (!thread_info_map.empty())
-        {
-            ThreadInfo *info = thread_info_map.begin()->second;
-            thread_info_map.erase(thread_info_map.begin());
-            delete info;
-        }
+        thread_info_map.clear();
     }
 
 #if defined PL_DARWIN
@@ -330,8 +325,8 @@ _sampler()
         microsecond_t wall_time = now - last_time;
 
         for_each_thread(
-            [=](PyThreadState *tstate, ThreadInfo *info)
-            { sample_thread(tstate, info, wall_time); });
+            [=](PyThreadState *tstate, ThreadInfo &thread)
+            { sample_thread(tstate, thread, wall_time); });
 
         while (gettime() < end_time && running)
             sched_yield();
@@ -439,7 +434,7 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             // Thread is already tracked so we update its info
-            info = thread_info_map[thread_id];
+            info = thread_info_map.find(thread_id)->second.get();
             if (info->name != NULL)
                 std::free((void *)info->name);
         }
@@ -459,7 +454,7 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 #endif
         info->update_cpu_time();
 
-        thread_info_map[thread_id] = info;
+        thread_info_map[thread_id] = ThreadInfo::Ptr(info);
     }
 
     Py_RETURN_NONE;
@@ -476,12 +471,7 @@ untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        if (thread_info_map.find(thread_id) != thread_info_map.end())
-        {
-            ThreadInfo *info = thread_info_map[thread_id];
-            thread_info_map.erase(thread_id);
-            delete info;
-        }
+        thread_info_map.erase(thread_id);
     }
 
     Py_RETURN_NONE;
@@ -511,8 +501,9 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
 
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
-            ThreadInfo *info = thread_info_map[thread_id];
-            info->asyncio_loop = loop != Py_None ? (uintptr_t)loop : 0;
+            thread_info_map.find(thread_id)->second->asyncio_loop = (loop != Py_None)
+                                                                        ? (uintptr_t)loop
+                                                                        : 0;
         }
     }
 
