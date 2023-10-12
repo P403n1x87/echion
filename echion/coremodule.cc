@@ -78,10 +78,7 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
                 // assume that any missing thread is the actual main thread.
                 auto new_info = new ThreadInfo();
                 new_info->thread_id = tstate.thread_id;
-
-                auto name = std::string("MainThread");
-                new_info->name = new char[name.length() + 1];
-                std::strcpy((char *)new_info->name, name.c_str());
+                new_info->name = "MainThread";
 
 #if PY_VERSION_HEX >= 0x030b0000
                 new_info->native_id = tstate.native_thread_id;
@@ -98,7 +95,7 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
 
                 new_info->update_cpu_time();
 
-                thread_info_map[tstate.thread_id] = ThreadInfo::Ptr(new_info);
+                thread_info_map.emplace(tstate.thread_id, ThreadInfo::Ptr(new_info));
             }
 
             auto &info = thread_info_map.find(tstate.thread_id)->second;
@@ -118,8 +115,6 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
 // ----------------------------------------------------------------------------
 static void sample_thread(PyThreadState *tstate, ThreadInfo &thread, microsecond_t delta)
 {
-    const char *thread_name = NULL;
-
     if (cpu)
     {
         microsecond_t previous_cpu_time = thread.cpu_time;
@@ -132,17 +127,13 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo &thread, microsecond
         delta = thread.cpu_time - previous_cpu_time;
     }
 
-    thread_name = thread.name;
-    if (thread_name == NULL)
-        return;
-
     thread.unwind(tstate);
 
     // Asyncio tasks
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << thread_name;
+        output << "P" << pid << ";T" << thread.name;
 
         // Print the stack
         if (native)
@@ -160,7 +151,7 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo &thread, microsecond
     {
         for (auto &task_stack : current_tasks)
         {
-            output << "P" << pid << ";T" << thread_name;
+            output << "P" << pid << ";T" << thread.name;
 
             if (native)
             {
@@ -422,10 +413,6 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
     if (!PyArg_ParseTuple(args, "lsi", &thread_id, &thread_name, &native_id))
         return NULL;
 
-    const char *name = strdup(thread_name);
-    if (name == NULL)
-        Py_RETURN_NONE;
-
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
@@ -435,17 +422,16 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         {
             // Thread is already tracked so we update its info
             info = thread_info_map.find(thread_id)->second.get();
-            if (info->name != NULL)
-                std::free((void *)info->name);
         }
         else
         {
             // Untracked thread. Create a new info entry.
             info = new ThreadInfo();
+            thread_info_map.emplace(thread_id, ThreadInfo::Ptr(info));
         }
 
         info->thread_id = thread_id;
-        info->name = name;
+        info->name = thread_name;
         info->native_id = native_id;
 #if defined PL_LINUX
         pthread_getcpuclockid((pthread_t)thread_id, &info->cpu_clock_id);
@@ -453,8 +439,6 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         info->mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         info->update_cpu_time();
-
-        thread_info_map[thread_id] = ThreadInfo::Ptr(info);
     }
 
     Py_RETURN_NONE;

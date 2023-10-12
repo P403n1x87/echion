@@ -26,7 +26,8 @@ public:
 
     uintptr_t thread_id;
     unsigned long native_id;
-    const char *name;
+
+    std::string name;
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
 #elif defined PL_DARWIN
@@ -40,11 +41,6 @@ public:
     bool is_running();
 
     void unwind(PyThreadState *);
-
-    ~ThreadInfo()
-    {
-        delete[] name;
-    };
 
 private:
     void unwind_tasks();
