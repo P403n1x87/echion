@@ -12,6 +12,7 @@
 #include <thread>
 
 static PyInterpreterState *interp = NULL;
+static PyThreadState *current_tstate = NULL;
 
 static std::thread *sampler_thread = nullptr;
 

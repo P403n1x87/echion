@@ -23,8 +23,6 @@ static FrameStack python_stack;
 static FrameStack native_stack;
 static FrameStack interleaved_stack;
 
-static PyThreadState *current_tstate = NULL;
-
 // ----------------------------------------------------------------------------
 void unwind_native_stack()
 {
