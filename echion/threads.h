@@ -22,6 +22,8 @@
 class ThreadInfo
 {
 public:
+    using Ptr = std::unique_ptr<ThreadInfo>;
+
     uintptr_t thread_id;
     unsigned long native_id;
     const char *name;
@@ -117,7 +119,7 @@ bool ThreadInfo::is_running()
 
 // ----------------------------------------------------------------------------
 
-static std::unordered_map<uintptr_t, ThreadInfo *> thread_info_map; // indexed by thread_id
+static std::unordered_map<uintptr_t, ThreadInfo::Ptr> thread_info_map; // indexed by thread_id
 static std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
