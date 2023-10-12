@@ -108,6 +108,8 @@ GenInfo::GenInfo(PyObject *gen_addr)
 class TaskInfo
 {
 public:
+    typedef std::unique_ptr<TaskInfo> Ptr;
+
     class Error : public std::exception
     {
     public:
@@ -126,13 +128,9 @@ public:
     std::string name;
 
     // Information to reconstruct the async stack as best as we can
-    TaskInfo *waiter = NULL;
+    TaskInfo::Ptr waiter = nullptr;
 
     TaskInfo(TaskObj *);
-    ~TaskInfo()
-    {
-        delete waiter;
-    }
 
     static TaskInfo current(PyObject *);
 };
@@ -178,14 +176,16 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
     root_frame = std::make_unique<Frame>(name);
     loop = task.task_loop;
 
-    try
+    if (task.task_fut_waiter)
     {
-        if (task.task_fut_waiter)
-            waiter = new TaskInfo((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
-    }
-    catch (TaskInfo::Error &)
-    {
-        waiter = NULL;
+        try
+        {
+            waiter = std::make_unique<TaskInfo>((TaskObj *)task.task_fut_waiter); // TODO: Make lazy?
+        }
+        catch (TaskInfo::Error &)
+        {
+            waiter = nullptr;
+        }
     }
 }
 
@@ -289,13 +289,13 @@ static std::vector<TaskStack *> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-static size_t unwind_task(TaskInfo *info, FrameStack &stack)
+static size_t unwind_task(TaskInfo &info, FrameStack &stack)
 {
     // TODO: Check for running task.
     std::stack<PyObject *> coro_frames;
 
     // Unwind the coro chain
-    for (auto coro = info->coro.get(); coro != NULL; coro = coro->await.get())
+    for (auto coro = info.coro.get(); coro != NULL; coro = coro->await.get())
     {
         if (coro->frame != NULL)
             coro_frames.push(coro->frame);
@@ -368,7 +368,7 @@ static void unwind_tasks(ThreadInfo *info)
         TaskInfo *current_task = task;
         while (current_task)
         {
-            int stack_size = unwind_task(current_task, *stack);
+            int stack_size = unwind_task(*current_task, *stack);
 
             if (current_task->coro->is_running)
             {
