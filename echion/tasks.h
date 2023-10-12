@@ -283,9 +283,7 @@ get_all_tasks(PyObject *loop)
 
 // ----------------------------------------------------------------------------
 
-typedef std::pair<TaskInfo *, FrameStack *> TaskStack;
-
-static std::vector<TaskStack *> current_tasks;
+static std::vector<std::unique_ptr<FrameStack>> current_tasks;
 
 // ----------------------------------------------------------------------------
 
@@ -364,7 +362,7 @@ static void unwind_tasks(ThreadInfo *info)
 
     for (TaskInfo *task : leaf_tasks)
     {
-        FrameStack *stack = new FrameStack();
+        auto stack = std::make_unique<FrameStack>();
         TaskInfo *current_task = task;
         while (current_task)
         {
@@ -413,6 +411,6 @@ static void unwind_tasks(ThreadInfo *info)
         for (auto p = python_stack.begin(); p != python_stack.end(); p++)
             stack->push_back(*p);
 
-        current_tasks.push_back(new TaskStack(task, stack));
+        current_tasks.push_back(std::move(stack));
     }
 }

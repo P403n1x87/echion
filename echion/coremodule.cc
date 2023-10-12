@@ -195,11 +195,10 @@ static void sample_thread(PyThreadState *tstate, ThreadInfo *info, microsecond_t
     }
     else
     {
-        for (auto task_pair : current_tasks)
+        for (auto &task_stack : current_tasks)
         {
             output << "P" << pid << ";T" << thread_name;
 
-            FrameStack *task_stack = task_pair->second;
             if (native)
             {
                 // NOTE: These stacks might be non-sensical, especially with
