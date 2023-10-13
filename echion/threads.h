@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <sstream>
@@ -26,6 +27,15 @@ class ThreadInfo
 {
 public:
     using Ptr = std::unique_ptr<ThreadInfo>;
+
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create thread info object";
+        }
+    };
 
     uintptr_t thread_id;
     unsigned long native_id;
@@ -59,6 +69,12 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
+        // Try to check that the thread_id is a valid pointer to a pthread
+        // structure. Calling pthread_getcpuclockid on an invalid memory address
+        // will cause a segmentation fault.
+        char buffer[32] = "";
+        if (copy_generic((void *)thread_id, buffer, sizeof(buffer)))
+            throw Error();
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -391,9 +407,19 @@ static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> c
 #else
                 auto native_id = getpid();
 #endif
-                thread_info_map.emplace(
-                    tstate.thread_id,
-                    std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                try
+                {
+                    thread_info_map.emplace(
+                        tstate.thread_id,
+                        std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                }
+                catch (ThreadInfo::Error &)
+                {
+                    // We failed to create the thread info object so we skip it.
+                    // We'll likely try again later with the valid thread
+                    // information.
+                    continue;
+                }
             }
 
             // Call back with the thread state and thread info.
