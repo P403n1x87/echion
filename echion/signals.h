@@ -11,8 +11,6 @@
 
 #include <echion/stacks.h>
 #include <echion/state.h>
-#include <echion/tasks.h>
-#include <echion/threads.h>
 
 // ----------------------------------------------------------------------------
 

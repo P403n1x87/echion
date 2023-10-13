@@ -17,7 +17,22 @@
 
 #define MAX_FRAMES 2048
 
-typedef std::deque<Frame::Ref> FrameStack;
+class FrameStack : public std::deque<Frame::Ref>
+{
+public:
+    void render(std::ostream &output)
+    {
+        for (auto it = this->rbegin(); it != this->rend(); ++it)
+        {
+#if PY_VERSION_HEX >= 0x030c0000
+            if ((*it).get().is_entry)
+                // This is a shim frame so we skip it.
+                continue;
+#endif
+            (*it).get().render(output);
+        }
+    }
+};
 
 static FrameStack python_stack;
 static FrameStack native_stack;
