@@ -162,6 +162,9 @@ extern "C"
             if (!(_Py_OPCODE(next) == RESUME || _Py_OPCODE(next) == RESUME_QUICK) || _Py_OPARG(next) < 2)
                 return NULL;
 
+            if (frame.stacktop < 1 || frame.stacktop > (1 << 20))
+                return NULL;
+
             auto localsplus = std::make_unique<PyObject *[]>(frame.stacktop);
             if (copy_generic(frame.localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject *)))
                 return NULL;
@@ -201,7 +204,11 @@ extern "C"
                 return NULL;
 
             ssize_t nvalues = frame.f_stackdepth;
+            if (nvalues < 1 || nvalues > (1 << 20))
+                return NULL;
+
             auto stack = std::make_unique<PyObject *[]>(nvalues);
+
             if (copy_generic(frame.f_valuestack, stack.get(), nvalues * sizeof(PyObject *)))
                 return NULL;
 
