@@ -114,11 +114,14 @@ private:
 #if PY_VERSION_HEX >= 0x030b0000
 // ----------------------------------------------------------------------------
 static inline int
-_read_varint(unsigned char *table, ssize_t *i)
+_read_varint(unsigned char *table, ssize_t size, ssize_t *i)
 {
+    if (*i >= size - 1)
+        return 0;
+
     int val = table[++*i] & 63;
     int shift = 0;
-    while (table[*i] & 64)
+    while (table[*i] & 64 && *i < size)
     {
         shift += 6;
         val |= (table[++*i] & 63) << shift;
@@ -128,9 +131,9 @@ _read_varint(unsigned char *table, ssize_t *i)
 
 // ----------------------------------------------------------------------------
 static inline int
-_read_signed_varint(unsigned char *table, ssize_t *i)
+_read_signed_varint(unsigned char *table, ssize_t size, ssize_t *i)
 {
-    int val = _read_varint(table, i);
+    int val = _read_varint(table, size, i);
     return (val & 1) ? -(val >> 1) : (val >> 1);
 }
 #endif
@@ -159,17 +162,17 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
             break;
 
         case 14: // Long form
-            lineno += _read_signed_varint(table_data, &i);
+            lineno += _read_signed_varint(table_data, len, &i);
 
             this->location.line = lineno;
-            this->location.line_end = lineno + _read_varint(table_data, &i);
-            this->location.column = _read_varint(table_data, &i);
-            this->location.column_end = _read_varint(table_data, &i);
+            this->location.line_end = lineno + _read_varint(table_data, len, &i);
+            this->location.column = _read_varint(table_data, len, &i);
+            this->location.column_end = _read_varint(table_data, len, &i);
 
             break;
 
         case 13: // No column data
-            lineno += _read_signed_varint(table_data, &i);
+            lineno += _read_signed_varint(table_data, len, &i);
 
             this->location.line = lineno;
             this->location.line_end = lineno;
@@ -180,6 +183,9 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
         case 12: // New lineno
         case 11:
         case 10:
+            if (i >= len - 2)
+                throw LocationError();
+
             lineno += code - 10;
 
             this->location.line = lineno;
@@ -190,6 +196,9 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
             break;
 
         default:
+            if (i >= len - 1)
+                throw LocationError();
+
             next_byte = table[++i];
 
             this->location.line = lineno;
