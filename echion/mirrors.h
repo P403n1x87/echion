@@ -109,7 +109,10 @@ MirrorDict::MirrorDict(PyObject *dict_addr)
     size_t values_size = dict.ma_values != NULL ? keys.dk_nentries * sizeof(PyObject *) : 0;
 
     // Allocate the buffer
-    size_t data_size = keys_size + (keys.dk_nentries * entry_size) + values_size;
+    ssize_t data_size = keys_size + (keys.dk_nentries * entry_size) + values_size;
+    if (data_size < 0 || data_size > (1 << 20))
+        throw MirrorError();
+
     data = std::make_unique<char[]>(data_size);
 
     // Copy the key data and update the pointer
@@ -149,7 +152,10 @@ MirrorSet::MirrorSet(PyObject *set_addr)
         throw MirrorError();
 
     size = set.mask + 1;
-    size_t table_size = size * sizeof(setentry);
+    ssize_t table_size = size * sizeof(setentry);
+    if (table_size < 0 || table_size > (1 << 20))
+        throw MirrorError();
+
     data = std::make_unique<char[]>(table_size);
     if (copy_generic(set.table, data.get(), table_size))
         throw MirrorError();
