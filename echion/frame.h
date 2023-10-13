@@ -116,12 +116,13 @@ private:
 static inline int
 _read_varint(unsigned char *table, ssize_t size, ssize_t *i)
 {
-    if (*i >= size - 1)
+    ssize_t guard = size - 1;
+    if (*i >= guard)
         return 0;
 
     int val = table[++*i] & 63;
     int shift = 0;
-    while (table[*i] & 64 && *i < size)
+    while (table[*i] & 64 && *i < guard)
     {
         shift += 6;
         val |= (table[++*i] & 63) << shift;
