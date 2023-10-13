@@ -194,6 +194,8 @@ extern "C"
 
             Py_ssize_t s = 0;
             auto c = pybytes_to_bytes_and_size(code.co_code, &s);
+            if (c == nullptr)
+                return NULL;
 
             if (c[(frame.f_lasti + 1) * sizeof(_Py_CODEUNIT)] != YIELD_FROM)
                 return NULL;
@@ -234,6 +236,8 @@ extern "C"
 
             Py_ssize_t s = 0;
             auto c = pybytes_to_bytes_and_size(code.co_code, &s);
+            if (c == nullptr)
+                return NULL;
 
             if (c[f->f_lasti + sizeof(_Py_CODEUNIT)] != YIELD_FROM)
                 return NULL;
