@@ -12,11 +12,9 @@
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <iostream>
 #include <mutex>
 #include <thread>
-#include <unordered_set>
 
 #include <fcntl.h>
 #include <sched.h>
@@ -29,132 +27,11 @@
 #endif
 
 #include <echion/config.h>
-#include <echion/frame.h>
-#include <echion/mirrors.h>
-#include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
-#include <echion/tasks.h>
 #include <echion/threads.h>
 #include <echion/timing.h>
-#include <echion/vm.h>
-
-// ----------------------------------------------------------------------------
-static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> callback)
-{
-    std::unordered_set<PyThreadState *> threads;
-    std::unordered_set<PyThreadState *> seen_threads;
-
-    threads.clear();
-    seen_threads.clear();
-
-    // Start from the thread list head
-    threads.insert(PyInterpreterState_ThreadHead(interp));
-
-    while (!threads.empty())
-    {
-        // Pop the next thread
-        PyThreadState *tstate_addr = *threads.begin();
-        threads.erase(threads.begin());
-
-        // Mark the thread as seen
-        seen_threads.insert(tstate_addr);
-
-        // Since threads can be created and destroyed at any time, we make
-        // a copy of the structure before trying to read its fields.
-        PyThreadState tstate;
-        if (copy_type(tstate_addr, tstate))
-            // We failed to copy the thread so we skip it.
-            continue;
-
-        {
-            const std::lock_guard<std::mutex> guard(thread_info_map_lock);
-
-            if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
-            {
-                // If the threading module was not imported in the target then
-                // we mistakenly take the hypno thread as the main thread. We
-                // assume that any missing thread is the actual main thread.
-#if PY_VERSION_HEX >= 0x030b0000
-                auto native_id = tstate.native_thread_id;
-#else
-                auto native_id = getpid();
-#endif
-                thread_info_map.emplace(
-                    tstate.thread_id,
-                    std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
-            }
-
-            // Call back with the thread state and thread info.
-            callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
-        }
-
-        // Enqueue the unseen threads that we can reach from this thread.
-        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
-            threads.insert(tstate.next);
-        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
-            threads.insert(tstate.prev);
-    }
-}
-
-// ----------------------------------------------------------------------------
-static void sample_thread(PyThreadState *tstate, ThreadInfo &thread, microsecond_t delta)
-{
-    if (cpu)
-    {
-        microsecond_t previous_cpu_time = thread.cpu_time;
-        thread.update_cpu_time();
-
-        if (!thread.is_running())
-            // If the thread is not running, then we skip it.
-            return;
-
-        delta = thread.cpu_time - previous_cpu_time;
-    }
-
-    thread.unwind(tstate);
-
-    // Asyncio tasks
-    if (current_tasks.empty())
-    {
-        // Print the PID and thread name
-        output << "P" << pid << ";T" << thread.name;
-
-        // Print the stack
-        if (native)
-        {
-            interleave_stacks();
-            render(interleaved_stack, output);
-        }
-        else
-            render(python_stack, output);
-
-        // Print the metric
-        output << " " << delta << std::endl;
-    }
-    else
-    {
-        for (auto &task_stack : current_tasks)
-        {
-            output << "P" << pid << ";T" << thread.name;
-
-            if (native)
-            {
-                // NOTE: These stacks might be non-sensical, especially with
-                // Python < 3.11.
-                interleave_stacks(*task_stack);
-                render(interleaved_stack, output);
-            }
-            else
-                render(*task_stack, output);
-
-            output << " " << delta << std::endl;
-        }
-
-        current_tasks.clear();
-    }
-}
 
 // ----------------------------------------------------------------------------
 static void do_where(std::ostream &stream)
@@ -171,10 +48,10 @@ static void do_where(std::ostream &stream)
             if (native)
             {
                 interleave_stacks();
-                render_where(thread, interleaved_stack, stream);
+                thread.render_where(interleaved_stack, stream);
             }
             else
-                render_where(thread, python_stack, stream);
+                thread.render_where(python_stack, stream);
             stream << std::endl;
         });
 }
@@ -303,7 +180,7 @@ _sampler()
 
         for_each_thread(
             [=](PyThreadState *tstate, ThreadInfo &thread)
-            { sample_thread(tstate, thread, wall_time); });
+            { thread.sample(tstate, wall_time); });
 
         while (gettime() < end_time && running)
             sched_yield();

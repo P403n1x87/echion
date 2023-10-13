@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
@@ -17,6 +18,7 @@
 #endif
 
 #include <echion/signals.h>
+#include <echion/stacks.h>
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
@@ -42,7 +44,16 @@ public:
     void update_cpu_time();
     bool is_running();
 
+    void sample(PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
+
+    void render_where(FrameStack &stack, std::ostream &output)
+    {
+        output << "    🧵 " << name << ":" << std::endl;
+
+        for (auto it = stack.rbegin(); it != stack.rend(); ++it)
+            (*it).get().render_where(output);
+    }
 
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
         : thread_id(thread_id), native_id(native_id), name(name)
@@ -277,5 +288,121 @@ void ThreadInfo::unwind_tasks()
             stack->push_back(*p);
 
         current_tasks.push_back(std::move(stack));
+    }
+}
+
+// ----------------------------------------------------------------------------
+void ThreadInfo::sample(PyThreadState *tstate, microsecond_t delta)
+{
+    if (cpu)
+    {
+        microsecond_t previous_cpu_time = cpu_time;
+        update_cpu_time();
+
+        if (!is_running())
+            // If the thread is not running, then we skip it.
+            return;
+
+        delta = cpu_time - previous_cpu_time;
+    }
+
+    unwind(tstate);
+
+    // Asyncio tasks
+    if (current_tasks.empty())
+    {
+        // Print the PID and thread name
+        output << "P" << pid << ";T" << name;
+
+        // Print the stack
+        if (native)
+        {
+            interleave_stacks();
+            interleaved_stack.render(output);
+        }
+        else
+            python_stack.render(output);
+
+        // Print the metric
+        output << " " << delta << std::endl;
+    }
+    else
+    {
+        for (auto &task_stack : current_tasks)
+        {
+            output << "P" << pid << ";T" << name;
+
+            if (native)
+            {
+                // NOTE: These stacks might be non-sensical, especially with
+                // Python < 3.11.
+                interleave_stacks(*task_stack);
+                interleaved_stack.render(output);
+            }
+            else
+                task_stack->render(output);
+
+            output << " " << delta << std::endl;
+        }
+
+        current_tasks.clear();
+    }
+}
+
+// ----------------------------------------------------------------------------
+static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> callback)
+{
+    std::unordered_set<PyThreadState *> threads;
+    std::unordered_set<PyThreadState *> seen_threads;
+
+    threads.clear();
+    seen_threads.clear();
+
+    // Start from the thread list head
+    threads.insert(PyInterpreterState_ThreadHead(interp));
+
+    while (!threads.empty())
+    {
+        // Pop the next thread
+        PyThreadState *tstate_addr = *threads.begin();
+        threads.erase(threads.begin());
+
+        // Mark the thread as seen
+        seen_threads.insert(tstate_addr);
+
+        // Since threads can be created and destroyed at any time, we make
+        // a copy of the structure before trying to read its fields.
+        PyThreadState tstate;
+        if (copy_type(tstate_addr, tstate))
+            // We failed to copy the thread so we skip it.
+            continue;
+
+        {
+            const std::lock_guard<std::mutex> guard(thread_info_map_lock);
+
+            if (thread_info_map.find(tstate.thread_id) == thread_info_map.end())
+            {
+                // If the threading module was not imported in the target then
+                // we mistakenly take the hypno thread as the main thread. We
+                // assume that any missing thread is the actual main thread.
+#if PY_VERSION_HEX >= 0x030b0000
+                auto native_id = tstate.native_thread_id;
+#else
+                auto native_id = getpid();
+#endif
+                thread_info_map.emplace(
+                    tstate.thread_id,
+                    std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+            }
+
+            // Call back with the thread state and thread info.
+            callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
+        }
+
+        // Enqueue the unseen threads that we can reach from this thread.
+        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
+            threads.insert(tstate.next);
+        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
+            threads.insert(tstate.prev);
     }
 }
