@@ -243,9 +243,8 @@ void ThreadInfo::unwind_tasks()
 
                 // Instead we get part of the thread stack
                 FrameStack temp_stack;
-                size_t nframes = python_stack.size() - stack_size + 1;
-                // TODO: assert nframe >= 0
-                for (size_t i = 0; i < nframes; i++)
+                ssize_t nframes = python_stack.size() - stack_size + 1;
+                for (ssize_t i = 0; i < nframes; i++)
                 {
                     auto python_frame = python_stack.front();
                     temp_stack.push_front(python_frame);
