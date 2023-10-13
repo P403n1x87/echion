@@ -311,16 +311,19 @@ Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
 static Frame INVALID_FRAME("<invalid>");
 static Frame UNKNOWN_FRAME("<unknown>");
 
-static std::unique_ptr<LRUCache<uintptr_t, Frame>> frame_cache = nullptr;
+// We make this a raw pointer to prevent its destruction on exit, since we
+// control the lifetime of the cache.
+static LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
 
 static void init_frame_cache(size_t capacity)
 {
-    frame_cache = std::make_unique<LRUCache<uintptr_t, Frame>>(capacity);
+    frame_cache = new LRUCache<uintptr_t, Frame>(capacity);
 }
 
 static void reset_frame_cache()
 {
-    frame_cache.reset();
+    delete frame_cache;
+    frame_cache = nullptr;
 }
 
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)
