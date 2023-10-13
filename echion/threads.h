@@ -273,7 +273,9 @@ void ThreadInfo::unwind_tasks()
                 // Check for, e.g., gather links
                 std::lock_guard<std::mutex> lock(task_link_map_lock);
 
-                if (task_link_map.find(task_origin) != task_link_map.end())
+                if (
+                    task_link_map.find(task_origin) != task_link_map.end() &&
+                    origin_map.find(task_link_map[task_origin]) != origin_map.end())
                 {
                     current_task = origin_map.find(task_link_map[task_origin])->second;
                     continue;
