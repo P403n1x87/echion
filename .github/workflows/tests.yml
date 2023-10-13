@@ -37,6 +37,7 @@ jobs:
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
+          hatch run tests.py${{ matrix.python-version }}:tests -svv
           sudo -E env PATH="$PATH" hatch run tests.py${{ matrix.python-version }}:tests -svv
       
       - name: Print core dumps
@@ -75,4 +76,6 @@ jobs:
         run: pip install hatch
   
       - name: Run tests
-        run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
+        run: |
+          hatch run tests.py${{ matrix.python-version }}:tests -svv
+          sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
