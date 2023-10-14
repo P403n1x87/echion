@@ -40,7 +40,8 @@ def start():
         ModuleWatchdog.install()
         atexit.register(ModuleWatchdog.uninstall)
     except RuntimeError:
-        # If ModuleWatchdog we have already registered the import hooks.
+        # If ModuleWatchdog is installed we have already registered the import
+        # hooks.
         pass
     else:
         for module in ("asyncio", "threading"):

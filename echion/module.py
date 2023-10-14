@@ -10,8 +10,6 @@ from types import ModuleType
 
 
 ModuleHookType = t.Callable[[ModuleType], None]
-PreExecHookType = t.Callable[[t.Any, ModuleType], None]
-PreExecHookCond = t.Union[str, t.Callable[[str], bool]]
 
 
 # Borrowed from the wrapt module
@@ -68,36 +66,13 @@ class _ImportHookChainedLoader(Loader):
 
     def _exec_module(self, module) -> None:
         # Collect and run only the first hook that matches the module.
-        pre_exec_hook = None
-
-        for _ in sys.meta_path:
-            if isinstance(_, ModuleWatchdog):
-                try:
-                    for cond, hook in _._pre_exec_module_hooks:
-                        if (
-                            isinstance(cond, str)
-                            and cond == module.__name__
-                            or cond(module.__name__)
-                        ):
-                            # Several pre-exec hooks could match, we keep the first one
-                            pre_exec_hook = hook
-                            break
-                except Exception:
-                    pass
-
-            if pre_exec_hook is not None:
-                break
-
-        if pre_exec_hook:
-            pre_exec_hook(self, module)
-        else:
-            self.loader.exec_module(module)
+        self.loader.exec_module(module)
 
         for callback in self.callbacks.values():
             callback(module)
 
 
-class ModuleWatchdog(dict):
+class ModuleWatchdog:
     """Module watchdog.
 
     Replace the standard ``sys.modules`` dictionary to detect when modules are
@@ -114,19 +89,8 @@ class ModuleWatchdog(dict):
     def __init__(self):
         # type: () -> None
         self._hook_map: t.DefaultDict[str, t.List[ModuleHookType]] = defaultdict(list)
-        self._modules: t.Union[dict, ModuleWatchdog] = sys.modules
         self._finding: t.Set[str] = set()
 
-    def __getitem__(self, item):
-        # type: (str) -> ModuleType
-        return self._modules.__getitem__(item)
-
-    def __setitem__(self, name, module):
-        # type: (str, ModuleType) -> None
-        self._modules.__setitem__(name, module)
-
-    def _add_to_meta_path(self):
-        # type: () -> None
         sys.meta_path.insert(0, self)  # type: ignore[arg-type]
 
     @classmethod
@@ -152,24 +116,6 @@ class ModuleWatchdog(dict):
         if hooks:
             for hook in hooks:
                 hook(module)
-
-    def __delitem__(self, name: str) -> None:
-        self._modules.__delitem__(name)
-
-    def __getattribute__(self, name: str) -> t.Any:
-        try:
-            return super().__getattribute__("_modules").__getattribute__(name)
-        except AttributeError:
-            return super().__getattribute__(name)
-
-    def __contains__(self, name: t.Any) -> bool:
-        return self._modules.__contains__(name)
-
-    def __len__(self) -> int:
-        return self._modules.__len__()
-
-    def __iter__(self) -> t.Iterator[str]:
-        return self._modules.__iter__()
 
     def find_module(
         self, fullname: str, path: t.Optional[str] = None
@@ -241,7 +187,7 @@ class ModuleWatchdog(dict):
         instance = t.cast(ModuleWatchdog, cls._instance)
         instance._hook_map[module].append(hook)
         try:
-            module_object = instance[module]
+            module_object = sys.modules[module]
         except KeyError:
             # The module is not loaded yet. Nothing more we can do.
             return
@@ -287,8 +233,7 @@ class ModuleWatchdog(dict):
         if cls.is_installed():
             raise RuntimeError("%s is already installed" % cls.__name__)
 
-        cls._instance = sys.modules = cls()
-        sys.modules._add_to_meta_path()
+        cls._instance = cls()
 
     @classmethod
     def is_installed(cls) -> bool:
@@ -303,16 +248,5 @@ class ModuleWatchdog(dict):
         class.
         """
         cls._check_installed()
-
-        parent, current = None, sys.modules
-        while isinstance(current, ModuleWatchdog):
-            if type(current) is cls:
-                cls._remove_from_meta_path()
-                if parent is not None:
-                    parent._modules = current._modules
-                else:
-                    sys.modules = current._modules
-                cls._instance = None
-                return
-            parent = current
-            current = current._modules
+        cls._remove_from_meta_path()
+        cls._instance = None
