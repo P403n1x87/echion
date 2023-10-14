@@ -40,40 +40,44 @@ def attach(args: argparse.Namespace) -> None:
 
     pid = args.pid or args.where
 
-    if args.where:
-        pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
-        os.mkfifo(pipe_name)
-
-    inject_py(pid, script)
-
     try:
-        end = None
-        if args.exposure:
-            from time import monotonic as time
+        if args.where:
+            pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
+            os.mkfifo(pipe_name)
 
-            end = time() + args.exposure
-        while not args.where:
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
-                break
-            if end is not None and time() > end:
-                break
-            os.sched_yield()
-    except (KeyboardInterrupt, ProcessLookupError):
-        pass
+        inject_py(pid, script)
 
-    # Read the output
-    if args.where:
-        with pipe_name.open("r") as f:
-            while True:
-                line = f.readline()
-                print(line, end="")
-                if not line:
+        try:
+            end = None
+            if args.exposure:
+                from time import monotonic as time
+
+                end = time() + args.exposure
+            while not args.where:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
                     break
-        pipe_name.unlink()
+                if end is not None and time() > end:
+                    break
+                os.sched_yield()
+        except (KeyboardInterrupt, ProcessLookupError):
+            pass
 
-    detach(pid)
+        # Read the output
+        if args.where and pipe_name.exists():
+            with pipe_name.open("r") as f:
+                while True:
+                    line = f.readline()
+                    print(line, end="")
+                    if not line:
+                        break
+
+        detach(pid)
+
+    finally:
+        if args.where and pipe_name.exists():
+            pipe_name.unlink()
 
 
 def main() -> None:
@@ -193,3 +197,7 @@ def main() -> None:
         )
         parser.print_usage()
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
