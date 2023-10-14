@@ -26,6 +26,9 @@ static int native = 0;
 // Where mode
 static int where = 0;
 
+// Pipe name (where mode IPC)
+static std::string pipe_name;
+
 // ----------------------------------------------------------------------------
 static PyObject *
 set_interval(PyObject *Py_UNUSED(m), PyObject *args)
@@ -74,6 +77,19 @@ set_where(PyObject *Py_UNUSED(m), PyObject *args)
         return NULL;
 
     where = value;
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+set_pipe_name(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    const char *name;
+    if (!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
+
+    pipe_name = name;
 
     Py_RETURN_NONE;
 }

@@ -138,15 +138,13 @@ _sampler()
 
     if (where)
     {
-        auto pipe_name = std::filesystem::temp_directory_path() / ("echion-" + std::to_string(getpid()));
         std::ofstream pipe(pipe_name, std::ios::out);
-        if (!pipe)
-        {
-            std::cerr << "Failed to open pipe " << pipe_name << std::endl;
-            return;
-        }
 
-        do_where(pipe);
+        if (pipe)
+            do_where(pipe);
+
+        else
+            std::cerr << "Failed to open pipe " << pipe_name << std::endl;
 
         running = 0;
 
@@ -398,6 +396,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
+    {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
