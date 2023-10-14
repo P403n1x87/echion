@@ -31,19 +31,24 @@ def detach(pid: int) -> None:
 def attach(args: argparse.Namespace) -> None:
     from hypno import inject_py
 
-    script = dedent(
-        f"""
-        from echion.bootstrap.attach import attach
-        attach({args.__dict__!r})
-        """
-    ).strip()
-
     pid = args.pid or args.where
 
     try:
+        pipe_name = None
         if args.where:
             pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
             os.mkfifo(pipe_name)
+            # This named pipe is likely created by the superuser, so we need to
+            # make it writable by everyone to allow the target process to write
+            # to it.
+            os.chmod(pipe_name, 0o666)
+
+        script = dedent(
+            f"""
+            from echion.bootstrap.attach import attach
+            attach({args.__dict__!r}, {repr(str(pipe_name)) if pipe_name is not None else str(None)})
+            """
+        ).strip()
 
         inject_py(pid, script)
 
@@ -53,6 +58,7 @@ def attach(args: argparse.Namespace) -> None:
                 from time import monotonic as time
 
                 end = time() + args.exposure
+
             while not args.where:
                 try:
                     os.kill(pid, 0)
@@ -61,11 +67,12 @@ def attach(args: argparse.Namespace) -> None:
                 if end is not None and time() > end:
                     break
                 os.sched_yield()
+
         except (KeyboardInterrupt, ProcessLookupError):
             pass
 
         # Read the output
-        if args.where and pipe_name.exists():
+        if args.where and pipe_name is not None and pipe_name.exists():
             with pipe_name.open("r") as f:
                 while True:
                     line = f.readline()
@@ -76,7 +83,7 @@ def attach(args: argparse.Namespace) -> None:
         detach(pid)
 
     finally:
-        if args.where and pipe_name.exists():
+        if args.where and pipe_name is not None and pipe_name.exists():
             pipe_name.unlink()
 
 
