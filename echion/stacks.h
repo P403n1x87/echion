@@ -51,19 +51,14 @@ void unwind_native_stack()
 
     while (unw_step(&cursor) > 0 && native_stack.size() < MAX_FRAMES)
     {
-        unw_word_t offset, pc;
-        unw_get_reg(&cursor, UNW_REG_IP, &pc);
-        if (pc == 0)
+        try
         {
-            // TODO: Invalid stack
+            native_stack.push_back(Frame::get(cursor));
+        }
+        catch (Frame::Error &)
+        {
             break;
         }
-
-        char sym[256];
-        native_stack.push_back(
-            unw_get_proc_name(&cursor, sym, sizeof(sym), &offset)
-                ? UNKNOWN_FRAME
-                : Frame::get(pc, sym, offset));
     }
 }
 
@@ -142,7 +137,7 @@ interleave_stacks(FrameStack &python_stack)
     {
         auto native_frame = *n;
 
-        if (native_frame.get().name.find("PyEval_EvalFrameDefault") != std::string::npos)
+        if (string_table.lookup(native_frame.get().name).find("PyEval_EvalFrameDefault") != std::string::npos)
         {
             if (p == python_stack.rend())
             {
