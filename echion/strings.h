@@ -69,3 +69,134 @@ pyunicode_to_utf8(PyObject *str_addr)
 
     return dest;
 }
+
+// ----------------------------------------------------------------------------
+
+class StringTable : public std::unordered_map<uintptr_t, std::string>
+{
+public:
+    using Key = uintptr_t;
+
+    class Error : public std::exception
+    {
+    };
+
+    class LookupError : public Error
+    {
+    };
+
+    static constexpr Key INVALID = 1;
+    static constexpr Key UNKNOWN = 2;
+
+    // Python string object
+    inline Key key(PyObject *s)
+    {
+        auto k = (Key)s;
+
+        if (this->find(k) == this->end())
+        {
+            // TODO: Emit MOJO string signal
+            try
+            {
+#if PY_VERSION_HEX >= 0x030c0000
+                // The task name might hold a PyLong for deferred task name formatting.
+                PyLongObject l;
+                auto str = (!copy_type(s, l) && PyLong_CheckExact(&l))
+                               ? "Task-" + std::to_string(PyLong_AsLong((PyObject *)&l))
+                               : pyunicode_to_utf8(s);
+#else
+                auto str = pyunicode_to_utf8(s);
+#endif
+                this->emplace(k, str);
+            }
+            catch (StringError &)
+            {
+                throw Error();
+            }
+        }
+
+        return k;
+    };
+
+    // Native filename by program counter
+    inline Key key(unw_word_t pc)
+    {
+        auto k = (Key)pc;
+
+        if (this->find(k) == this->end())
+        {
+            // TODO: Emit MOJO string signal
+            try
+            {
+                auto s = std::string(32, '\0');
+                std::snprintf((char *)s.c_str(), 32, "native@%p", (void *)k);
+                this->emplace(k, s);
+            }
+            catch (StringError &)
+            {
+                throw Error();
+            }
+        }
+
+        return k;
+    }
+
+    // Native scope name by unwinding cursor
+    inline Key key(unw_cursor_t &cursor)
+    {
+        unw_proc_info_t pi;
+        if ((unw_get_proc_info(&cursor, &pi)))
+            throw Error();
+
+        auto k = (Key)pi.start_ip;
+
+        if (this->find(k) == this->end())
+        {
+            // TODO: Emit MOJO string signal
+            unw_word_t offset; // Ignored. All the information is in the PC anyway.
+            char sym[256];
+            if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
+                throw Error();
+
+            char *name = sym;
+
+            // Try to demangle C++ names
+            char *demangled = NULL;
+            if (name[0] == '_' && name[1] == 'Z')
+            {
+                int status;
+                demangled = abi::__cxa_demangle(name, NULL, NULL, &status);
+                if (status == 0)
+                    name = demangled;
+            }
+
+            this->emplace(k, name);
+
+            if (demangled)
+                std::free(demangled);
+        }
+
+        return k;
+    }
+
+    inline std::string &lookup(Key key)
+    {
+        auto it = this->find(key);
+        if (it == this->end())
+            throw LookupError();
+
+        return it->second;
+    };
+
+    StringTable() : std::unordered_map<uintptr_t, std::string>()
+    {
+        this->emplace(0, "");
+        this->emplace(INVALID, "<invalid>");
+        this->emplace(UNKNOWN, "<unknown>");
+    };
+};
+
+// We make this a reference to a heap-allocated object so that we can avoid
+// the destruction on exit. We are in charge of cleaning up the object. Note
+// that the object will leak, but this is not a problem.
+static StringTable &string_table = *(new StringTable());

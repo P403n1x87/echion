@@ -117,6 +117,7 @@ _stop()
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
         thread_info_map.clear();
+        string_table.clear();
     }
 
 #if defined PL_DARWIN

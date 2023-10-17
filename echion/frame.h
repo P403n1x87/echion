@@ -52,8 +52,8 @@ public:
         }
     };
 
-    std::string filename = "";
-    std::string name = "";
+    StringTable::Key filename = 0;
+    StringTable::Key name = 0;
 
     struct _location
     {
@@ -68,25 +68,27 @@ public:
 
     void render(std::ostream &stream)
     {
-        stream << ";" << filename << ":" << name << ":" << location.line;
+        stream
+            << ";" << string_table.lookup(filename)
+            << ":" << string_table.lookup(name)
+            << ":" << location.line;
     }
 
     void render_where(std::ostream &stream)
     {
-        if ((filename).rfind("native@", 0) == 0)
-            stream << "          \033[38;5;248;1m" << name
-                   << "\033[0m \033[38;5;246m(" << filename
+        if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
+            stream << "          \033[38;5;248;1m" << string_table.lookup(name)
+                   << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
                    << "\033[0m:\033[38;5;246m" << location.line
                    << ")\033[0m" << std::endl;
         else
-            stream << "          \033[33;1m" << name
-                   << "\033[0m (\033[36m" << filename
+            stream << "          \033[33;1m" << string_table.lookup(name)
+                   << "\033[0m (\033[36m" << string_table.lookup(filename)
                    << "\033[0m:\033[32m" << location.line
                    << "\033[0m)" << std::endl;
     }
 
-    Frame(const char *name) : name({std::string(name)}){};
-    Frame(std::string &name) : name(name){};
+    Frame(StringTable::Key name) : name(name){};
 
     static Frame &read(PyObject *, PyObject **);
     static Frame &read(PyObject *frame_addr)
@@ -95,12 +97,12 @@ public:
         return Frame::read(frame_addr, &unused);
     }
 
-    static Frame &get(PyCodeObject *code, int lasti);
-    static Frame &get(unw_word_t pc, const char *name, unw_word_t offset);
-    static Frame &get(PyObject *, std::string &);
+    static Frame &get(PyCodeObject *, int);
+    static Frame &get(unw_cursor_t &);
+    static Frame &get(StringTable::Key);
 
     Frame(PyCodeObject *, int);
-    Frame(unw_word_t, const char *, unw_word_t);
+    Frame(unw_cursor_t &, unw_word_t);
 
 private:
     void infer_location(PyCodeObject *, int);
@@ -110,6 +112,9 @@ private:
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
 };
+
+static auto INVALID_FRAME = Frame(StringTable::INVALID);
+static auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);
 
 #if PY_VERSION_HEX >= 0x030b0000
 // ----------------------------------------------------------------------------
@@ -267,14 +272,14 @@ Frame::Frame(PyCodeObject *code, int lasti)
 {
     try
     {
-        filename = pyunicode_to_utf8(code->co_filename);
+        filename = string_table.key(code->co_filename);
 #if PY_VERSION_HEX >= 0x030b0000
-        name = pyunicode_to_utf8(code->co_qualname);
+        name = string_table.key(code->co_qualname);
 #else
-        name = pyunicode_to_utf8(code->co_name);
+        name = string_table.key(code->co_name);
 #endif
     }
-    catch (StringError &)
+    catch (StringTable::Error &)
     {
         throw Error();
     }
@@ -282,34 +287,20 @@ Frame::Frame(PyCodeObject *code, int lasti)
     infer_location(code, lasti);
 }
 
-Frame::Frame(unw_word_t pc, const char *name, unw_word_t offset)
+Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
 {
-    filename = std::string(32, '\0');
-    std::snprintf((char *)filename.c_str(), 32, "native@%p", (void *)pc);
-
-    // Try to demangle C++ names
-    char *demangled = NULL;
-    if (name[0] == '_' && name[1] == 'Z')
+    try
     {
-        int status;
-        demangled = abi::__cxa_demangle(name, NULL, NULL, &status);
-        if (status == 0)
-            name = demangled;
+        filename = string_table.key(pc);
+        name = string_table.key(cursor);
     }
-
-    // Make a copy
-    this->name = std::string(name);
-
-    if (demangled != NULL)
-        std::free(demangled);
-
-    location.line = offset;
+    catch (StringTable::Error &)
+    {
+        throw Error();
+    }
 }
 
 // ----------------------------------------------------------------------------
-
-static Frame INVALID_FRAME("<invalid>");
-static Frame UNKNOWN_FRAME("<unknown>");
 
 // We make this a raw pointer to prevent its destruction on exit, since we
 // control the lifetime of the cache.
@@ -354,8 +345,13 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
 }
 
-Frame &Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
+Frame &Frame::get(unw_cursor_t &cursor)
 {
+    unw_word_t pc;
+    unw_get_reg(&cursor, UNW_REG_IP, &pc);
+    if (pc == 0)
+        throw Error();
+
     uintptr_t frame_key = (uintptr_t)pc;
     try
     {
@@ -363,16 +359,23 @@ Frame &Frame::get(unw_word_t pc, const char *name, unw_word_t offset)
     }
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
-        auto frame = std::make_unique<Frame>(pc, name, offset);
-        auto &f = *frame;
-        frame_cache->store(frame_key, std::move(frame));
-        return f;
+        try
+        {
+            auto frame = std::make_unique<Frame>(cursor, pc);
+            auto &f = *frame;
+            frame_cache->store(frame_key, std::move(frame));
+            return f;
+        }
+        catch (Frame::Error &)
+        {
+            return UNKNOWN_FRAME;
+        }
     }
 }
 
-Frame &Frame::get(PyObject *origin, std::string &name)
+Frame &Frame::get(StringTable::Key name)
 {
-    uintptr_t frame_key = (uintptr_t)origin;
+    uintptr_t frame_key = (uintptr_t)name;
     try
     {
         return frame_cache->lookup(frame_key);

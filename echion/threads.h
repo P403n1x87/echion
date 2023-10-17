@@ -279,7 +279,7 @@ void ThreadInfo::unwind_tasks()
             }
 
             // Add the task name frame
-            stack->push_back(Frame::get(task.origin, task.name));
+            stack->push_back(Frame::get(task.name));
 
             // Get the next task in the chain
             PyObject *task_origin = task.origin;

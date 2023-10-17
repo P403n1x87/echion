@@ -133,7 +133,7 @@ public:
 
     GenInfo::Ptr coro = nullptr;
 
-    std::string name;
+    StringTable::Key name;
 
     // Information to reconstruct the async stack as best as we can
     TaskInfo::Ptr waiter = nullptr;
@@ -167,17 +167,9 @@ TaskInfo::TaskInfo(TaskObj *task_addr)
 
     try
     {
-#if PY_VERSION_HEX >= 0x030c0000
-        // The task name might hold a PyLong for deferred task name formatting.
-        PyLongObject name_obj;
-        name = (!copy_type(task.task_name, name_obj) && PyLong_CheckExact(&name_obj))
-                   ? "Task-" + std::to_string(PyLong_AsLong((PyObject *)&name_obj))
-                   : pyunicode_to_utf8(task.task_name);
-#else
-        name = pyunicode_to_utf8(task.task_name);
-#endif
+        name = string_table.key(task.task_name);
     }
-    catch (StringError &)
+    catch (StringTable::Error &)
     {
         throw Error();
     }
