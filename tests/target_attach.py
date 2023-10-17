@@ -8,11 +8,11 @@ def sleep(t):
 
 
 def foo():
-    sleep(0.1)
+    sleep(0.4)
 
 
 def bar():
-    sleep(0.2)
+    sleep(0.8)
     foo()
 
 

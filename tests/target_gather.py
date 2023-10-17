@@ -23,7 +23,7 @@ async def f4():
 
 
 async def f5():
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(1)
 
 
 async def main():

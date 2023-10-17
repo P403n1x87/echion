@@ -13,7 +13,7 @@ def test_where():
     with Popen(
         [sys.executable, "-m", "tests.target_attach"], stdout=PIPE, stderr=PIPE
     ) as target:
-        sleep(0.5)
+        sleep(1)
         try:
             # attach multiple times
             for _ in range(10):
