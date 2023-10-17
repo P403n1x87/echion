@@ -27,6 +27,7 @@
 #endif
 
 #include <echion/config.h>
+#include <echion/interp.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
@@ -40,19 +41,23 @@ static void do_where(std::ostream &stream)
            << "🐴 Echion reporting for duty" << std::endl
            << std::endl;
 
-    // TODO: Add support for tasks
-    for_each_thread(
-        [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
+    for_each_interp(
+        [&stream](PyInterpreterState *interp) -> void
         {
-            thread.unwind(tstate);
-            if (native)
-            {
-                interleave_stacks();
-                thread.render_where(interleaved_stack, stream);
-            }
-            else
-                thread.render_where(python_stack, stream);
-            stream << std::endl;
+            for_each_thread(
+                interp,
+                [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
+                {
+                    thread.unwind(tstate);
+                    if (native)
+                    {
+                        interleave_stacks();
+                        thread.render_where(interleaved_stack, stream);
+                    }
+                    else
+                        thread.render_where(python_stack, stream);
+                    stream << std::endl;
+                });
         });
 }
 
@@ -177,9 +182,14 @@ _sampler()
         microsecond_t end_time = now + interval;
         microsecond_t wall_time = now - last_time;
 
-        for_each_thread(
-            [=](PyThreadState *tstate, ThreadInfo &thread)
-            { thread.sample(tstate, wall_time); });
+        for_each_interp(
+            [=](PyInterpreterState *interp) -> void
+            {
+                for_each_thread(
+                    interp,
+                    [=](PyThreadState *tstate, ThreadInfo &thread)
+                    { thread.sample(interp->id, tstate, wall_time); });
+            });
 
         while (gettime() < end_time && running)
             sched_yield();
@@ -203,11 +213,6 @@ sampler()
 // ----------------------------------------------------------------------------
 static void _init()
 {
-#if PY_VERSION_HEX >= 0x03090000
-    interp = PyInterpreterState_Get();
-#else
-    interp = _PyInterpreterState_Get();
-#endif
     pid = getpid();
 }
 

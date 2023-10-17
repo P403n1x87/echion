@@ -21,17 +21,17 @@ def test_asyncio_gather_wall_time():
 
     # Test line numbers
     assert (
-        summary.query("MainThread", (("F4_0", 0), ("f4", 22), ("f5", 26))) is not None
+        summary.query("0:MainThread", (("F4_0", 0), ("f4", 22), ("f5", 26))) is not None
     )
     assert (
-        summary.query("MainThread", (("F4_1", 0), ("f4", 22), ("f5", 26))) is not None
+        summary.query("0:MainThread", (("F4_1", 0), ("f4", 22), ("f5", 26))) is not None
     )
 
     # Test stacks and expected values
     if PY >= (3, 11):
         for t in ("F4_0", "F4_1"):
             summary.assert_substack(
-                "MainThread",
+                "0:MainThread",
                 (
                     "_run_module_as_main",
                     "_run_code",
@@ -61,7 +61,7 @@ def test_asyncio_gather_wall_time():
     else:
         for t in ("F4_0", "F4_1"):
             summary.assert_substack(
-                "MainThread",
+                "0:MainThread",
                 (
                     "_run_module_as_main",
                     "_run_code",

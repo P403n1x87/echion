@@ -22,12 +22,12 @@ def test_wall_time(stealth):
     assert summary.total_metric >= 1e6 * expected_nthreads
 
     # Test line numbers
-    assert summary.query("MainThread", (("main", 22), ("bar", 17))) is not None
-    assert summary.query("SecondaryThread", (("bar", 18), ("foo", 13))) is not None
+    assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is not None
+    assert summary.query("0:SecondaryThread", (("bar", 18), ("foo", 13))) is not None
 
     # Test stacks and expected values
     summary.assert_stack(
-        "MainThread",
+        "0:MainThread",
         (
             "_run_module_as_main",
             "_run_code",
@@ -38,7 +38,7 @@ def test_wall_time(stealth):
         lambda v: v >= 0.95e6,
     )
     summary.assert_stack(
-        "MainThread",
+        "0:MainThread",
         (
             "_run_module_as_main",
             "_run_code",
@@ -53,7 +53,7 @@ def test_wall_time(stealth):
 
     if PY >= (3, 11):
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "Thread._bootstrap",
                 "thread_bootstrap_inner",
@@ -65,7 +65,7 @@ def test_wall_time(stealth):
             lambda v: v >= 0.95e6,
         )
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "Thread._bootstrap",
                 "thread_bootstrap_inner",
@@ -81,7 +81,7 @@ def test_wall_time(stealth):
 
         if not bool(stealth):
             summary.assert_stack(
-                "echion.core.sampler",
+                "0:echion.core.sampler",
                 (
                     "Thread._bootstrap",
                     "thread_bootstrap_inner",
@@ -92,7 +92,7 @@ def test_wall_time(stealth):
             )
     else:
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "_bootstrap",
                 "thread_bootstrap_inner",
@@ -104,7 +104,7 @@ def test_wall_time(stealth):
             lambda v: v >= 0.95e6,
         )
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "_bootstrap",
                 "thread_bootstrap_inner",
@@ -120,7 +120,7 @@ def test_wall_time(stealth):
 
         if not bool(stealth):
             summary.assert_stack(
-                "echion.core.sampler",
+                "0:echion.core.sampler",
                 (
                     "_bootstrap",
                     "thread_bootstrap_inner",
@@ -149,8 +149,10 @@ def test_wall_time_native(stealth):
 
     # Test line numbers. This only works with CFrames
     if PY >= (3, 11):
-        assert summary.query("MainThread", (("main", 22), ("bar", 17))) is not None
-        assert summary.query("SecondaryThread", (("bar", 18), ("foo", 13))) is not None
+        assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is not None
+        assert (
+            summary.query("0:SecondaryThread", (("bar", 18), ("foo", 13))) is not None
+        )
     else:
-        assert summary.query("MainThread", (("bar", 17),)) is not None
-        assert summary.query("SecondaryThread", (("foo", 13),)) is not None
+        assert summary.query("0:MainThread", (("bar", 17),)) is not None
+        assert summary.query("0:SecondaryThread", (("foo", 13),)) is not None

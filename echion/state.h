@@ -6,12 +6,17 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#if defined __GNUC__ && defined HAVE_STD_ATOMIC
+#undef HAVE_STD_ATOMIC
+#endif
+#define Py_BUILD_CORE
+#include <internal/pycore_pystate.h>
 
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 
-static PyInterpreterState *interp = NULL;
+static _PyRuntimeState *runtime = &_PyRuntime;
 static PyThreadState *current_tstate = NULL;
 
 static std::thread *sampler_thread = nullptr;
