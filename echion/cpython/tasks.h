@@ -177,7 +177,7 @@ extern "C"
 
 #elif PY_VERSION_HEX >= 0x030a0000
     PyObject *
-    PyGen_yf(PyGenObject *gen, PyObject *frame_addr)
+    PyGen_yf(PyGenObject *Py_UNUSED(gen), PyObject *frame_addr)
     {
         PyObject *yf = NULL;
         PyFrameObject *f = (PyFrameObject *)frame_addr;
@@ -220,7 +220,7 @@ extern "C"
 
 #else
     PyObject *
-    PyGen_yf(PyGenObject *gen, PyObject *frame_addr)
+    PyGen_yf(PyGenObject *Py_UNUSED(gen), PyObject *frame_addr)
     {
         PyObject *yf = NULL;
         PyFrameObject *f = (PyFrameObject *)frame_addr;

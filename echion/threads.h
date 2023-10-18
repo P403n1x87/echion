@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <Python.h>
+#define Py_BUILD_CORE
+
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -54,7 +57,7 @@ public:
     void update_cpu_time();
     bool is_running();
 
-    void sample(PyThreadState *, microsecond_t);
+    void sample(int64_t, PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
 
     void render_where(FrameStack &stack, std::ostream &output)
@@ -314,7 +317,7 @@ void ThreadInfo::unwind_tasks()
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::sample(PyThreadState *tstate, microsecond_t delta)
+void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
     if (cpu)
     {
@@ -334,7 +337,7 @@ void ThreadInfo::sample(PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << name;
+        output << "P" << pid << ";T" << iid << ":" << name;
 
         // Print the stack
         if (native)
@@ -352,7 +355,7 @@ void ThreadInfo::sample(PyThreadState *tstate, microsecond_t delta)
     {
         for (auto &task_stack : current_tasks)
         {
-            output << "P" << pid << ";T" << name;
+            output << "P" << pid << ";T" << iid << ":" << name;
 
             if (native)
             {
@@ -372,7 +375,7 @@ void ThreadInfo::sample(PyThreadState *tstate, microsecond_t delta)
 }
 
 // ----------------------------------------------------------------------------
-static void for_each_thread(std::function<void(PyThreadState *, ThreadInfo &)> callback)
+static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThreadState *, ThreadInfo &)> callback)
 {
     std::unordered_set<PyThreadState *> threads;
     std::unordered_set<PyThreadState *> seen_threads;

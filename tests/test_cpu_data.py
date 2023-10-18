@@ -23,10 +23,10 @@ def test_cpu_time(stealth):
     assert summary.nsamples
 
     # Test line numbers
-    assert summary.query("MainThread", (("main", 22), ("bar", 17))) is None
+    assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is None
     assert (
         summary.query(
-            "SecondaryThread",
+            "0:SecondaryThread",
             ("Thread.run" if PY >= (3, 11) else "run", "keep_cpu_busy"),
         )
         is not None
@@ -34,7 +34,7 @@ def test_cpu_time(stealth):
 
     # Test stacks and expected values
     summary.assert_stack(
-        "MainThread",
+        "0:MainThread",
         (
             "_run_module_as_main",
             "_run_code",
@@ -46,7 +46,7 @@ def test_cpu_time(stealth):
 
     if PY >= (3, 11):
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "Thread._bootstrap",
                 "thread_bootstrap_inner",
@@ -58,7 +58,7 @@ def test_cpu_time(stealth):
         )
         if not bool(stealth):
             summary.assert_stack(
-                "echion.core.sampler",
+                "0:echion.core.sampler",
                 (
                     "Thread._bootstrap",
                     "thread_bootstrap_inner",
@@ -69,7 +69,7 @@ def test_cpu_time(stealth):
             )
     else:
         summary.assert_stack(
-            "SecondaryThread",
+            "0:SecondaryThread",
             (
                 "_bootstrap",
                 "thread_bootstrap_inner",
@@ -81,7 +81,7 @@ def test_cpu_time(stealth):
         )
         if not bool(stealth):
             summary.assert_stack(
-                "echion.core.sampler",
+                "0:echion.core.sampler",
                 (
                     "_bootstrap",
                     "thread_bootstrap_inner",
@@ -112,15 +112,15 @@ def test_cpu_time_native(stealth):
     if PY >= (3, 11):
         assert (
             summary.query(
-                "MainThread",
+                "0:MainThread",
                 (
                     ("<module>", 48),
                     ("keep_cpu_busy", 39),
                 ),
             )
             is not None
-        ), summary.threads["MainThread"]
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 39),)) is not None
+        ), summary.threads["0:MainThread"]
+        assert summary.query("0:SecondaryThread", (("keep_cpu_busy", 39),)) is not None
     else:
-        assert summary.query("MainThread", (("keep_cpu_busy", 39),)) is not None
-        assert summary.query("SecondaryThread", (("keep_cpu_busy", 39),)) is not None
+        assert summary.query("0:MainThread", (("keep_cpu_busy", 39),)) is not None
+        assert summary.query("0:SecondaryThread", (("keep_cpu_busy", 39),)) is not None
