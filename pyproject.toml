@@ -108,9 +108,7 @@ profile = "black"
 
 [tool.black]
 line-length = 88
-exclude = [
-  "echion/_version.py",
-]
+exclude = "echion/_version.py"
 
 [tool.mypy]
 ignore_missing_imports = true

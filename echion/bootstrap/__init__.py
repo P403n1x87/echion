@@ -54,7 +54,19 @@ def start():
                 sys.modules[echion_module].track()
 
     do_on_fork = True
-    os.register_at_fork(after_in_child=restart_on_fork)
+    try:
+        os.register_at_fork(after_in_child=restart_on_fork)
+    except AttributeError:
+        # Windows?
+        from warnings import warn
+
+        warn(
+            "Restart hook on child process spawning is not supported on this "
+            "platform. Sampling will not be performed in child processes, "
+            "unless done manually."
+        )
+        do_on_fork = False
+
     atexit.register(stop)
 
     if int(os.getenv("ECHION_STEALTH", 0)):

@@ -204,7 +204,7 @@ TaskInfo TaskInfo::current(PyObject *loop)
 
         return TaskInfo((TaskObj *)task);
     }
-    catch (MirrorError &e)
+    catch (MirrorError &)
     {
         throw Error();
     }
@@ -236,7 +236,7 @@ get_all_tasks(PyObject *loop)
                 if (task_info->loop == loop)
                     tasks.push_back(std::move(task_info));
             }
-            catch (TaskInfo::Error &e)
+            catch (TaskInfo::Error &)
             {
                 // We failed to get this task but we keep going
             }
@@ -255,7 +255,7 @@ get_all_tasks(PyObject *loop)
                     if (task_info->loop == loop)
                         tasks.push_back(std::move(task_info));
                 }
-                catch (TaskInfo::Error &e)
+                catch (TaskInfo::Error &)
                 {
                     // We failed to get this task but we keep going
                 }

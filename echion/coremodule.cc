@@ -10,18 +10,14 @@
 #endif
 
 #include <condition_variable>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <thread>
 
 #include <fcntl.h>
-#include <sched.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
 #endif
@@ -106,10 +102,7 @@ _start()
 
     install_signals();
 
-#if defined PL_DARWIN
-    // Get the wall time clock resource.
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-#endif
+    setup_timing();
 }
 
 // ----------------------------------------------------------------------------
@@ -125,9 +118,7 @@ _stop()
         string_table.clear();
     }
 
-#if defined PL_DARWIN
-    mach_port_deallocate(mach_task_self(), cclock);
-#endif
+    teardown_timing();
 
     restore_signals();
 
@@ -171,11 +162,6 @@ _sampler()
     output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
     output << "# interval: " << interval << std::endl;
 
-    // Install the signal handler if we are sampling the native stacks.
-    if (native)
-        // We use SIGPROF to sample the stacks within each thread.
-        signal(SIGPROF, sigprof_handler);
-
     while (running)
     {
         microsecond_t now = gettime();
@@ -192,7 +178,7 @@ _sampler()
             });
 
         while (gettime() < end_time && running)
-            sched_yield();
+            yield();
 
         last_time = now;
     }
@@ -283,22 +269,15 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        if (thread_info_map.find(thread_id) != thread_info_map.end())
-        {
+        auto entry = thread_info_map.find(thread_id); 
+        if (entry != thread_info_map.end())
             // Thread is already tracked so we update its info
-            auto &thread = *thread_info_map.find(thread_id)->second;
-
-            thread.name = thread_name;
-            thread.native_id = native_id;
-            thread.update_cpu_time();
-        }
+            entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
         else
-        {
             // Untracked thread. Create a new info entry.
             thread_info_map.emplace(
                 thread_id,
                 std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
-        }
     }
 
     Py_RETURN_NONE;
@@ -385,6 +364,47 @@ link_tasks(PyObject *Py_UNUSED(m), PyObject *args)
     Py_RETURN_NONE;
 }
 
+
+#if defined PL_WIN32
+// ----------------------------------------------------------------------------
+static PyObject *
+create_named_pipe(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    const char *path;
+
+    if (!PyArg_ParseTuple(args, "s", &path))
+        return NULL;
+
+    // Create a named pipe on windows
+    HANDLE pipe = CreateNamedPipeA(
+        path,
+        PIPE_ACCESS_INBOUND,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1,
+        1024,
+        1024,
+        0,
+        NULL);
+
+    if (pipe == INVALID_HANDLE_VALUE)
+        return NULL;
+
+    return PyLong_FromLong((long)pipe);
+}
+static PyObject *
+close_named_pipe(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    HANDLE pipe;
+
+    if (!PyArg_ParseTuple(args, "l", &pipe))
+        return NULL;
+
+    CloseHandle(pipe);
+
+    Py_RETURN_NONE;
+}
+#endif
+
 // ----------------------------------------------------------------------------
 static PyMethodDef echion_core_methods[] = {
     {"start", start, METH_NOARGS, "Start the stack sampler"},
@@ -403,6 +423,11 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
+#if defined PL_WIN32
+    {"create_named_pipe", create_named_pipe, METH_VARARGS, "Create a named pipe on Windows"},
+    {"read_named_pipe", read_named_pipe, METH_VARARGS, "Read from a named pipe on Windows"},
+    {"close_named_pipe", close_named_pipe, METH_VARARGS, "Close a named pipe on Windows"},
+#endif
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 

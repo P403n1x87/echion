@@ -36,12 +36,18 @@ def attach(args: argparse.Namespace) -> None:
     try:
         pipe_name = None
         if args.where:
-            pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
-            os.mkfifo(pipe_name)
-            # This named pipe is likely created by the superuser, so we need to
-            # make it writable by everyone to allow the target process to write
-            # to it.
-            os.chmod(pipe_name, 0o666)
+            if sys.platform == "win32":
+                import echion.core as ec
+
+                pipe_name = f"\\\\.\\pipe\\echion-{pid}"
+                pipe_handle = ec.create_named_pipe(pipe_name)
+            else:
+                pipe_name = Path(tempfile.gettempdir()) / f"echion-{pid}"
+                os.mkfifo(pipe_name)
+                # This named pipe is likely created by the superuser, so we need to
+                # make it writable by everyone to allow the target process to write
+                # to it.
+                os.chmod(pipe_name, 0o666)
 
         script = dedent(
             f"""
@@ -72,18 +78,23 @@ def attach(args: argparse.Namespace) -> None:
             pass
 
         # Read the output
-        if args.where and pipe_name is not None and pipe_name.exists():
-            with pipe_name.open("r") as f:
-                while True:
-                    line = f.readline()
-                    print(line, end="")
-                    if not line:
-                        break
+        else:
+            if args.where and pipe_name is not None and pipe_name.exists():
+                with pipe_name.open("r") as f:
+                    while True:
+                        line = f.readline()
+                        print(line, end="")
+                        if not line:
+                            break
 
         detach(pid)
 
     finally:
-        if args.where and pipe_name is not None and pipe_name.exists():
+        if sys.platform == "win32":
+            import echion.core as ec
+
+            ec.close_named_pipe(pipe_handle)
+        elif args.where and pipe_name is not None and pipe_name.exists():
             pipe_name.unlink()
 
 

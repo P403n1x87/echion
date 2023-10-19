@@ -14,24 +14,28 @@ PLATFORM = sys.platform.lower()
 
 LDADD = {
     "linux": ["-l:libunwind.a", "-l:liblzma.a"],
+    "win32": ["psapi.lib", "ntdll.lib", "imagehlp.lib", "dbghelp.lib"],
 }
 
 # add option to colorize compiler output
-COLORS = [
-    "-fdiagnostics-color=always" if PLATFORM == "linux" else "-fcolor-diagnostics"
-]
+COLORS = {
+    "darwin": ["-fcolor-diagnostics"],
+    "linux": ["-fdiagnostics-color=always"],
+}
 
-if PLATFORM == "darwin":
-    CFLAGS = ["-mmacosx-version-min=10.15"]
-else:
-    CFLAGS = []
+CFLAGS = {
+    "darwin": ["-Wextra", "-mmacosx-version-min=10.15"],
+    "linux": ["-Wextra"],
+}
 
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
-    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
+    extra_compile_args=["-std=c++17", "-Wall"]
+    + CFLAGS.get(PLATFORM, [])
+    + COLORS.get(PLATFORM, []),
     extra_link_args=LDADD.get(PLATFORM, []),
 )
 
