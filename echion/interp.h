@@ -21,7 +21,6 @@
 static void for_each_interp(std::function<void(PyInterpreterState *interp)> callback)
 {
     PyInterpreterState interp;
-    PyInterpreterState *interp_addr = runtime->interpreters.head;
     for (PyInterpreterState *interp_addr = runtime->interpreters.head;
          !copy_type(interp_addr, interp);
          interp_addr = interp.next)
