@@ -10,8 +10,13 @@
 #include <deque>
 #include <unordered_set>
 
+#if defined PL_LINUX || defined PL_DARWIN
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#elif defined PL_WIN32
+#include <windows.h>
+#include <dbghelp.h>
+#endif
 
 #include <echion/frame.h>
 
@@ -39,15 +44,16 @@ static FrameStack native_stack;
 static FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
+#if defined PL_LINUX || defined PL_DARWIN
 void unwind_native_stack()
 {
+    native_stack.clear();
+
     unw_cursor_t cursor;
     unw_context_t context;
 
     unw_getcontext(&context);
     unw_init_local(&cursor, &context);
-
-    native_stack.clear();
 
     while (unw_step(&cursor) > 0 && native_stack.size() < MAX_FRAMES)
     {
@@ -61,6 +67,69 @@ void unwind_native_stack()
         }
     }
 }
+
+#elif defined PL_WIN32
+void unwind_native_stack(HANDLE thread)
+{
+    native_stack.clear();
+
+    // Use StackWalk64 to unwind the stack
+    HANDLE process = GetCurrentProcess();
+    if (!SymInitialize(process, NULL, TRUE))
+        return;
+
+    SymSetOptions(SYMOPT_LOAD_LINES);
+
+    CONTEXT context = {};
+    context.ContextFlags = CONTEXT_FULL;
+    if (thread == GetCurrentThread()) {
+        // From the Win32 API documentation:
+        // "If you call GetThreadContext for the current thread, the function
+        // returns successfully; however, the context returned is not valid."
+        // So we use RtlCaptureContext instead.
+        RtlCaptureContext(&context);
+    } else {
+        // NOTE: From the Win32 API documentation:
+        // "You cannot get a valid context for a running thread. Use the
+        // SuspendThread function to suspend the thread before calling
+        // GetThreadContext."
+        if (!GetThreadContext(thread, &context))
+            return;
+    }
+
+    // TODO: Add support for other architectures
+    STACKFRAME64 stackframe = {};
+    stackframe.AddrPC.Mode = AddrModeFlat;
+    stackframe.AddrStack.Mode = AddrModeFlat;
+    stackframe.AddrFrame.Mode = AddrModeFlat;
+    stackframe.AddrPC.Offset = context.Rip;
+    stackframe.AddrStack.Offset = context.Rsp;
+    stackframe.AddrFrame.Offset = context.Rbp;
+
+    while (StackWalk64(
+        IMAGE_FILE_MACHINE_AMD64,
+        process,
+        thread,
+        &stackframe,
+        &context,
+        NULL,
+        SymFunctionTableAccess64,
+        SymGetModuleBase64,
+        NULL))
+    {
+        try
+        {
+            native_stack.push_back(Frame::get(stackframe));
+        }
+        catch (Frame::Error &)
+        {
+            break;
+        }
+    }
+
+    SymCleanup(process);
+}
+#endif
 
 // ----------------------------------------------------------------------------
 static size_t
@@ -131,9 +200,17 @@ interleave_stacks(FrameStack &python_stack)
     interleaved_stack.clear();
 
     auto p = python_stack.rbegin();
+
+#if defined PL_LINUX || defined PL_DARWIN
     // The last two frames are usually the signal trampoline and the signal
     // handler. We skip them.
-    for (auto n = native_stack.rbegin(); n != native_stack.rend() - 2; ++n)
+    #define NATIVE_FRAME_SKIP 2
+#elif defined PL_WIN32
+    // On Windows we don't have signals so we don't have frames to skip.
+    #define NATIVE_FRAME_SKIP 0
+#endif
+
+    for (auto n = native_stack.rbegin(); n != native_stack.rend() - NATIVE_FRAME_SKIP; ++n)
     {
         auto native_frame = *n;
 

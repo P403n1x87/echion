@@ -9,8 +9,6 @@
 
 #include <iostream>
 
-#include <signal.h>
-
 // Sampling interval
 static unsigned int interval = 1000;
 

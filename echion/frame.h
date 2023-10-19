@@ -18,9 +18,16 @@
 #include <functional>
 #include <iostream>
 
+#if defined PL_LINUX || defined PL_DARWIN
 #include <cxxabi.h>
+
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#elif defined PL_WIN32
+#include <windows.h>
+#include <dbghelp.h>
+
+#endif
 
 #include <echion/cache.h>
 #include <echion/strings.h>
@@ -98,11 +105,17 @@ public:
     }
 
     static Frame &get(PyCodeObject *, int);
-    static Frame &get(unw_cursor_t &);
+    Frame(PyCodeObject *, int);
+
     static Frame &get(StringTable::Key);
 
-    Frame(PyCodeObject *, int);
+#if defined PL_LINUX || defined PL_DARWIN
+    static Frame &get(unw_cursor_t &);
     Frame(unw_cursor_t &, unw_word_t);
+#elif defined PL_WIN32
+    static Frame &get(STACKFRAME64 &);
+    Frame(STACKFRAME64 &);
+#endif
 
 private:
     void infer_location(PyCodeObject *, int);
@@ -287,6 +300,8 @@ Frame::Frame(PyCodeObject *code, int lasti)
     infer_location(code, lasti);
 }
 
+// ----------------------------------------------------------------------------
+#if defined PL_LINUX || defined PL_DARWIN
 Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
 {
     try
@@ -299,6 +314,30 @@ Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
         throw Error();
     }
 }
+
+#elif defined PL_WIN32
+Frame::Frame(STACKFRAME64 &win_frame)
+{
+    try
+    {
+        auto pc = win_frame.AddrPC.Offset;
+        char symbol_buffer[sizeof(IMAGEHLP_SYMBOL) + (MAX_SYM_NAME + 1) * sizeof(TCHAR)];
+
+        IMAGEHLP_SYMBOL &symbol = (IMAGEHLP_SYMBOL &)symbol_buffer;
+        symbol.SizeOfStruct = sizeof(IMAGEHLP_SYMBOL);
+        symbol.MaxNameLength = MAX_SYM_NAME;
+
+        filename = string_table.key(pc);
+        name = SymGetSymFromAddr(GetCurrentProcess(), pc, 0, &symbol)
+                ? string_table.key(symbol)
+                : StringTable::UNKNOWN;
+    }
+    catch (StringTable::Error &)
+    {
+        throw Error();
+    }
+}
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -345,34 +384,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
 }
 
-Frame &Frame::get(unw_cursor_t &cursor)
-{
-    unw_word_t pc;
-    unw_get_reg(&cursor, UNW_REG_IP, &pc);
-    if (pc == 0)
-        throw Error();
-
-    uintptr_t frame_key = (uintptr_t)pc;
-    try
-    {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        try
-        {
-            auto frame = std::make_unique<Frame>(cursor, pc);
-            auto &f = *frame;
-            frame_cache->store(frame_key, std::move(frame));
-            return f;
-        }
-        catch (Frame::Error &)
-        {
-            return UNKNOWN_FRAME;
-        }
-    }
-}
-
+// ----------------------------------------------------------------------------
 Frame &Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = (uintptr_t)name;
@@ -389,6 +401,7 @@ Frame &Frame::get(StringTable::Key name)
     }
 }
 
+// ----------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030b0000
@@ -428,3 +441,60 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
+
+// ----------------------------------------------------------------------------
+#if defined PL_LINUX || defined PL_DARWIN
+Frame &Frame::get(unw_cursor_t &cursor)
+{
+    unw_word_t pc;
+    unw_get_reg(&cursor, UNW_REG_IP, &pc);
+    if (pc == 0)
+        throw Error();
+
+    uintptr_t frame_key = (uintptr_t)pc;
+    try
+    {
+        return frame_cache->lookup(frame_key);
+    }
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
+        try
+        {
+            auto frame = std::make_unique<Frame>(cursor, pc);
+            auto &f = *frame;
+            frame_cache->store(frame_key, std::move(frame));
+            return f;
+        }
+        catch (Frame::Error &)
+        {
+            return UNKNOWN_FRAME;
+        }
+    }
+}
+
+#elif defined PL_WIN32
+Frame &Frame::get(STACKFRAME64 &win_frame)
+{
+    auto pc = win_frame.AddrPC.Offset;
+    auto frame_key = (StringTable::Key)pc;
+    try
+    {
+        return frame_cache->lookup(frame_key);
+    }
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
+        try
+        {
+            auto frame = std::make_unique<Frame>(win_frame);
+            auto &f = *frame;
+            frame_cache->store(frame_key, std::move(frame));
+            return f;
+        }
+        catch (Frame::Error &)
+        {
+            return UNKNOWN_FRAME;
+        }
+    }
+}
+
+#endif

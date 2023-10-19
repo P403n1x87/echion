@@ -10,18 +10,14 @@
 #endif
 
 #include <condition_variable>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <thread>
 
 #include <fcntl.h>
-#include <sched.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
 #endif
@@ -106,10 +102,7 @@ _start()
 
     install_signals();
 
-#if defined PL_DARWIN
-    // Get the wall time clock resource.
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-#endif
+    setup_timing();
 }
 
 // ----------------------------------------------------------------------------
@@ -125,9 +118,7 @@ _stop()
         string_table.clear();
     }
 
-#if defined PL_DARWIN
-    mach_port_deallocate(mach_task_self(), cclock);
-#endif
+    teardown_timing();
 
     restore_signals();
 
@@ -171,11 +162,6 @@ _sampler()
     output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
     output << "# interval: " << interval << std::endl;
 
-    // Install the signal handler if we are sampling the native stacks.
-    if (native)
-        // We use SIGPROF to sample the stacks within each thread.
-        signal(SIGPROF, sigprof_handler);
-
     while (running)
     {
         microsecond_t now = gettime();
@@ -192,7 +178,7 @@ _sampler()
             });
 
         while (gettime() < end_time && running)
-            sched_yield();
+            yield();
 
         last_time = now;
     }
@@ -283,22 +269,15 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        if (thread_info_map.find(thread_id) != thread_info_map.end())
-        {
+        auto entry = thread_info_map.find(thread_id); 
+        if (entry != thread_info_map.end())
             // Thread is already tracked so we update its info
-            auto &thread = *thread_info_map.find(thread_id)->second;
-
-            thread.name = thread_name;
-            thread.native_id = native_id;
-            thread.update_cpu_time();
-        }
+            entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
         else
-        {
             // Untracked thread. Create a new info entry.
             thread_info_map.emplace(
                 thread_id,
                 std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
-        }
     }
 
     Py_RETURN_NONE;
