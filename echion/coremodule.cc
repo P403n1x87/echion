@@ -171,11 +171,6 @@ _sampler()
     output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
     output << "# interval: " << interval << std::endl;
 
-    // Install the signal handler if we are sampling the native stacks.
-    if (native)
-        // We use SIGPROF to sample the stacks within each thread.
-        signal(SIGPROF, sigprof_handler);
-
     while (running)
     {
         microsecond_t now = gettime();
