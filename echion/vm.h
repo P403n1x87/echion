@@ -31,6 +31,20 @@ typedef mach_port_t proc_ref_t;
 #define copy_type(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(dest), &dest))
 #define copy_type_p(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(*dest), dest))
 #define copy_generic(addr, dest, size) (copy_memory(mach_task_self(), (void *)(addr), size, (void *)(dest)))
+
+#elif defined PL_WIN32
+#include <windows.h>
+
+typedef HANDLE proc_ref_t;
+typedef SSIZE_T ssize_t;
+
+#define copy_type(addr, dest) (copy_memory(GetCurrentProcess(), addr, sizeof(dest), &dest))
+#define copy_type_p(addr, dest) (copy_memory(GetCurrentProcess(), addr, sizeof(*dest), dest))
+#define copy_generic(addr, dest, size) (copy_memory(GetCurrentProcess(), (void *)(addr), size, (void *)(dest)))
+
+#else
+#error "Unsupported platform"
+
 #endif
 
 /**
@@ -68,6 +82,12 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
         (mach_vm_size_t *)&result);
 
     if (kr != KERN_SUCCESS)
+        return -1;
+
+#elif defined PL_WIN32
+    size_t n;
+    result = ReadProcessMemory(proc_ref, addr, buf, len, &n) ? n : -1;
+    if (result == -1)
         return -1;
 
 #endif

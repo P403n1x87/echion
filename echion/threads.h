@@ -7,6 +7,7 @@
 #include <Python.h>
 #define Py_BUILD_CORE
 
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -19,12 +20,90 @@
 #elif defined PL_DARWIN
 #include <mach/clock.h>
 #include <mach/mach.h>
+#elif defined PL_WIN32
+#include <windows.h>
+#include <realtimeapiset.h>
+#include <winternl.h>
+#include <Ntstatus.h>
+
+typedef enum _THREAD_STATE
+{
+    StateInitialized,
+    StateReady,
+    StateRunning,
+    StateStandby,
+    StateTerminated,
+    StateWait,
+    StateTransition,
+    StateUnknown
+} THREAD_STATE;
+
+typedef enum _KWAIT_REASON
+{
+    Executive = 0,
+    FreePage = 1,
+    PageIn = 2,
+    PoolAllocation = 3,
+    DelayExecution = 4,
+    Suspended = 5,
+    UserRequest = 6,
+    WrExecutive = 7,
+    WrFreePage = 8,
+    WrPageIn = 9,
+    WrPoolAllocation = 10,
+    WrDelayExecution = 11,
+    WrSuspended = 12,
+    WrUserRequest = 13,
+    WrEventPair = 14,
+    WrQueue = 15,
+    WrLpcReceive = 16,
+    WrLpcReply = 17,
+    WrVirtualMemory = 18,
+    WrPageOut = 19,
+    WrRendezvous = 20,
+    Spare2 = 21,
+    Spare3 = 22,
+    Spare4 = 23,
+    Spare5 = 24,
+    WrCalloutStack = 25,
+    WrKernel = 26,
+    WrResource = 27,
+    WrPushLock = 28,
+    WrMutex = 29,
+    WrQuantumEnd = 30,
+    WrDispatchInt = 31,
+    WrPreempted = 32,
+    WrYieldExecution = 33,
+    WrFastMutex = 34,
+    WrGuardedMutex = 35,
+    WrRundown = 36,
+    MaximumWaitReason = 37
+} KWAIT_REASON;
+
+typedef struct _SYSTEM_THREAD
+{
+    LARGE_INTEGER KernelTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER CreateTime;
+    ULONG WaitTime;
+    PVOID StartAddress;
+    CLIENT_ID ClientId;
+    KPRIORITY Priority;
+    LONG BasePriority;
+    ULONG ContextSwitchCount;
+    THREAD_STATE State;
+    KWAIT_REASON WaitReason;
+} SYSTEM_THREAD, *PSYSTEM_THREAD;
+
+static PVOID _pi_buffer = NULL;
+static ULONG _pi_buffer_size = 0;
 #endif
 
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/tasks.h>
 #include <echion/timing.h>
+#include <echion/vm.h>
 
 class ThreadInfo
 {
@@ -49,13 +128,15 @@ public:
     clockid_t cpu_clock_id;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
+#elif defined PL_WIN32
+    HANDLE thread_handle;
 #endif
     microsecond_t cpu_time;
 
     uintptr_t asyncio_loop = 0;
 
     void update_cpu_time();
-    bool is_running();
+    int is_running();
 
     void sample(int64_t, PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
@@ -81,6 +162,8 @@ public:
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
+#elif defined PL_WIN32
+        thread_handle = OpenThread(THREAD_ALL_ACCESS, FALSE, (DWORD)native_id);
 #endif
         update_cpu_time();
     };
@@ -97,6 +180,7 @@ void ThreadInfo::update_cpu_time()
         return;
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
+
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
@@ -106,10 +190,20 @@ void ThreadInfo::update_cpu_time()
         return;
 
     this->cpu_time = TV_TO_MICROSECOND(info.user_time) + TV_TO_MICROSECOND(info.system_time);
+
+#elif defined PL_WIN32
+    // Note that this is not a measure in microseconds, but of CPU cycles.
+    // The Win32 API doc says that no attempt should be made to convert this
+    // metric to elapsed time. However, here we make the assumption that the
+    // CPU frequency is of the order of GHz, so we divide by 1000 to get a
+    // measure that can be compared to a microsecond.
+    QueryThreadCycleTime(thread_handle, (ULONG64 *)&cpu_time);
+    cpu_time >>= 10;
+
 #endif
 }
 
-bool ThreadInfo::is_running()
+int ThreadInfo::is_running()
 {
 #if defined PL_LINUX
     char buffer[2048] = "";
@@ -153,6 +247,47 @@ bool ThreadInfo::is_running()
 
     return info.run_state == TH_STATE_RUNNING;
 
+#elif defined PL_WIN32
+    ULONG n;
+    NTSTATUS status = NtQuerySystemInformation(
+        SystemProcessInformation,
+        _pi_buffer,
+        _pi_buffer_size,
+        &n);
+
+    if (status == STATUS_INFO_LENGTH_MISMATCH)
+    {
+        // Buffer was too small so we reallocate a larger one and try again.
+        _pi_buffer_size = n;
+        PVOID _new_buffer = realloc(_pi_buffer, n);
+        if (_new_buffer == NULL)
+            return -1;
+
+        _pi_buffer = _new_buffer;
+        return is_running();
+    }
+
+    if (status != STATUS_SUCCESS)
+        return -1;
+
+    SYSTEM_PROCESS_INFORMATION *pi = (SYSTEM_PROCESS_INFORMATION *)_pi_buffer;
+    while (pi->UniqueProcessId != (HANDLE)pid)
+    {
+        if (pi->NextEntryOffset == 0)
+            return -1;
+
+        pi = (SYSTEM_PROCESS_INFORMATION *)(((BYTE *)pi) + pi->NextEntryOffset);
+    }
+
+    SYSTEM_THREAD *ti = (SYSTEM_THREAD *)((char *)pi + sizeof(SYSTEM_PROCESS_INFORMATION));
+    for (DWORD i = 0; i < pi->NumberOfThreads; i++, ti++)
+    {
+        if (ti->ClientId.UniqueThread == (HANDLE)thread_id)
+            return ti->State == StateRunning;
+    }
+
+    return -1;
+
 #endif
 }
 
@@ -169,6 +304,7 @@ static std::mutex thread_info_map_lock;
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind(PyThreadState *tstate)
 {
+#if defined PL_LINUX || defined PL_DARWIN
     if (native)
     {
         // Lock on the signal handler. Will get unlocked once the handler is
@@ -188,9 +324,15 @@ void ThreadInfo::unwind(PyThreadState *tstate)
         sigprof_handler_lock.lock();
     }
     else
+#endif
     {
+#if defined PL_WIN32
+        if (native)
+            unwind_native_stack(name == "echion.core.sampler" ? GetCurrentThread() : thread_handle);
+#endif
         unwind_python_stack(tstate);
         if (asyncio_loop)
+        {
             try
             {
                 unwind_tasks();
@@ -199,6 +341,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
             {
                 // We failed to unwind tasks
             }
+        }
     }
 }
 

@@ -118,6 +118,7 @@ public:
         return k;
     };
 
+#if defined PL_LINUX || defined PL_DARWIN
     // Native filename by program counter
     inline Key key(unw_word_t pc)
     {
@@ -126,16 +127,9 @@ public:
         if (this->find(k) == this->end())
         {
             // TODO: Emit MOJO string signal
-            try
-            {
-                auto s = std::string(32, '\0');
-                std::snprintf((char *)s.c_str(), 32, "native@%p", (void *)k);
-                this->emplace(k, s);
-            }
-            catch (StringError &)
-            {
-                throw Error();
-            }
+            auto s = std::string(32, '\0');
+            std::snprintf((char *)s.c_str(), 32, "native@%p", (void *)k);
+            this->emplace(k, s);
         }
 
         return k;
@@ -179,6 +173,61 @@ public:
         return k;
     }
 
+#elif defined PL_WIN32
+    // Native filename by program counter
+    inline Key key(DWORD64 pc)
+    {
+        auto k = (Key)pc;
+
+        if (this->find(k) == this->end())
+        {
+            // TODO: Emit MOJO string signal
+            IMAGEHLP_LINE line;
+            line.SizeOfStruct = sizeof(IMAGEHLP_LINE);
+
+            DWORD offset_ln = 0;
+            if (SymGetLineFromAddr(GetCurrentProcess(), pc, &offset_ln, &line))
+            {
+                emplace(k, line.FileName);
+            }
+            else {
+                auto moduleBase = SymGetModuleBase(GetCurrentProcess(), pc);
+
+                char module_buffer[MAX_PATH];
+                if (moduleBase && GetModuleFileNameA((HINSTANCE)moduleBase, module_buffer, MAX_PATH))
+                {
+                    emplace(k, module_buffer);
+                }
+                else {
+                    auto s = std::string(32, '\0');
+                    std::snprintf((char *)s.c_str(), 31, "native@%p", (void *)k);
+                    emplace(k, (char *)s.c_str());
+                }
+            }
+        }
+
+        return k;
+    }
+
+    // Native scope name by sybmol info
+    inline Key key(IMAGEHLP_SYMBOL &sym)
+    {
+        auto k = (Key)sym.Address;
+
+        if (this->find(k) == this->end())
+        {
+            // TODO: Emit MOJO string signal
+            char demangled[MAX_SYM_NAME + 1] = {0};
+            if (UnDecorateSymbolName((char *)sym.Name, demangled, MAX_SYM_NAME, UNDNAME_COMPLETE))
+                this->emplace(k, demangled);
+            else
+                this->emplace(k, (char *)sym.Name);
+        }
+
+        return k;
+    }
+
+#endif
     inline std::string &lookup(Key key)
     {
         auto it = this->find(key);

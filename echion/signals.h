@@ -12,6 +12,9 @@
 #include <echion/stacks.h>
 #include <echion/state.h>
 
+#if defined PL_LINUX || defined PL_DARWIN
+#include <signal.h>
+
 // ----------------------------------------------------------------------------
 
 static std::mutex sigprof_handler_lock;
@@ -34,18 +37,24 @@ void sigquit_handler([[maybe_unused]] int signum)
     where_cv.notify_one();
 }
 
+#endif
+
 // ----------------------------------------------------------------------------
 void install_signals()
 {
+#if defined PL_LINUX || defined PL_DARWIN
     signal(SIGQUIT, sigquit_handler);
 
     if (native)
         signal(SIGPROF, sigprof_handler);
+#endif
 }
 
 // ----------------------------------------------------------------------------
 void restore_signals()
 {
+#if defined PL_LINUX || defined PL_DARWIN
     signal(SIGQUIT, SIG_DFL);
     signal(SIGPROF, SIG_DFL);
+#endif
 }
