@@ -337,7 +337,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << iid << ":" << name;
+        mojo_stack(pid, iid, name);
 
         // Print the stack
         if (native)
@@ -349,13 +349,13 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             python_stack.render(output);
 
         // Print the metric
-        output << " " << delta << std::endl;
+        mojo_metric_time(delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
-            output << "P" << pid << ";T" << iid << ":" << name;
+            mojo_stack(pid, iid, name);
 
             if (native)
             {
@@ -367,7 +367,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render(output);
 
-            output << " " << delta << std::endl;
+            mojo_metric_time(delta);
         }
 
         current_tasks.clear();

@@ -23,16 +23,16 @@
 #include <libunwind.h>
 
 #include <echion/cache.h>
+#include <echion/mojo.h>
 #include <echion/strings.h>
 #include <echion/vm.h>
-
-#define MOJO_INT32 ((uintptr_t)(1 << (6 + 7 * 3)) - 1)
 
 class Frame
 {
 public:
-    typedef std::reference_wrapper<Frame> Ref;
-    typedef std::unique_ptr<Frame> Ptr;
+    using Ref = std::reference_wrapper<Frame>;
+    using Ptr = std::unique_ptr<Frame>;
+    using Key = uintptr_t;
 
     class Error : public std::exception
     {
@@ -52,6 +52,7 @@ public:
         }
     };
 
+    Key cache_key = 0;
     StringTable::Key filename = 0;
     StringTable::Key name = 0;
 
@@ -107,7 +108,7 @@ public:
 private:
     void infer_location(PyCodeObject *, int);
 
-    static inline uintptr_t key(PyCodeObject *code, int lasti)
+    static inline Key key(PyCodeObject *code, int lasti)
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
@@ -323,7 +324,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     if (copy_type(code_addr, code))
         return INVALID_FRAME;
 
-    uintptr_t frame_key = Frame::key(code_addr, lasti);
+    auto frame_key = Frame::key(code_addr, lasti);
 
     try
     {
@@ -334,7 +335,9 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
         try
         {
             auto new_frame = std::make_unique<Frame>(&code, lasti);
+            new_frame->cache_key = frame_key;
             auto &f = *new_frame;
+            mojo_frame(frame_key, new_frame);
             frame_cache->store(frame_key, std::move(new_frame));
             return f;
         }
@@ -362,7 +365,9 @@ Frame &Frame::get(unw_cursor_t &cursor)
         try
         {
             auto frame = std::make_unique<Frame>(cursor, pc);
+            frame->cache_key = frame_key;
             auto &f = *frame;
+            mojo_frame(frame_key, frame);
             frame_cache->store(frame_key, std::move(frame));
             return f;
         }
@@ -383,7 +388,9 @@ Frame &Frame::get(StringTable::Key name)
     catch (LRUCache<uintptr_t, Frame>::LookupError &)
     {
         auto frame = std::make_unique<Frame>(name);
+        frame->cache_key = frame_key;
         auto &f = *frame;
+        mojo_frame(frame_key, frame);
         frame_cache->store(frame_key, std::move(frame));
         return f;
     }

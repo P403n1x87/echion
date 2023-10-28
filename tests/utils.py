@@ -12,28 +12,14 @@ from tempfile import TemporaryDirectory
 from time import sleep
 
 import pytest
-from austin.stats import AustinFileReader
-from austin.stats import MetricType
-from austin.stats import Sample
+from austin.format.mojo import MojoFile
 
 
 PY = sys.version_info[:2]
 
 
-class Data:
-    def __init__(self, file: Path) -> None:
-        self.source = file
-        self.samples = []
-
-        with AustinFileReader(str(file)) as afr:
-            for s in afr:
-                self.samples.append(Sample.parse(s, MetricType.TIME)[0])
-
-            self.metadata = afr.metadata
-
-
 class DataSummary:
-    def __init__(self, data: Data) -> None:
+    def __init__(self, data: MojoFile) -> None:
         self.data = data
         self.metadata = data.metadata
 
@@ -44,15 +30,19 @@ class DataSummary:
         for sample in data.samples:
             self.nsamples += 1
             frames = sample.frames
-            v = sample.metric.value
+            v = sample.metrics[0].value
+
+            if not sample.thread or not v:
+                continue
 
             self.total_metric += v
-            stacks = self.threads.setdefault(sample.thread, {})
 
-            stack = tuple((f.function, f.line) for f in frames)
+            stacks = self.threads.setdefault(f"{sample.iid}:{sample.thread}", {})
+
+            stack = tuple((f.scope.string.value, f.line) for f in frames)
             stacks[stack] = stacks.get(stack, 0) + v
 
-            fstack = tuple(f.function for f in frames)
+            fstack = tuple(f.scope.string.value for f in frames)
             stacks[fstack] = stacks.get(fstack, 0) + v
 
     @property
@@ -60,7 +50,12 @@ class DataSummary:
         return len(self.threads)
 
     def query(self, thread_name, frames):
-        stacks = self.threads[thread_name]
+        try:
+            stacks = self.threads[thread_name]
+        except KeyError as e:
+            raise AssertionError(
+                f"Expected thread {thread_name}, found {list(self.threads.keys())}"
+            ) from e
         for stack in stacks:
             for i in range(0, len(stack) - len(frames) + 1):
                 if stack[i : i + len(frames)] == frames:
@@ -119,7 +114,9 @@ def run_echion(*args: str) -> CompletedProcess:
         raise
 
 
-def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional[Data]]:
+def run_target(
+    target: Path, *args: str
+) -> t.Tuple[CompletedProcess, t.Optional[MojoFile]]:
     with TemporaryDirectory(prefix="echion") as td:
         output_file = Path(td) / "output.echion"
 
@@ -132,7 +129,12 @@ def run_target(target: Path, *args: str) -> t.Tuple[CompletedProcess, t.Optional
             f"tests.{target}",
         )
 
-        return result, (Data(output_file) if output_file.is_file() else None)
+        if not output_file.is_file():
+            return result, None
+
+        m = MojoFile(output_file.open(mode="rb"))
+        m.unwind()
+        return result, m
 
 
 def run_with_signal(target: Path, signal: int, delay: float, *args: str) -> Popen:
