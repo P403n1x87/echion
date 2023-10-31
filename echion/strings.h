@@ -95,7 +95,6 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             try
             {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -108,6 +107,7 @@ public:
                 auto str = pyunicode_to_utf8(s);
 #endif
                 this->emplace(k, str);
+                mojo_string_event(k, str);
             }
             catch (StringError &)
             {
@@ -125,12 +125,12 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             try
             {
-                auto s = std::string(32, '\0');
-                std::snprintf((char *)s.c_str(), 32, "native@%p", (void *)k);
-                this->emplace(k, s);
+                char buffer[32] = {0};
+                std::snprintf(buffer, 32, "native@%p", (void *)k);
+                this->emplace(k, buffer);
+                mojo_string_event(k, buffer);
             }
             catch (StringError &)
             {
@@ -152,7 +152,6 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             unw_word_t offset; // Ignored. All the information is in the PC anyway.
             char sym[256];
             if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
@@ -171,6 +170,7 @@ public:
             }
 
             this->emplace(k, name);
+            mojo_string_event(k, name);
 
             if (demangled)
                 std::free(demangled);

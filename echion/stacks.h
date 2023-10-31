@@ -29,7 +29,7 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            (*it).get().render(output);
+            mojo_frame_ref((*it).get().cache_key);
         }
     }
 };

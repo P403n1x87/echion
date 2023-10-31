@@ -168,8 +168,20 @@ _sampler()
         return;
     }
 
-    output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
-    output << "# interval: " << interval << std::endl;
+    mojo_header();
+
+    mojo_metadata("mode", (cpu ? "cpu" : "wall"));
+    mojo_metadata("interval", interval);
+    mojo_metadata("sampler", "echion");
+
+    // DEV: Workaround for the austin-python library: we send an empty sample
+    // to set the PID. We also map the key value 0 to the empty string, to
+    // support task name frames.
+    mojo_stack(pid, 0, "");
+    mojo_string_event(0, "");
+    mojo_string_event(1, "<invalid>");
+    mojo_string_event(2, "<unknown>");
+    mojo_metric_time(0);
 
     while (running)
     {
