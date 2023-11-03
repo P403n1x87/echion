@@ -35,28 +35,28 @@
 #include <echion/timing.h>
 
 // ----------------------------------------------------------------------------
-static void do_where(std::ostream &stream)
+static void do_where()
 {
-    stream << "\r"
-           << "🐴 Echion reporting for duty" << std::endl
-           << std::endl;
+    Renderer::get().render_message("\r");
+    Renderer::get().render_message("🐴 Echion reporting for duty");
+    Renderer::get().render_message("");
 
     for_each_interp(
-        [&stream](PyInterpreterState *interp) -> void
+        [](PyInterpreterState *interp) -> void
         {
             for_each_thread(
                 interp,
-                [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
+                [](PyThreadState *tstate, ThreadInfo &thread) -> void
                 {
                     thread.unwind(tstate);
                     if (native)
                     {
                         interleave_stacks();
-                        thread.render_where(interleaved_stack, stream);
+                        thread.render_where(interleaved_stack);
                     }
                     else
-                        thread.render_where(python_stack, stream);
-                    stream << std::endl;
+                        thread.render_where(python_stack);
+                    Renderer::get().render_message("");
                 });
         });
 }
@@ -72,7 +72,7 @@ static void where_listener()
         if (!running)
             break;
 
-        do_where(std::cerr);
+        do_where();
     }
 }
 
@@ -144,10 +144,9 @@ _sampler()
 
     if (where)
     {
-        std::ofstream pipe(pipe_name, std::ios::out);
-
-        if (pipe)
-            do_where(pipe);
+        if (Renderer::get().set_output(pipe_name)) {
+            do_where();
+        }
 
         else
             std::cerr << "Failed to open pipe " << pipe_name << std::endl;
@@ -161,15 +160,14 @@ _sampler()
 
     last_time = gettime();
 
-    output.open(std::getenv("ECHION_OUTPUT"));
-    if (!output.is_open())
+    if (!Renderer::get().set_output(std::getenv("ECHION_OUTPUT")))
     {
         std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
         return;
     }
 
-    output << "# mode: " << (cpu ? "cpu" : "wall") << std::endl;
-    output << "# interval: " << interval << std::endl;
+    Renderer::get().render_message("# mode: " + std::string(cpu ? "cpu" : "wall"));
+    Renderer::get().render_message("# interval: " + std::to_string(interval));
 
     while (running)
     {
@@ -186,13 +184,14 @@ _sampler()
                     { thread.sample(interp->id, tstate, wall_time); });
             });
 
-        while (gettime() < end_time && running)
-            sched_yield();
+        while (now < end_time && running) {
+            auto sleep_duration = std::chrono::microseconds(end_time - now);
+            std::this_thread::sleep_for(sleep_duration);
+            now = gettime();
+        }
 
         last_time = now;
     }
-
-    output.close();
 
     teardown_where();
 }

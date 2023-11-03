@@ -16,13 +16,13 @@
 #include <cstring>
 #include <exception>
 #include <functional>
-#include <iostream>
 
 #include <cxxabi.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 #include <echion/cache.h>
+#include <echion/render.h>
 #include <echion/strings.h>
 #include <echion/vm.h>
 
@@ -66,26 +66,23 @@ public:
     bool is_entry = false;
 #endif
 
-    void render(std::ostream &stream)
+    void render()
     {
-        stream
-            << ";" << string_table.lookup(filename)
-            << ":" << string_table.lookup(name)
-            << ":" << location.line;
+        Renderer::get().render_python_frame(
+            string_table.lookup(name),
+            string_table.lookup(filename),
+            location.line);
     }
 
-    void render_where(std::ostream &stream)
+    void render_where()
     {
-        if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
-            stream << "          \033[38;5;248;1m" << string_table.lookup(name)
-                   << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
-                   << "\033[0m:\033[38;5;246m" << location.line
-                   << ")\033[0m" << std::endl;
+        auto name_str = string_table.lookup(name);
+        auto filename_str = string_table.lookup(filename);
+        auto line = location.line;
+        if (filename_str.rfind("native@", 0) == 0)
+            Renderer::get().render_python_frame(filename_str, name_str, line);
         else
-            stream << "          \033[33;1m" << string_table.lookup(name)
-                   << "\033[0m (\033[36m" << string_table.lookup(filename)
-                   << "\033[0m:\033[32m" << location.line
-                   << "\033[0m)" << std::endl;
+            Renderer::get().render_native_frame(filename_str, name_str, line);
     }
 
     Frame(StringTable::Key name) : name(name){};
@@ -98,11 +95,12 @@ public:
     }
 
     static Frame &get(PyCodeObject *, int);
-    static Frame &get(unw_cursor_t &);
     static Frame &get(StringTable::Key);
 
     Frame(PyCodeObject *, int);
+
     Frame(unw_cursor_t &, unw_word_t);
+    static Frame &get(unw_cursor_t &);
 
 private:
     void infer_location(PyCodeObject *, int);

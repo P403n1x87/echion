@@ -17,9 +17,6 @@ static unsigned int interval = 1000;
 // CPU Time mode
 static int cpu = 0;
 
-// Output stream
-static std::ofstream output;
-
 // Native stack sampling
 static int native = 0;
 
