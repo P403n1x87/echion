@@ -21,6 +21,7 @@
 #include <mach/mach.h>
 #endif
 
+#include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/tasks.h>
@@ -60,12 +61,12 @@ public:
     void sample(int64_t, PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
 
-    void render_where(FrameStack &stack, std::ostream &output)
+    void render_where(FrameStack &stack)
     {
-        output << "    🧵 " << name << ":" << std::endl;
+        Renderer::get().render_message("    🧵 " + name + ":");
 
         for (auto it = stack.rbegin(); it != stack.rend(); ++it)
-            (*it).get().render_where(output);
+            (*it).get().render_where();
     }
 
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
@@ -337,37 +338,37 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        output << "P" << pid << ";T" << iid << ":" << name;
+        Renderer::get().render_message("P" + std::to_string(getpid()) + ";T" + std::to_string(iid) + ":" + name);
 
         // Print the stack
         if (native)
         {
             interleave_stacks();
-            interleaved_stack.render(output);
+            interleaved_stack.render();
         }
         else
-            python_stack.render(output);
+            python_stack.render();
 
         // Print the metric
-        output << " " << delta << std::endl;
+        Renderer::get().render_cpu_time(delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
-            output << "P" << pid << ";T" << iid << ":" << name;
+            Renderer::get().render_message("P" + std::to_string(getpid()) + ";T" + std::to_string(iid) + ":" + name);
 
             if (native)
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
                 interleave_stacks(*task_stack);
-                interleaved_stack.render(output);
+                interleaved_stack.render();
             }
             else
-                task_stack->render(output);
+                task_stack->render();
 
-            output << " " << delta << std::endl;
+            Renderer::get().render_cpu_time(delta);
         }
 
         current_tasks.clear();

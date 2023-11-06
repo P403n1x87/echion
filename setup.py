@@ -13,7 +13,7 @@ from setuptools import setup
 PLATFORM = sys.platform.lower()
 
 LDADD = {
-    "linux": ["-l:libunwind.a", "-l:liblzma.a"],
+    "linux": ["-l:libunwind.a", "-l:libunwind-x86_64.a", "-l:liblzma.a"],
 }
 
 # add option to colorize compiler output
@@ -29,7 +29,8 @@ else:
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
-    include_dirs=["."],
+    include_dirs=[".", "vendor/libunwind-1.6.2/include"],
+    library_dirs=["vendor/libunwind-1.6.2/src/.libs"],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),

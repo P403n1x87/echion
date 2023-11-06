@@ -20,8 +20,9 @@
 class FrameStack : public std::deque<Frame::Ref>
 {
 public:
-    void render(std::ostream &output)
+    void render()
     {
+        Renderer::get().render_stack_begin();
         for (auto it = this->rbegin(); it != this->rend(); ++it)
         {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -29,8 +30,9 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            (*it).get().render(output);
+            (*it).get().render();
         }
+        Renderer::get().render_stack_end();
     }
 };
 

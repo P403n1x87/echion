@@ -47,5 +47,6 @@ void install_signals()
 void restore_signals()
 {
     signal(SIGQUIT, SIG_DFL);
-    signal(SIGPROF, SIG_DFL);
+    if (native)
+        signal(SIGPROF, SIG_DFL);
 }
