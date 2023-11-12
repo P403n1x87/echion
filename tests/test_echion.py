@@ -2,7 +2,7 @@ from tests.utils import run_target
 
 
 def test_echion():
-    result, data = run_target("target")
+    result, _ = run_target("target", "-i", "10ms")
     assert result.returncode == 0, result.stderr
 
 
