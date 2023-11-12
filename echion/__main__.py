@@ -87,6 +87,17 @@ def attach(args: argparse.Namespace) -> None:
             pipe_name.unlink()
 
 
+def microseconds(v: str) -> int:
+    try:
+        if v.endswith("ms"):
+            return int(v[:-2]) * 1000
+        if v.endswith("s"):
+            return int(v[:-1]) * 1000000
+        return int(v)
+    except Exception as e:
+        raise ValueError("Invalid interval: %s" % v) from e
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="In-process CPython frame stack sampler",
@@ -100,7 +111,7 @@ def main() -> None:
         "--interval",
         help="sampling interval in microseconds",
         default=1000,
-        type=int,
+        type=microseconds,
     )
     parser.add_argument(
         "-c",
@@ -163,7 +174,13 @@ def main() -> None:
         action="version",
         version="%(prog)s " + __version__,
     )
-    args = parser.parse_args()
+
+    try:
+        args = parser.parse_args()
+    except Exception as e:
+        print("echion: %s" % e)
+        parser.print_usage()
+        sys.exit(1)
 
     # TODO: Validate arguments
 
