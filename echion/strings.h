@@ -107,12 +107,34 @@ public:
                 auto str = pyunicode_to_utf8(s);
 #endif
                 this->emplace(k, str);
-                mojo_string_event(k, str);
+                mojo.string(k, str);
             }
             catch (StringError &)
             {
                 throw Error();
             }
+        }
+
+        return k;
+    };
+
+    // Python string object
+    inline Key key_unsafe(PyObject *s)
+    {
+        auto k = (Key)s;
+
+        if (this->find(k) == this->end())
+        {
+#if PY_VERSION_HEX >= 0x030c0000
+            // The task name might hold a PyLong for deferred task name formatting.
+            auto str = (PyLong_CheckExact(s))
+                           ? "Task-" + std::to_string(PyLong_AsLong(s))
+                           : std::string(PyUnicode_AsUTF8(s));
+#else
+            auto str = std::string(PyUnicode_AsUTF8(s));
+#endif
+            this->emplace(k, str);
+            mojo.string(k, str);
         }
 
         return k;
@@ -130,7 +152,7 @@ public:
                 char buffer[32] = {0};
                 std::snprintf(buffer, 32, "native@%p", (void *)k);
                 this->emplace(k, buffer);
-                mojo_string_event(k, buffer);
+                mojo.string(k, buffer);
             }
             catch (StringError &)
             {
@@ -170,7 +192,7 @@ public:
             }
 
             this->emplace(k, name);
-            mojo_string_event(k, name);
+            mojo.string(k, name);
 
             if (demangled)
                 std::free(demangled);

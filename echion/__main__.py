@@ -115,6 +115,12 @@ def main() -> None:
         type=int,
     )
     parser.add_argument(
+        "-m",
+        "--memory",
+        help="Collect memory allocation events",
+        action="store_true",
+    )
+    parser.add_argument(
         "-n",
         "--native",
         help="sample native stacks",
@@ -165,6 +171,7 @@ def main() -> None:
 
     env["ECHION_INTERVAL"] = str(args.interval)
     env["ECHION_CPU"] = str(int(bool(args.cpu)))
+    env["ECHION_MEMORY"] = str(int(bool(args.memory)))
     env["ECHION_NATIVE"] = str(int(bool(args.native)))
     env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
     env["ECHION_STEALTH"] = str(int(bool(args.stealth)))

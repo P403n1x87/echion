@@ -68,6 +68,7 @@ public:
             (*it).get().render_where(output);
     }
 
+    // ------------------------------------------------------------------------
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
         : thread_id(thread_id), native_id(native_id), name(name)
     {
@@ -191,6 +192,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
     {
         unwind_python_stack(tstate);
         if (asyncio_loop)
+        {
             try
             {
                 unwind_tasks();
@@ -199,6 +201,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
             {
                 // We failed to unwind tasks
             }
+        }
     }
 }
 
@@ -337,37 +340,37 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        mojo_stack(pid, iid, name);
+        mojo.stack(pid, iid, name);
 
         // Print the stack
         if (native)
         {
             interleave_stacks();
-            interleaved_stack.render(output);
+            interleaved_stack.render();
         }
         else
-            python_stack.render(output);
+            python_stack.render();
 
         // Print the metric
-        mojo_metric_time(delta);
+        mojo.metric_time(delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
-            mojo_stack(pid, iid, name);
+            mojo.stack(pid, iid, name);
 
             if (native)
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
                 interleave_stacks(*task_stack);
-                interleaved_stack.render(output);
+                interleaved_stack.render();
             }
             else
-                task_stack->render(output);
+                task_stack->render();
 
-            mojo_metric_time(delta);
+            mojo.metric_time(delta);
         }
 
         current_tasks.clear();

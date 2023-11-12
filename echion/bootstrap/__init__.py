@@ -32,6 +32,7 @@ def start():
     # Set the configuration
     ec.set_interval(int(os.getenv("ECHION_INTERVAL", 1000)))
     ec.set_cpu(bool(int(os.getenv("ECHION_CPU", 0))))
+    ec.set_memory(bool(int(os.getenv("ECHION_MEMORY", 0))))
     ec.set_native(bool(int(os.getenv("ECHION_NATIVE", 0))))
     ec.set_where(bool(int(os.getenv("ECHION_WHERE", 0) or 0)))
 

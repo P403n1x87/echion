@@ -58,6 +58,7 @@ options:
   -c, --cpu             sample on-CPU stacks only
   -x EXPOSURE, --exposure EXPOSURE
                         exposure time, in seconds
+  -m, --memory          Collect memory allocation events
   -n, --native          sample native stacks
   -o OUTPUT, --output OUTPUT
                         output location (can use %(pid) to insert the process ID)
@@ -99,6 +100,25 @@ When running or attaching to a process, you can also send a `SIGQUIT` signal to
 dump the stacks of all running threads. The result is similar to the where mode.
 You can normally send a `SIGQUIT` signal with the <kbd>CTRL</kbd>+<kbd>\\</kbd>
 key combination.
+
+
+## Memory mode
+
+Besides wall time and CPU time, Echion can be used to profile memory
+allocations. In this mode, Echion tracks the Python memory domain allocators and
+accounts for each single event. Because of the tracing nature, this mode
+introduces considerable overhead, but gives pretty accurate results that can be
+used to investigate potential memory leaks. To fully understand that data that
+is collected in this mode, one should be aware of how Echion tracks allocations
+and deallocations. When an allocation is made, Echion records the frame stack
+that was involved and maps it to the returned memory address. When a
+deallocation for a tracked memory address is made, the freed memory is accounted
+for the same stack. Therefore, objects that are allocated and deallocated during
+the tracking period account for a total of 0 allocated bytes. This means that
+all the non-negative values reported by Echion represent memory that was still
+allocated by the time the tracking ended.
+
+*Since Echion 0.3.0*.
 
 
 ## Why Echion?
