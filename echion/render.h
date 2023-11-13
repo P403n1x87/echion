@@ -218,7 +218,7 @@ public:
       return instance;
     }
 
-    void setRenderer(std::shared_ptr<RendererInterface> renderer) {
+    void set_renderer(std::shared_ptr<RendererInterface> renderer) {
         currentRenderer = renderer;
     }
 
