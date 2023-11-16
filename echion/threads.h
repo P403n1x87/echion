@@ -63,8 +63,6 @@ public:
 
     void render_where(FrameStack &stack)
     {
-        Renderer::get().render_message("    🧵 " + name + ":");
-
         for (auto it = stack.rbegin(); it != stack.rend(); ++it)
             (*it).get().render_where();
     }
@@ -84,6 +82,7 @@ public:
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         update_cpu_time();
+        Renderer::get().render_thread_begin(name, cpu_time, thread_id, native_id);
     };
 
 private:

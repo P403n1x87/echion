@@ -12,6 +12,7 @@ class RendererInterface {
 public:
 
     virtual void render_message(std::string_view msg) = 0;
+    virtual void render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
     virtual void render_stack_begin() = 0;
     virtual void render_python_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
     virtual void render_native_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
@@ -50,6 +51,16 @@ public:
         file_stream.close();
         output = &new_output;
         return true;
+    }
+
+    void
+    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    override
+    {
+        (void)cpu_time;
+        (void)thread_id;
+        (void)native_id;;
+        *output << "    🧵 " + name + ":" << std::endl;
     }
 
     void
