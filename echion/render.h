@@ -8,6 +8,8 @@
 #include <iostream>
 #include <string_view>
 
+#include "timing.h" // microsecond_t
+
 class RendererInterface {
 public:
 
@@ -60,7 +62,7 @@ public:
         (void)cpu_time;
         (void)thread_id;
         (void)native_id;;
-        *output << "    🧵 " + name + ":" << std::endl;
+        *output << "    🧵 " << name << ":" << std::endl;
     }
 
     void
@@ -120,6 +122,17 @@ public:
 
 class NullRenderer : public RendererInterface {
   public:
+    void
+    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    override
+    {
+        (void)name;
+        (void)cpu_time;
+        (void)thread_id;
+        (void)native_id;
+        return;
+    }
+
     void
     render_stack_begin()
     override
@@ -226,6 +239,12 @@ public:
     render_message(std::string_view msg)
     {
         getActiveRenderer()->render_message(msg);
+    }
+
+    void
+    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    {
+        getActiveRenderer()->render_thread_begin(name, cpu_time, thread_id, native_id);
     }
 
     void
