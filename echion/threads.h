@@ -82,7 +82,6 @@ public:
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         update_cpu_time();
-        Renderer::get().render_thread_begin(name, cpu_time, thread_id, native_id);
     };
 
 private:
@@ -331,6 +330,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         delta = cpu_time - previous_cpu_time;
     }
 
+    Renderer::get().render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
     unwind(tstate);
 
     // Asyncio tasks
