@@ -67,10 +67,17 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
         (mach_vm_address_t)buf,
         (mach_vm_size_t *)&result);
 
-    if (kr != KERN_SUCCESS)
+    if (kr != KERN_SUCCESS) {
+        std::cout << "mach_vm_read_overwrite failed on address " << addr << std::endl;
         return -1;
+    }
 
 #endif
+
+    if (len != result) {
+        std::cout << "copy_memory failed on address " << addr << std::endl;
+        return -1;
+    }
 
     return len != result;
 }
