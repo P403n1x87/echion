@@ -236,6 +236,7 @@ public:
     }
 
     void set_renderer(std::shared_ptr<RendererInterface> renderer) {
+        std::cout << "Renderer set_renderer" << std::endl;
         currentRenderer = renderer;
     }
 
