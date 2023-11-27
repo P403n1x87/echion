@@ -56,7 +56,7 @@ public:
     }
 
     void
-    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
     override
     {
         (void)tstate;
@@ -124,7 +124,7 @@ public:
 class NullRenderer : public RendererInterface {
   public:
     void
-    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
     override
     {
         (void)tstate;
@@ -244,7 +244,7 @@ public:
     }
 
     void
-    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
     {
         getActiveRenderer()->render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
     }
