@@ -14,7 +14,7 @@ class RendererInterface {
 public:
 
     virtual void render_message(std::string_view msg) = 0;
-    virtual void render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
+    virtual void render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
     virtual void render_stack_begin() = 0;
     virtual void render_python_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
     virtual void render_native_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
@@ -56,9 +56,10 @@ public:
     }
 
     void
-    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
     override
     {
+        (void)tstate;
         (void)cpu_time;
         (void)thread_id;
         (void)native_id;;
@@ -123,9 +124,10 @@ public:
 class NullRenderer : public RendererInterface {
   public:
     void
-    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
     override
     {
+        (void)tstate;
         (void)name;
         (void)cpu_time;
         (void)thread_id;
@@ -242,9 +244,9 @@ public:
     }
 
     void
-    render_thread_begin(std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
+    render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
     {
-        getActiveRenderer()->render_thread_begin(name, cpu_time, thread_id, native_id);
+        getActiveRenderer()->render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
     }
 
     void
