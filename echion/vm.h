@@ -75,7 +75,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
 #endif
 
     if (len != result) {
-        std::cout << "copy_memory failed on address " << addr << std::endl;
+        std::cout << "copy_memory failed on address " << addr << " (len: " << len << ", result: " << result << ")" << std::endl;
         return -1;
     }
 
