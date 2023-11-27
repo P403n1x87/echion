@@ -83,3 +83,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
 }
 
 static pid_t pid = 0;
+
+void _set_pid(pid_t p) {
+    pid = p;
+}
