@@ -47,6 +47,10 @@ typedef mach_port_t proc_ref_t;
 static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void *buf)
 {
     ssize_t result = -1;
+    if (reinterpret_cast<uintptr_t>(addr) < 4096) {
+        // Early exit on zero page
+        return -1;
+    }
 
 #if defined PL_LINUX
     struct iovec local[1];
