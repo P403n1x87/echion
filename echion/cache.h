@@ -8,21 +8,11 @@
 #include <list>
 #include <unordered_map>
 
-#define PRINT_THREAD_AND_FUNC() \
-    std::cout << "Thread ID: " << gettid() \
-              << ", Function: " << __func__ << std::endl;
-
 template <typename K, typename V>
 class LRUCache
 {
 public:
-    LRUCache(size_t capacity) : capacity(capacity) {
-      PRINT_THREAD_AND_FUNC();
-    }
-
-    ~LRUCache() {
-      PRINT_THREAD_AND_FUNC();
-    }
+    LRUCache(size_t capacity) : capacity(capacity) {}
 
     V &lookup(const K &k);
 
@@ -46,11 +36,9 @@ private:
 template <typename K, typename V>
 void LRUCache<K, V>::store(const K &k, std::unique_ptr<V> v)
 {
-    PRINT_THREAD_AND_FUNC();
     // Check if cache is full
     if (items.size() >= capacity)
     {
-        std::cout << "Cache is full, removing last item" << std::endl;
         index.erase(items.back().first);
         items.pop_back();
     }
@@ -65,7 +53,6 @@ void LRUCache<K, V>::store(const K &k, std::unique_ptr<V> v)
 template <typename K, typename V>
 V &LRUCache<K, V>::lookup(const K &k)
 {
-    PRINT_THREAD_AND_FUNC();
     auto itr = index.find(k);
     if (itr == index.end())
         throw LookupError();

@@ -28,14 +28,11 @@
 
 #define MOJO_INT32 ((uintptr_t)(1 << (6 + 7 * 3)) - 1)
 
-#define PRINT_THREAD_AND_FUNC() \
-    std::cout << "Thread ID: " << gettid() \
-              << ", Function: " << __func__ << std::endl;
-
 class Frame
 {
 public:
     typedef std::reference_wrapper<Frame> Ref;
+    typedef std::unique_ptr<Frame> Ptr;
 
     class Error : public std::exception
     {
@@ -55,8 +52,8 @@ public:
         }
     };
 
-    const StringTable::Key filename = 0;
-    const StringTable::Key name = 0;
+    StringTable::Key filename = 0;
+    StringTable::Key name = 0;
 
     struct _location
     {
@@ -71,29 +68,14 @@ public:
 
     void render()
     {
-        PRINT_THREAD_AND_FUNC();
-        std::string *name_str = nullptr;
-        std::string *filename_str = nullptr;
-        try {
-            name_str = &string_table.lookup(name);
-            std::cout << "[" << gettid() << "] (" << this << ") name_str is " << *name_str << ", name is " << std::hex << name << std::endl;
-        } catch (...)  {
-            std::cout << "[" << gettid() << "] (" << this << ") name is " << std::hex << name << std::endl;
-        }
-
-        try {
-            filename_str = &string_table.lookup(filename);
-        } catch (...)  {
-            std::cout << "[" << gettid() << "] (" << this << ") filename is " << std::hex << filename << std::endl;
-            std::abort();
-        }
-        Renderer::get().render_python_frame(*filename_str, *name_str, location.line);
+        Renderer::get().render_python_frame(
+            string_table.lookup(name),
+            string_table.lookup(filename),
+            location.line);
     }
 
     void render_where()
     {
-        PRINT_THREAD_AND_FUNC();
-        std::cout << "UNEXPECTED!!!!!!!!!!!!!!!!!" << std::endl;
         auto name_str = string_table.lookup(name);
         auto filename_str = string_table.lookup(filename);
         auto line = location.line;
@@ -108,13 +90,8 @@ public:
     static Frame &read(PyObject *, PyObject **);
     static Frame &read(PyObject *frame_addr)
     {
-        PRINT_THREAD_AND_FUNC();
         PyObject *unused;
         return Frame::read(frame_addr, &unused);
-    }
-
-    ~Frame() {
-      std::cout << "Frame destructor called [" << gettid() << "](" << this << ")" << std::endl;
     }
 
     static Frame &get(PyCodeObject *, int);
@@ -130,7 +107,6 @@ private:
 
     static inline uintptr_t key(PyCodeObject *code, int lasti)
     {
-        PRINT_THREAD_AND_FUNC();
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
 };
@@ -290,32 +266,31 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 }
 
 // ----------------------------------------------------------------------------
-Frame::Frame(PyCodeObject *code, int lasti) :
-        filename{string_table.key(code->co_filename)},
-#if PY_VERSION_HEX >= 0x030b0000
-        name{string_table.key(code->co_qualname)}
-#else
-        name{string_table.key(code->co_name)}
-#endif
+Frame::Frame(PyCodeObject *code, int lasti)
 {
     try
     {
-        std::cout << "[" << gettid() << "] (" << this << ") stashed name_str is " << string_table.lookup(name) << ", name is " << std::hex << name << std::endl;
+        filename = string_table.key(code->co_filename);
+#if PY_VERSION_HEX >= 0x030b0000
+        name = string_table.key(code->co_qualname);
+#else
+        name = string_table.key(code->co_name);
+#endif
     }
     catch (StringTable::Error &)
     {
-        std::cout << "STRING ERROR" << std::endl;
         throw Error();
     }
 
     infer_location(code, lasti);
 }
 
-Frame::Frame(unw_cursor_t &cursor, unw_word_t pc) : name{string_table.key(cursor)}, filename{string_table.key(pc)}
+Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
 {
     try
     {
-        std::cout << "[" << gettid() << "] (" << this << ") stashed name_str is " << string_table.lookup(name) << ", name is " << std::hex << name << std::endl;
+        filename = string_table.key(pc);
+        name = string_table.key(cursor);
     }
     catch (StringTable::Error &)
     {
@@ -336,7 +311,6 @@ static void init_frame_cache(size_t capacity)
 
 static void reset_frame_cache()
 {
-    PRINT_THREAD_AND_FUNC();
     delete frame_cache;
     frame_cache = nullptr;
 }

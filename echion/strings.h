@@ -107,7 +107,6 @@ public:
 #else
                 auto str = pyunicode_to_utf8(s);
 #endif
-                std::cout << "ST: (0x" << std::hex << k << ") " << str << std::endl;
                 this->emplace(k, str);
             }
             catch (StringError &)
