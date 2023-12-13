@@ -14,6 +14,9 @@
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 typedef pid_t proc_ref_t;
 
@@ -43,8 +46,7 @@ typedef mach_port_t proc_ref_t;
 bool failed_safe_copy = false;
 
 #if defined PL_LINUX
-ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long);
-safe_copy = process_vm_readv;
+ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
 
 class VmReader {
   void *buffer;
