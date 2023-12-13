@@ -4,6 +4,12 @@
 
 #pragma once
 
+#include <iostream>
+#include <array>
+#include <string>
+#include <stdexcept>
+#include <cstdlib>
+
 #if defined PL_LINUX
 #include <sys/uio.h>
 #include <sys/types.h>
@@ -33,6 +39,166 @@ typedef mach_port_t proc_ref_t;
 #define copy_generic(addr, dest, size) (copy_memory(mach_task_self(), (void *)(addr), size, (void *)(dest)))
 #endif
 
+// Some checks are done at static initialization, so use this to read them at runtime
+bool failed_safe_copy = false;
+
+#if defined PL_LINUX
+ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long);
+safe_copy = process_vm_readv;
+
+class VmReader {
+  void *buffer;
+  size_t sz;
+  inline static VmReader *instance{nullptr};  // Prevents having to set this in implementation
+
+  void* init(size_t new_sz) {
+    // Makes a temporary file and ftruncates it to the specified size
+    std::array<std::string, 3> tmp_dirs= {"/dev/shm", "/tmp", "/var/tmp"};
+    std::string tmp_suffix = "/echion-XXXXXX";
+    void* ret = nullptr;
+
+    for (auto &tmp_dir : tmp_dirs) {
+      std::string tmpfile = tmp_dir + tmp_suffix;
+      int fd = mkstemp(tmpfile.data());
+      if (fd == -1)
+        continue;
+
+      if (ftruncate(fd, sz) == -1) {
+        close(fd);
+        continue;
+      }
+
+      // Unlink might fail if delete is blocked on the VFS, but currently no action is taken
+      unlink(tmpfile.data());
+
+      ret = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+      close(fd);
+      if (ret == MAP_FAILED) {
+        fd = -1;
+        ret = nullptr;
+        continue;
+      }
+
+      // Successful.  Break.
+      break;
+    }
+
+    return ret;
+  }
+
+  VmReader(size_t _sz) : sz{_sz} {
+    buffer = init(sz);
+    if (!buffer) {
+      throw std::runtime_error("Failed to initialize VmReader");
+    }
+    instance = this;
+  }
+
+
+public:
+  static VmReader *get_instance() {
+    if (instance == nullptr) {
+      try {
+        instance = new VmReader(1024 * 1024); // A megabyte?
+      } catch (std::exception &e) {
+        std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
+      }
+    }
+    return instance;
+  }
+
+  ssize_t safe_copy(pid_t pid,
+                    const struct iovec *local_iov, unsigned long liovcnt,
+                    const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags) {
+    if (liovcnt != 1 || riovcnt != 1) {
+      // Unsupported
+      return 0;
+    }
+
+    // Check to see if we need to resize the buffer
+    if (local_iov[0].iov_len > sz) {
+      void *new_buffer = init(iov.iov_len);
+      if (!new_buffer)
+        return 0;
+      munmap(buffer, sz);
+      buffer = new_buffer;
+      sz = local_iov[0].iov_len;
+    }
+
+    ssize_t ret = writev(fd, local_iov, liovcnt);
+    if (ret == -1)
+      return ret;
+
+    // Copy the data from the buffer to the remote process
+    memcpy(buffer, remote_iov[0].iov_base, remote_iov[0].iov_len);
+    return ret;
+  }
+
+  ~VmReader() {
+    munmap(buffer, sz);
+    instance = nullptr;
+  }
+};
+
+/**
+  * Initialize the safe copy operation on Linux
+  */
+bool read_process_vm_init() {
+  VmReader *_ = VmReader::get_instance();
+  return !!_;
+}
+
+size_t vmreader_safe_copy(pid_t pid,
+                       const struct iovec *local_iov, unsigned long liovcnt,
+                       const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags) {
+  auto reader = VmReader::get_instance();
+  if (!reader)
+    return 0;
+  return reader->safe_copy(pid, local_iov, liovcnt, remote_iov, riovcnt, flags);
+}
+
+/**
+ * Initialize the safe copy operation on Linux
+ *
+ * This occurs at static init
+ */
+__attribute__((constructor)) void init_safe_copy() {
+  char src[128];
+  char dst[128];
+  for (size_t i = 0; i < 128; i++) {
+    src[i] = 0x41;
+    dst[i] = 0x42;
+  }
+
+  // Check to see that process_vm_readv works, unless it's overridden
+  const char force_override_str = "ECHION_ALT_VM_READ_FORCE";
+  const std::array<std::string, 6> truthy_values = {"1", "true", "yes", "on", "enable", "enabled"};
+  const char* force_override = std::getenv(force_override_str);
+  if (!force_override || std::find(truthy_values.begin(), truthy_values.end(), force_override) == truthy_values.end()) {
+    struct iovec[2] iov = {dst, sizeof(dst)};
+    struct iovec iov_src = {src, sizeof(src)};
+    ssize_t result = process_vm_readv(getpid(), &iov_dst, 1, &iov_src, 1, 0);
+
+    // If we succeed, then use process_vm_readv
+    if (result == sizeof(src)) {
+      safe_copy = process_vm_readv;
+      return;
+    }
+  }
+
+  // Else, we have to setup the writev method
+  if (!read_process_vm_init()) {
+    std::cerr << "Failed to initialize all safe copy interfaces" << std::endl;
+    failed_safe_copy = true;
+    return;
+  }
+
+  safe_copy = vmreader_safe_copy;
+  std::cerr << "Using safe copy" << std::endl;
+  }
+}
+#endif
+
 /**
  * Copy a chunk of memory from a portion of the virtual memory of another
  * process.
@@ -47,6 +213,11 @@ typedef mach_port_t proc_ref_t;
 static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void *buf)
 {
     ssize_t result = -1;
+
+    // Early exit on zero page
+    if (reinterpret_cast<uintptr_t>(addr) < 4096) {
+        return result;
+    }
 
 #if defined PL_LINUX
     struct iovec local[1];
