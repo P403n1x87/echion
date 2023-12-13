@@ -51,6 +51,7 @@ ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct io
 class VmReader {
   void *buffer;
   size_t sz;
+  int fd{-1};
   inline static VmReader *instance{nullptr};  // Prevents having to set this in implementation
 
   void* init(size_t new_sz) {
@@ -65,16 +66,14 @@ class VmReader {
       if (fd == -1)
         continue;
 
-      if (ftruncate(fd, sz) == -1) {
-        close(fd);
+      if (ftruncate(fd, new_sz) == -1) {
         continue;
       }
 
       // Unlink might fail if delete is blocked on the VFS, but currently no action is taken
       unlink(tmpfile.data());
 
-      ret = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-      close(fd);
+      ret = mmap(NULL, new_sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
       if (ret == MAP_FAILED) {
         fd = -1;
         ret = nullptr;
@@ -112,6 +111,8 @@ public:
   ssize_t safe_copy(pid_t pid,
                     const struct iovec *local_iov, unsigned long liovcnt,
                     const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags) {
+    (void)pid;
+    (void)flags;
     if (liovcnt != 1 || riovcnt != 1) {
       // Unsupported
       return 0;
@@ -119,12 +120,15 @@ public:
 
     // Check to see if we need to resize the buffer
     if (local_iov[0].iov_len > sz) {
-      void *new_buffer = init(iov.iov_len);
-      if (!new_buffer)
+      if (ftruncate(fd, local_iov[0].iov_len) == -1) {
         return 0;
-      munmap(buffer, sz);
-      buffer = new_buffer;
-      sz = local_iov[0].iov_len;
+      } else {
+        void *tmp = mremap(buffer, sz, local_iov[0].iov_len, MREMAP_MAYMOVE);
+        if (tmp == MAP_FAILED)
+          return 0;
+        buffer = tmp; // no need to munmap
+        sz = local_iov[0].iov_len;
+      }
     }
 
     ssize_t ret = writev(fd, local_iov, liovcnt);
@@ -150,7 +154,7 @@ bool read_process_vm_init() {
   return !!_;
 }
 
-size_t vmreader_safe_copy(pid_t pid,
+ssize_t vmreader_safe_copy(pid_t pid,
                        const struct iovec *local_iov, unsigned long liovcnt,
                        const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags) {
   auto reader = VmReader::get_instance();
@@ -173,11 +177,11 @@ __attribute__((constructor)) void init_safe_copy() {
   }
 
   // Check to see that process_vm_readv works, unless it's overridden
-  const char force_override_str = "ECHION_ALT_VM_READ_FORCE";
+  const char force_override_str[] = "ECHION_ALT_VM_READ_FORCE";
   const std::array<std::string, 6> truthy_values = {"1", "true", "yes", "on", "enable", "enabled"};
   const char* force_override = std::getenv(force_override_str);
   if (!force_override || std::find(truthy_values.begin(), truthy_values.end(), force_override) == truthy_values.end()) {
-    struct iovec[2] iov = {dst, sizeof(dst)};
+    struct iovec iov_dst = {dst, sizeof(dst)};
     struct iovec iov_src = {src, sizeof(src)};
     ssize_t result = process_vm_readv(getpid(), &iov_dst, 1, &iov_src, 1, 0);
 
@@ -197,7 +201,6 @@ __attribute__((constructor)) void init_safe_copy() {
 
   safe_copy = vmreader_safe_copy;
   std::cerr << "Using safe copy" << std::endl;
-  }
 }
 #endif
 
