@@ -228,7 +228,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
     remote[0].iov_base = addr;
     remote[0].iov_len = len;
 
-    result = process_vm_readv(proc_ref, local, 1, remote, 1, 0);
+    result = safe_copy(proc_ref, local, 1, remote, 1, 0);
 
 #elif defined PL_DARWIN
     kern_return_t kr = mach_vm_read_overwrite(
