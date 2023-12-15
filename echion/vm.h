@@ -140,8 +140,11 @@ public:
     }
 
     ssize_t ret = pwritev(fd, local_iov, liovcnt, 0);
-    if (ret == -1)
+    if (ret == -1) {
+      std::cerr << "Failed to write to temporary file" << std::endl;
+      std::cerr << "Error: " << strerror(errno) << std::endl;
       return ret;
+    }
 
     // Copy the data from the buffer to the remote process
     memcpy(buffer, remote_iov[0].iov_base, remote_iov[0].iov_len);
