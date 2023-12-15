@@ -44,6 +44,10 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
+void _set_cpu(int new_cpu) {
+    cpu = new_cpu;
+}
+
 static PyObject *
 set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
 {
@@ -51,7 +55,7 @@ set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
     if (!PyArg_ParseTuple(args, "p", &new_cpu))
         return NULL;
 
-    cpu = new_cpu;
+    _set_cpu(new_cpu);
 
     Py_RETURN_NONE;
 }
@@ -60,12 +64,14 @@ set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
 static PyObject *
 set_native(PyObject *Py_UNUSED(m), PyObject *args)
 {
+#ifndef UNWIND_NATIVE_DISABLE
     int new_native;
     if (!PyArg_ParseTuple(args, "p", &new_native))
         return NULL;
 
     native = new_native;
 
+#endif
     Py_RETURN_NONE;
 }
 

@@ -126,20 +126,20 @@ public:
     }
 
     // Check to see if we need to resize the buffer
-    if (local_iov[0].iov_len > sz) {
-      if (ftruncate(fd, local_iov[0].iov_len) == -1) {
+    if (remote_iov[0].iov_len > sz) {
+      if (ftruncate(fd, remote_iov[0].iov_len) == -1) {
         return 0;
       } else {
-        void *tmp = mremap(buffer, sz, local_iov[0].iov_len, MREMAP_MAYMOVE);
+        void *tmp = mremap(buffer, sz, remote_iov[0].iov_len, MREMAP_MAYMOVE);
         if (tmp == MAP_FAILED) {
           return 0;
         }
         buffer = tmp; // no need to munmap
-        sz = local_iov[0].iov_len;
+        sz = remote_iov[0].iov_len;
       }
     }
 
-    ssize_t ret = pwritev(fd, local_iov, liovcnt, 0);
+    ssize_t ret = pwritev(fd, remote_iov, riovcnt, 0);
     if (ret == -1) {
       std::cerr << "Failed to write to temporary file" << std::endl;
       std::cerr << "Error: " << strerror(errno) << std::endl;
@@ -147,7 +147,7 @@ public:
     }
 
     // Copy the data from the buffer to the remote process
-    memcpy(buffer, remote_iov[0].iov_base, remote_iov[0].iov_len);
+    memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
     return ret;
   }
 
@@ -184,7 +184,7 @@ __attribute__((constructor)) void init_safe_copy() {
   char dst[128];
   for (size_t i = 0; i < 128; i++) {
     src[i] = 0x41;
-    dst[i] = 0x42;
+    dst[i] = ~0x42;
   }
 
   // Check to see that process_vm_readv works, unless it's overridden

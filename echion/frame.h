@@ -17,9 +17,11 @@
 #include <exception>
 #include <functional>
 
+#ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif
 
 #include <echion/cache.h>
 #include <echion/render.h>
@@ -117,8 +119,10 @@ public:
 
     Frame(PyCodeObject *, int);
 
+#ifndef UNWIND_NATIVE_DISABLE
     Frame(unw_cursor_t &, unw_word_t);
     static Frame &get(unw_cursor_t &);
+#endif
 
 private:
     void infer_location(PyCodeObject *, int);
@@ -303,6 +307,7 @@ Frame::Frame(PyCodeObject *code, int lasti)
     infer_location(code, lasti);
 }
 
+#ifndef UNWIND_NATIVE_DISABLE
 Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
 {
     try
@@ -315,6 +320,7 @@ Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
         throw Error();
     }
 }
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -361,6 +367,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
 }
 
+#ifndef UNWIND_NATIVE_DISABLE
 Frame &Frame::get(unw_cursor_t &cursor)
 {
     unw_word_t pc;
@@ -388,6 +395,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
         }
     }
 }
+#endif
 
 Frame &Frame::get(StringTable::Key name)
 {

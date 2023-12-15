@@ -10,8 +10,10 @@
 #include <deque>
 #include <unordered_set>
 
+#ifndef UNWIND_NATIVE_DISABLE
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif
 
 #include <echion/frame.h>
 
@@ -43,6 +45,7 @@ static FrameStack interleaved_stack;
 // ----------------------------------------------------------------------------
 void unwind_native_stack()
 {
+#ifndef UNWIND_NATIVE_DISABLE
     unw_cursor_t cursor;
     unw_context_t context;
 
@@ -62,6 +65,7 @@ void unwind_native_stack()
             break;
         }
     }
+#endif
 }
 
 // ----------------------------------------------------------------------------
