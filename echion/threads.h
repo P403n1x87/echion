@@ -118,19 +118,19 @@ bool ThreadInfo::is_running()
 
     int fd = open(file_name_stream.str().c_str(), O_RDONLY);
     if (fd == -1)
-        return -1;
+        return false;
 
     if (read(fd, buffer, 2047) == 0)
     {
         close(fd);
-        return -1;
+        return false;
     }
 
     close(fd);
 
     char *p = strchr(buffer, ')');
     if (p == NULL)
-        return -1;
+        return false;
 
     p += 2;
     if (*p == ' ')
