@@ -318,6 +318,9 @@ void ThreadInfo::unwind_tasks()
 // ----------------------------------------------------------------------------
 void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
+
+
+    Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
@@ -328,9 +331,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             return;
 
         delta = cpu_time - previous_cpu_time;
+        Renderer::get().render_cpu_time(delta);
     }
-
-    Renderer::get().render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
     unwind(tstate);
 
     // Asyncio tasks
@@ -349,7 +351,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             python_stack.render();
 
         // Print the metric
-        Renderer::get().render_cpu_time(delta);
     }
     else
     {
