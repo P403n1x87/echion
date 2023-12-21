@@ -91,7 +91,7 @@ public:
           name_str = missing_name;
         }
 
-        Renderer::get().render_python_frame(filename_str, name_str, location.line);
+        Renderer::get().render_python_frame(name_str, filename_str, location.line);
     }
 
     void render_where()
@@ -100,9 +100,9 @@ public:
         auto filename_str = string_table.lookup(filename);
         auto line = location.line;
         if (filename_str.rfind("native@", 0) == 0)
-            Renderer::get().render_python_frame(filename_str, name_str, line);
+            Renderer::get().render_python_frame(name_str, filename_str, line);
         else
-            Renderer::get().render_native_frame(filename_str, name_str, line);
+            Renderer::get().render_native_frame(name_str, filename_str, line);
     }
 
     Frame(StringTable::Key name) : name(name){};
