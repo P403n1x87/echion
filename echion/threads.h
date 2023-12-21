@@ -326,12 +326,13 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         microsecond_t previous_cpu_time = cpu_time;
         update_cpu_time();
 
-        if (!is_running())
-            // If the thread is not running, then we skip it.
+        // If this thread isn't running, we observe it, but set CPU time to zero
+        if (is_running()) {
+            delta = cpu_time - previous_cpu_time;
+            Renderer::get().render_cpu_time(delta);
             return;
+        }
 
-        delta = cpu_time - previous_cpu_time;
-        Renderer::get().render_cpu_time(delta);
     }
     unwind(tstate);
 
