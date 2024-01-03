@@ -358,7 +358,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render();
 
-            Renderer::get().render_cpu_time(delta);
+            // Hide for now, since we don't have good task rendering
+            //Renderer::get().render_cpu_time(delta);
         }
 
         current_tasks.clear();
