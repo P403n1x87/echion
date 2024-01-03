@@ -91,28 +91,34 @@ private:
 
 #if defined PL_LINUX
 static microsecond_t extract_cpu_time_us(const std::string& line) {
-    static long long clock_ticks_per_second = sysconf(_SC_CLK_TCK);
+    static double clock_ticks_per_second = (double)sysconf(_SC_CLK_TCK);
     std::istringstream iss(line);
     std::string token;
+    int token_count = 0;
+    long long utime = 0, stime = 0;
 
-    // Skip to the 14th token (utime)
-    for (int i = 0; i < 13; ++i) {
-        if (!(iss >> token)) {
-            return -1; // Error handling
+    while (iss >> token) {
+        ++token_count;
+
+        if (token_count == 14) { // utime is the 14th field
+            utime = std::stoll(token);
+        } else if (token_count == 15) { // stime is the 15th field
+            stime = std::stoll(token);
+            break; // No need to read further
         }
     }
 
-    // Read utime and stime
-    long long utime, stime;
-    if (!(iss >> utime >> stime)) {
-        return -1; // Error handling
+    if (token_count < 15) {
+        return -1; // Error: did not find enough tokens
     }
 
     // Convert clock ticks to microseconds
-    microsecond_t user_time_microseconds = (utime * 1000000LL) / clock_ticks_per_second;
-    microsecond_t system_time_microseconds = (stime * 1000000LL) / clock_ticks_per_second;
+    std::cout << "ticks: " << utime << " " << stime << std::endl;
+    long long ticks = utime + stime;
+    double seconds = ticks / clock_ticks_per_second;
+    microsecond_t microseconds = static_cast<microsecond_t>(seconds * 1e6);
 
-    return user_time_microseconds + system_time_microseconds;
+    return microseconds;
 }
 #endif
 
@@ -354,10 +360,10 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         update_cpu_time();
 
         // If this thread isn't running, we observe it, but set CPU time to zero
-        delta = 0;
+        auto cpu_time_delta = 0;
         if (is_running())
-            delta = cpu_time - previous_cpu_time;
-        Renderer::get().render_cpu_time(delta);
+            cpu_time_delta = cpu_time - previous_cpu_time;
+        Renderer::get().render_cpu_time(cpu_time_delta);
 
     }
     unwind(tstate);
@@ -376,8 +382,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         }
         else
             python_stack.render();
-
-        // Print the metric
     }
     else
     {
@@ -395,7 +399,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render();
 
-            Renderer::get().render_cpu_time(delta);
+            // We don't render the task-CPU time for now, since we don't have a clear way of rendering task context
+            //Renderer::get().render_cpu_time(delta);
         }
 
         current_tasks.clear();
