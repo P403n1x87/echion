@@ -13,6 +13,7 @@
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined PL_LINUX
 #include <time.h>
@@ -88,14 +89,48 @@ private:
     void unwind_tasks();
 };
 
+#if defined PL_LINUX
+static microsecond_t extract_cpu_time_us(const std::string& line) {
+    static long long clock_ticks_per_second = sysconf(_SC_CLK_TCK);
+    std::istringstream iss(line);
+    std::string token;
+
+    // Skip to the 14th token (utime)
+    for (int i = 0; i < 13; ++i) {
+        if (!(iss >> token)) {
+            return -1; // Error handling
+        }
+    }
+
+    // Read utime and stime
+    long long utime, stime;
+    if (!(iss >> utime >> stime)) {
+        return -1; // Error handling
+    }
+
+    // Convert clock ticks to microseconds
+    microsecond_t user_time_microseconds = (utime * 1000000LL) / clock_ticks_per_second;
+    microsecond_t system_time_microseconds = (stime * 1000000LL) / clock_ticks_per_second;
+
+    return user_time_microseconds + system_time_microseconds;
+}
+#endif
+
 void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
-    struct timespec ts;
-    if (clock_gettime(cpu_clock_id, &ts))
+    std::ifstream file("/proc/self/task/" + std::to_string(native_id) + "/stat");
+    if (!file)
         return;
 
-    this->cpu_time = TS_TO_MICROSECOND(ts);
+    std::string line;
+    if (!std::getline(file, line))
+        return;
+
+    // Errors preserve old time, so deltas are 0
+    auto new_cpu_time = extract_cpu_time_us(line);
+    if (new_cpu_time != static_cast<microsecond_t>(-1))
+        this->cpu_time = new_cpu_time;
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
@@ -111,32 +146,24 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048] = "";
-
     std::ostringstream file_name_stream;
     file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
 
-    int fd = open(file_name_stream.str().c_str(), O_RDONLY);
-    if (fd == -1)
+    std::ifstream file(file_name_stream.str());
+    if (!file)
         return false;
 
-    if (read(fd, buffer, 2047) == 0)
-    {
-        close(fd);
-        return false;
-    }
+    std::string line;
+    std::getline(file, line);
 
-    close(fd);
-
-    char *p = strchr(buffer, ')');
-    if (p == NULL)
+    if (line.empty())
         return false;
 
-    p += 2;
-    if (*p == ' ')
-        p++;
+    auto p = line.find(')');
+    if (p == std::string::npos)
+        return false;
 
-    return (*p == 'R');
+    return line.size() > p + 2 && line[p + 2] == 'R';
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
@@ -148,7 +175,7 @@ bool ThreadInfo::is_running()
         &count);
 
     if (kr != KERN_SUCCESS)
-        return -1;
+        return false;
 
     return info.run_state == TH_STATE_RUNNING;
 
