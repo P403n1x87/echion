@@ -13,7 +13,6 @@
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
-#include <unordered_set>
 
 #if defined PL_LINUX
 #include <time.h>
@@ -89,54 +88,14 @@ private:
     void unwind_tasks();
 };
 
-#if defined PL_LINUX
-static microsecond_t extract_cpu_time_us(const std::string& line) {
-    static double clock_ticks_per_second = (double)sysconf(_SC_CLK_TCK);
-    std::istringstream iss(line);
-    std::string token;
-    int token_count = 0;
-    long long utime = 0, stime = 0;
-
-    while (iss >> token) {
-        ++token_count;
-
-        if (token_count == 14) { // utime is the 14th field
-            utime = std::stoll(token);
-        } else if (token_count == 15) { // stime is the 15th field
-            stime = std::stoll(token);
-            break; // No need to read further
-        }
-    }
-
-    if (token_count < 15) {
-        return -1; // Error: did not find enough tokens
-    }
-
-    // Convert clock ticks to microseconds
-    std::cout << "ticks: " << utime << " " << stime << std::endl;
-    long long ticks = utime + stime;
-    double seconds = ticks / clock_ticks_per_second;
-    microsecond_t microseconds = static_cast<microsecond_t>(seconds * 1e6);
-
-    return microseconds;
-}
-#endif
-
 void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
-    std::ifstream file("/proc/self/task/" + std::to_string(native_id) + "/stat");
-    if (!file)
+    struct timespec ts;
+    if (clock_gettime(cpu_clock_id, &ts))
         return;
 
-    std::string line;
-    if (!std::getline(file, line))
-        return;
-
-    // Errors preserve old time, so deltas are 0
-    auto new_cpu_time = extract_cpu_time_us(line);
-    if (new_cpu_time != static_cast<microsecond_t>(-1))
-        this->cpu_time = new_cpu_time;
+    this->cpu_time = TS_TO_MICROSECOND(ts);
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
@@ -399,8 +358,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render();
 
-            // We don't render the task-CPU time for now, since we don't have a clear way of rendering task context
-            //Renderer::get().render_cpu_time(delta);
+            Renderer::get().render_cpu_time(delta);
         }
 
         current_tasks.clear();
