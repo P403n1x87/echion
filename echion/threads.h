@@ -86,8 +86,7 @@ public:
 
 private:
 #if defined PL_LINUX
-    std::ostringstream file_name_stream;
-    std::ifstream file;
+    std::array<char, 1024> buffer; // Buffer for reading file contents
 #endif
     void unwind_tasks();
 };
@@ -115,26 +114,26 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    file_name_stream.str("");
-    file_name_stream.clear();
-    file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
+    static char file_path[128];
+    snprintf(file_path, sizeof(file_path), "/proc/self/task/%ld/stat", this->native_id);
 
-    file.open(file_name_stream.str());
-    if (!file)
-        return false;
+    // Open the file
+    int fd = open(file_path, O_RDONLY);
+    if (fd == -1) {
+        return false; // Failed to open file
+    }
 
-    std::string line;
-    std::getline(file, line);
-    file.close();
+    // Read from the file
+    ssize_t bytes_read = read(fd, buffer.data(), buffer.size() - 1);
+    close(fd);
 
-    if (line.empty())
-        return false;
+    if (bytes_read <= 0) {
+        return false; // Failed to read or empty file
+    }
 
-    auto p = line.find(')');
-    if (p == std::string::npos)
-        return false;
-
-    return line.size() > p + 2 && line[p + 2] == 'R';
+    buffer[bytes_read] = '\0';
+    const char* p = strchr(buffer.data(), ')');
+    return p != nullptr && strlen(p) > 2 && p[2] == 'R';
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
