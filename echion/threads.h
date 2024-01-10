@@ -85,6 +85,10 @@ public:
     };
 
 private:
+#if defined PL_LINUX
+    std::ostringstream file_name_stream;
+    std::ifstream file;
+#endif
     void unwind_tasks();
 };
 
@@ -111,15 +115,17 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    std::ostringstream file_name_stream;
+    file_name_stream.str("");
+    file_name_stream.clear();
     file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
 
-    std::ifstream file(file_name_stream.str());
+    file.open(file_name_stream.str());
     if (!file)
         return false;
 
     std::string line;
     std::getline(file, line);
+    file.close();
 
     if (line.empty())
         return false;
