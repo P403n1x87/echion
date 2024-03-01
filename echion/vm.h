@@ -141,8 +141,6 @@ public:
 
     ssize_t ret = pwritev(fd, remote_iov, riovcnt, 0);
     if (ret == -1) {
-      std::cerr << "Failed to write to temporary file" << std::endl;
-      std::cerr << "Error: " << strerror(errno) << std::endl;
       return ret;
     }
 
