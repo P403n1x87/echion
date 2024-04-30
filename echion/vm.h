@@ -261,7 +261,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
     if (len != result) {
       count++;
       if (count % mod == 0) {
-        std::cerr << "Failed to read memory " << count << " times" << std::endl;
+        // TODO we used to print an error here; can we do better?
         mod *= 10;
       }
     }
