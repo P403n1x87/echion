@@ -318,6 +318,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
 
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
+    Renderer::get().render_pid_tid(getpid(), iid);
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
@@ -335,9 +336,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     // Asyncio tasks
     if (current_tasks.empty())
     {
-        // Print the PID and thread name
-        Renderer::get().render_message("P" + std::to_string(getpid()) + ";T" + std::to_string(iid) + ":" + name);
-
         // Print the stack
         if (native)
         {
@@ -351,7 +349,12 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     {
         for (auto &task_stack : current_tasks)
         {
-            Renderer::get().render_message("P" + std::to_string(getpid()) + ";T" + std::to_string(iid) + ":" + name);
+            try {
+                auto &task_name = string_table.lookup(task_stack->front().get().name);
+                Renderer::get().render_task_begin(task_name);
+            } catch (StringTable::Error &) {
+                Renderer::get().render_task_begin("[Unknown]");
+            }
 
             if (native)
             {

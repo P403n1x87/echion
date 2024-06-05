@@ -15,6 +15,8 @@ public:
 
     virtual void render_message(std::string_view msg) = 0;
     virtual void render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id) = 0;
+    virtual void render_task_begin(std::string_view name) = 0;
+    virtual void render_pid_tid(uintptr_t pid, uintptr_t tid) = 0;
     virtual void render_stack_begin() = 0;
     virtual void render_python_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
     virtual void render_native_frame(std::string_view name, std::string_view file, uint64_t line) = 0;
@@ -64,6 +66,20 @@ public:
         (void)thread_id;
         (void)native_id;;
         *output << "    🧵 " << name << ":" << std::endl;
+    }
+
+    void
+    render_task_begin(std::string_view name)
+    override
+    {
+        *output << "  📝 " << name << ":" << std::endl;
+    }
+
+    void
+    render_pid_tid(uintptr_t pid, uintptr_t tid)
+    override
+    {
+        *output << "  🆔 " << pid << ":" << tid << std::endl;
     }
 
     void
@@ -132,6 +148,23 @@ class NullRenderer : public RendererInterface {
         (void)cpu_time;
         (void)thread_id;
         (void)native_id;
+        return;
+    }
+
+    void
+    render_task_begin(std::string_view name)
+    override
+    {
+        (void)name;
+        return;
+    }
+
+    void
+    render_pid_tid(uintptr_t pid, uintptr_t tid)
+    override
+    {
+        (void)pid;
+        (void)tid;
         return;
     }
 
@@ -247,6 +280,18 @@ public:
     render_thread_begin(PyThreadState *tstate, std::string_view name, microsecond_t cpu_time, uintptr_t thread_id, unsigned long native_id)
     {
         getActiveRenderer()->render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
+    }
+
+    void
+    render_task_begin(std::string_view name)
+    {
+        getActiveRenderer()->render_task_begin(name);
+    }
+
+    void
+    render_pid_tid(uintptr_t pid, uintptr_t tid)
+    {
+        getActiveRenderer()->render_pid_tid(pid, tid);
     }
 
     void
