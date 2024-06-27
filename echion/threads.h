@@ -318,17 +318,14 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
 
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
-    Renderer::get().render_pid_tid(getpid(), iid);
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
         update_cpu_time();
 
         // If this thread isn't running, we observe it, but set CPU time to zero
-        auto cpu_time_delta = 0;
         if (is_running())
-            cpu_time_delta = cpu_time - previous_cpu_time;
-        Renderer::get().render_cpu_time(cpu_time_delta);
+            Renderer::get().render_cpu_time(cpu_time - previous_cpu_time);
 
     }
     unwind(tstate);

@@ -145,7 +145,7 @@ public:
             {
 #if PY_VERSION_HEX >= 0x030c0000
                 // The task name might hold a PyLong for deferred task name formatting.
-              std::string str = "Task-";
+                std::string str = "Task-";
                 try
                 {
                     str += std::to_string(pylong_to_llong(s));
