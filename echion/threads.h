@@ -7,6 +7,7 @@
 #include <Python.h>
 #define Py_BUILD_CORE
 
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <functional>
