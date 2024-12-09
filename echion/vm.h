@@ -11,6 +11,7 @@
 #include <cstdlib>
 
 #if defined PL_LINUX
+#include <algorithm>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <unistd.h>
