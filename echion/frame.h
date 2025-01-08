@@ -354,6 +354,21 @@ private:
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
+
+    // ------------------------------------------------------------------------
+    static inline Key key(PyObject *frame)
+    {
+#if PY_VERSION_HEX >= 0x030b0000
+        const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        const int lasti = _PyInterpreterFrame_LASTI(iframe);
+        PyCodeObject *code = iframe->f_code;
+#else
+        const PyFrameObject *py_frame = (PyFrameObject *)frame;
+        const int lasti = py_frame->f_lasti;
+        PyCodeObject *code = py_frame->f_code;
+#endif
+        return key(code, lasti);
+    }
 };
 
 // ----------------------------------------------------------------------------
@@ -419,7 +434,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     return frame;
 }
 
-// ------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 {
     PyCodeObject code;
@@ -454,7 +469,32 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
     }
 }
 
-// ------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+Frame &Frame::get(PyObject *frame)
+{
+    auto frame_key = Frame::key(frame);
+
+    try
+    {
+        return frame_cache->lookup(frame_key);
+    }
+    catch (LRUCache<uintptr_t, Frame>::LookupError &)
+    {
+        auto new_frame = std::make_unique<Frame>(frame);
+        new_frame->cache_key = frame_key;
+        auto &f = *new_frame;
+        mojo.frame(
+            frame_key,
+            new_frame->filename,
+            new_frame->name,
+            new_frame->location.line, new_frame->location.line_end,
+            new_frame->location.column, new_frame->location.column_end);
+        frame_cache->store(frame_key, std::move(new_frame));
+        return f;
+    }
+}
+
+// ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
 Frame &Frame::get(unw_cursor_t &cursor)
 {
@@ -492,7 +532,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
 }
 #endif
 
-// ------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 Frame &Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = (uintptr_t)name;
