@@ -17,6 +17,9 @@ static unsigned int interval = 1000;
 // CPU Time mode
 static int cpu = 0;
 
+// Memory events
+static int memory = 0;
+
 // Native stack sampling
 static int native = 0;
 
@@ -56,6 +59,19 @@ set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
         return NULL;
 
     _set_cpu(new_cpu);
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+set_memory(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    int new_memory;
+    if (!PyArg_ParseTuple(args, "p", &new_memory))
+        return NULL;
+
+    memory = new_memory;
 
     Py_RETURN_NONE;
 }

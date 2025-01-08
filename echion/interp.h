@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
+#pragma once
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 

@@ -28,6 +28,8 @@
 
 #include <echion/config.h>
 #include <echion/interp.h>
+#include <echion/memory.h>
+#include <echion/mojo.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
@@ -104,43 +106,21 @@ _start()
 {
     init_frame_cache(MAX_FRAMES * (1 + native));
 
+    try
+    {
+        mojo.open();
+    }
+    catch (MojoWriter::Error &)
+    {
+        return;
+    }
+
     install_signals();
 
 #if defined PL_DARWIN
     // Get the wall time clock resource.
     host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
 #endif
-}
-
-// ----------------------------------------------------------------------------
-static inline void
-_stop()
-{
-    // Clean up the thread info map. When not running async, we need to guard
-    // the map lock because we are not in control of the sampling thread.
-    {
-        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
-
-        thread_info_map.clear();
-        string_table.clear();
-    }
-
-#if defined PL_DARWIN
-    mach_port_deallocate(mach_task_self(), cclock);
-#endif
-
-    restore_signals();
-
-    reset_frame_cache();
-}
-
-// ----------------------------------------------------------------------------
-static inline void
-_sampler()
-{
-    // This function can run without the GIL on the basis that these assumptions
-    // hold:
-    // 1. The interpreter state object lives as long as the process itself.
 
     if (where)
     {
@@ -158,31 +138,94 @@ _sampler()
 
     setup_where();
 
-    last_time = gettime();
+    mojo.header();
 
-    if (!Renderer::get().set_output(std::getenv("ECHION_OUTPUT")))
+    if (memory)
     {
-        std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
-        return;
+        mojo.metadata("mode", "memory");
+    }
+    else
+    {
+        mojo.metadata("mode", (cpu ? "cpu" : "wall"));
+    }
+    mojo.metadata("interval", std::to_string(interval));
+    mojo.metadata("sampler", "echion");
+
+    // DEV: Workaround for the austin-python library: we send an empty sample
+    // to set the PID. We also map the key value 0 to the empty string, to
+    // support task name frames.
+    mojo.stack(pid, 0, "MainThread");
+    mojo.string(0, "");
+    mojo.string(1, "<invalid>");
+    mojo.string(2, "<unknown>");
+    mojo.metric_time(0);
+
+    if (memory)
+        setup_memory();
+}
+
+// ----------------------------------------------------------------------------
+static inline void
+_stop()
+{
+    if (memory)
+        teardown_memory();
+
+    // Clean up the thread info map. When not running async, we need to guard
+    // the map lock because we are not in control of the sampling thread.
+    {
+        const std::lock_guard<std::mutex> guard(thread_info_map_lock);
+
+        thread_info_map.clear();
+        string_table.clear();
     }
 
-    Renderer::get().render_message("# mode: " + std::string(cpu ? "cpu" : "wall"));
-    Renderer::get().render_message("# interval: " + std::to_string(interval));
+    teardown_where();
+
+#if defined PL_DARWIN
+    mach_port_deallocate(mach_task_self(), cclock);
+#endif
+
+    restore_signals();
+
+    mojo.close();
+
+    reset_frame_cache();
+}
+
+// ----------------------------------------------------------------------------
+static inline void
+_sampler()
+{
+    // This function can run without the GIL on the basis that these assumptions
+    // hold:
+    // 1. The interpreter state object lives as long as the process itself.
+
+    last_time = gettime();
 
     while (running)
     {
         microsecond_t now = gettime();
         microsecond_t end_time = now + interval;
-        microsecond_t wall_time = now - last_time;
 
-        for_each_interp(
-            [=](PyInterpreterState *interp) -> void
-            {
-                for_each_thread(
-                    interp,
-                    [=](PyThreadState *tstate, ThreadInfo &thread)
-                    { thread.sample(interp->id, tstate, wall_time); });
-            });
+        if (memory)
+        {
+            if (rss_tracker.check())
+                stack_stats.flush();
+        }
+        else
+        {
+            microsecond_t wall_time = now - last_time;
+
+            for_each_interp(
+                [=](PyInterpreterState *interp) -> void
+                {
+                    for_each_thread(
+                        interp,
+                        [=](PyThreadState *tstate, ThreadInfo &thread)
+                        { thread.sample(interp->id, tstate, wall_time); });
+                });
+        }
 
         while (now < end_time && running) {
             auto sleep_duration = std::chrono::microseconds(end_time - now);
@@ -192,8 +235,6 @@ _sampler()
 
         last_time = now;
     }
-
-    teardown_where();
 }
 
 static void
@@ -387,6 +428,7 @@ static PyMethodDef echion_core_methods[] = {
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
+    {"set_memory", set_memory, METH_VARARGS, "Set whether to sample memory usage"},
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},

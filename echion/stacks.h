@@ -8,6 +8,8 @@
 #include <Python.h>
 
 #include <deque>
+#include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 
 #ifndef UNWIND_NATIVE_DISABLE
@@ -16,12 +18,28 @@
 #endif
 
 #include <echion/frame.h>
+#include <echion/mojo.h>
 
 #define MAX_FRAMES 2048
 
 class FrameStack : public std::deque<Frame::Ref>
 {
 public:
+    using Ptr = std::unique_ptr<FrameStack>;
+    using Key = Frame::Key;
+
+    // ------------------------------------------------------------------------
+    Key key()
+    {
+        Key h = 0;
+
+        for (auto it = this->begin(); it != this->end(); ++it)
+            h = rotl(h) ^ (*it).get().cache_key;
+
+        return h;
+    }
+
+    // ------------------------------------------------------------------------
     void render()
     {
         Renderer::get().render_stack_begin();
@@ -33,10 +51,20 @@ public:
                 continue;
 #endif
             (*it).get().render();
+            mojo.frame_ref((*it).get().cache_key);
         }
         Renderer::get().render_stack_end();
     }
+
+private:
+    // ------------------------------------------------------------------------
+    static inline Frame::Key rotl(Key key)
+    {
+        return (key << 1) | (key >> (CHAR_BIT * sizeof(key) - 1));
+    }
 };
+
+// ----------------------------------------------------------------------------
 
 static FrameStack python_stack;
 static FrameStack native_stack;
@@ -102,11 +130,39 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 }
 
 // ----------------------------------------------------------------------------
+static size_t
+unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
+{
+    std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
+    int count = 0;
+
+    PyObject *current_frame = frame;
+    while (current_frame != NULL && stack.size() < MAX_FRAMES)
+    {
+
+        if (seen_frames.find(current_frame) != seen_frames.end())
+            break;
+
+        count++;
+
+        seen_frames.insert(current_frame);
+
+        stack.push_back(Frame::get(current_frame));
+
+#if PY_VERSION_HEX >= 0x030b0000
+        current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
+#else
+        current_frame = (PyObject *)((PyFrameObject *)current_frame)->f_back;
+#endif
+    }
+
+    return count;
+}
+
+// ----------------------------------------------------------------------------
 static void
 unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
-    std::unordered_set<void *> seen_frames; // Used to detect cycles in the stack
-
     stack.clear();
 
 #if PY_VERSION_HEX >= 0x030b0000
@@ -121,6 +177,20 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
     PyObject *frame_addr = (PyObject *)tstate->frame;
 #endif
     unwind_frame(frame_addr, stack);
+}
+
+// ----------------------------------------------------------------------------
+static void
+unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
+{
+    stack.clear();
+
+#if PY_VERSION_HEX >= 0x030b0000
+    PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
+#else // Python < 3.11
+    PyObject *frame_addr = (PyObject *)tstate->frame;
+#endif
+    unwind_frame_unsafe(frame_addr, stack);
 }
 
 // ----------------------------------------------------------------------------
@@ -192,3 +262,56 @@ interleave_stacks()
 {
     interleave_stacks(python_stack);
 }
+
+// ----------------------------------------------------------------------------
+// This table is used to store entire stacks and index them by key. This is
+// used when profiling memory events to account for deallocations.
+class StackTable
+{
+public:
+    // ------------------------------------------------------------------------
+    FrameStack::Key inline store(FrameStack::Ptr stack)
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+
+        auto stack_key = stack->key();
+
+        auto stack_entry = table.find(stack_key);
+        if (stack_entry == table.end())
+        {
+            table.emplace(stack_key, std::move(stack));
+        }
+        else
+        {
+            // TODO: Check for collisions.
+        }
+
+        return stack_key;
+    }
+
+    // ------------------------------------------------------------------------
+    FrameStack &retrieve(FrameStack::Key stack_key)
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+
+        return *table.find(stack_key)->second;
+    }
+
+    // ------------------------------------------------------------------------
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+
+        table.clear();
+    }
+
+private:
+    std::unordered_map<FrameStack::Key, std::unique_ptr<FrameStack>> table;
+    std::mutex lock;
+};
+
+// ----------------------------------------------------------------------------
+// We make this a reference to a heap-allocated object so that we can avoid
+// the destruction on exit. We are in charge of cleaning up the object. Note
+// that the object will leak, but this is not a problem.
+static auto &stack_table = *(new StackTable());

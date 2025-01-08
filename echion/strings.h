@@ -140,7 +140,6 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             try
             {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -158,11 +157,34 @@ public:
                 std::string str = pyunicode_to_utf8(s);
 #endif
                 this->emplace(k, str);
+                mojo.string(k, str);
             }
             catch (StringError &)
             {
                 throw Error();
             }
+        }
+
+        return k;
+    };
+
+    // Python string object
+    inline Key key_unsafe(PyObject *s)
+    {
+        auto k = (Key)s;
+
+        if (this->find(k) == this->end())
+        {
+#if PY_VERSION_HEX >= 0x030c0000
+            // The task name might hold a PyLong for deferred task name formatting.
+            auto str = (PyLong_CheckExact(s))
+                           ? "Task-" + std::to_string(PyLong_AsLong(s))
+                           : std::string(PyUnicode_AsUTF8(s));
+#else
+            auto str = std::string(PyUnicode_AsUTF8(s));
+#endif
+            this->emplace(k, str);
+            mojo.string(k, str);
         }
 
         return k;
@@ -176,12 +198,12 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             try
             {
-                auto s = std::string(32, '\0');
-                std::snprintf((char *)s.c_str(), 32, "native@%p", (void *)k);
-                this->emplace(k, s);
+                char buffer[32] = {0};
+                std::snprintf(buffer, 32, "native@%p", (void *)k);
+                this->emplace(k, buffer);
+                mojo.string(k, buffer);
             }
             catch (StringError &)
             {
@@ -203,7 +225,6 @@ public:
 
         if (this->find(k) == this->end())
         {
-            // TODO: Emit MOJO string signal
             unw_word_t offset; // Ignored. All the information is in the PC anyway.
             char sym[256];
             if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
@@ -222,6 +243,7 @@ public:
             }
 
             this->emplace(k, name);
+            mojo.string(k, name);
 
             if (demangled)
                 std::free(demangled);

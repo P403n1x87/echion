@@ -19,6 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
 
 requires-python = ">=3.8"
@@ -41,7 +42,7 @@ template = "tests"
 dependencies = [
   "pytest>=5.4.2",
   "pytest-cov>=2.8.1",
-  "austin-python",
+  "austin-python~=1.7",
   "bytecode",
 ]
 

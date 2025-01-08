@@ -68,6 +68,7 @@ public:
             (*it).get().render_where();
     }
 
+    // ------------------------------------------------------------------------
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
         : thread_id(thread_id), native_id(native_id), name(name)
     {
@@ -188,6 +189,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
     {
         unwind_python_stack(tstate);
         if (asyncio_loop)
+        {
             try
             {
                 unwind_tasks();
@@ -196,6 +198,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
             {
                 // We failed to unwind tasks
             }
+        }
     }
 }
 
@@ -334,6 +337,9 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     // Asyncio tasks
     if (current_tasks.empty())
     {
+        // Print the PID and thread name
+        mojo.stack(pid, iid, name);
+
         // Print the stack
         if (native)
         {
@@ -342,6 +348,9 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         }
         else
             python_stack.render();
+
+        // Print the metric
+        mojo.metric_time(delta);
     }
     else
     {
@@ -353,6 +362,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             } catch (StringTable::Error &) {
                 Renderer::get().render_task_begin("[Unknown]");
             }
+            mojo.stack(pid, iid, name);
 
             if (native)
             {
@@ -366,6 +376,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
             // Hide for now, since we don't have good task rendering
             //Renderer::get().render_cpu_time(delta);
+            mojo.metric_time(delta);
         }
 
         current_tasks.clear();
