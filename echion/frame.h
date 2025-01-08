@@ -164,6 +164,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
+    #ifndef UNWIND_NATIVE_DISABLE
     Frame(unw_cursor_t &cursor, unw_word_t pc)
     {
         try
@@ -176,6 +177,7 @@ public:
             throw Error();
         }
     }
+    #endif
 
     // ------------------------------------------------------------------------
     void render()
@@ -205,7 +207,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void render_where(std::ostream &stream)
+    void render_where()
     {
         auto name_str = string_table.lookup(name);
         auto filename_str = string_table.lookup(filename);
@@ -352,43 +354,7 @@ private:
     {
         return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
     }
-
-    // ------------------------------------------------------------------------
-    static inline Key key(PyObject *frame)
-    {
-#if PY_VERSION_HEX >= 0x030b0000
-        const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
-        const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject *code = iframe->f_code;
-#else
-        const PyFrameObject *py_frame = (PyFrameObject *)frame;
-        const int lasti = py_frame->f_lasti;
-        PyCodeObject *code = py_frame->f_code;
-#endif
-        return key(code, lasti);
-    }
-    catch (StringTable::Error &)
-    {
-        throw Error();
-    }
-
-    infer_location(code, lasti);
-}
-
-#ifndef UNWIND_NATIVE_DISABLE
-Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
-{
-    try
-    {
-        filename = string_table.key(pc);
-        name = string_table.key(cursor);
-    }
-    catch (StringTable::Error &)
-    {
-        throw Error();
-    }
-}
-#endif
+};
 
 // ----------------------------------------------------------------------------
 
@@ -430,6 +396,12 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
         {
             auto new_frame = std::make_unique<Frame>(&code, lasti);
             auto &f = *new_frame;
+            mojo.frame(
+                frame_key,
+                new_frame->filename,
+                new_frame->name,
+                new_frame->location.line, new_frame->location.line_end,
+                new_frame->location.column, new_frame->location.column_end);
             frame_cache->store(frame_key, std::move(new_frame));
             return f;
         }
@@ -459,6 +431,12 @@ Frame &Frame::get(unw_cursor_t &cursor)
         {
             auto frame = std::make_unique<Frame>(cursor, pc);
             auto &f = *frame;
+            mojo.frame(
+                frame_key,
+                frame->filename,
+                frame->name,
+                frame->location.line, frame->location.line_end,
+                frame->location.column, frame->location.column_end);
             frame_cache->store(frame_key, std::move(frame));
             return f;
         }
@@ -481,6 +459,12 @@ Frame &Frame::get(StringTable::Key name)
     {
         auto frame = std::make_unique<Frame>(name);
         auto &f = *frame;
+        mojo.frame(
+            frame_key,
+            frame->filename,
+            frame->name,
+            frame->location.line, frame->location.line_end,
+            frame->location.column, frame->location.column_end);
         frame_cache->store(frame_key, std::move(frame));
         return f;
     }
@@ -524,125 +508,4 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 #endif
 
     return frame;
-}
-
-// ----------------------------------------------------------------------------
-Frame &Frame::get(PyCodeObject *code_addr, int lasti)
-{
-    PyCodeObject code;
-    if (copy_type(code_addr, code))
-        return INVALID_FRAME;
-
-    auto frame_key = Frame::key(code_addr, lasti);
-
-    try
-    {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        try
-        {
-            auto new_frame = std::make_unique<Frame>(&code, lasti);
-            new_frame->cache_key = frame_key;
-            auto &f = *new_frame;
-            mojo.frame(
-                frame_key,
-                new_frame->filename,
-                new_frame->name,
-                new_frame->location.line, new_frame->location.line_end,
-                new_frame->location.column, new_frame->location.column_end);
-            frame_cache->store(frame_key, std::move(new_frame));
-            return f;
-        }
-        catch (Frame::Error &)
-        {
-            return INVALID_FRAME;
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-Frame &Frame::get(PyObject *frame)
-{
-    auto frame_key = Frame::key(frame);
-
-    try
-    {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        auto new_frame = std::make_unique<Frame>(frame);
-        new_frame->cache_key = frame_key;
-        auto &f = *new_frame;
-        mojo.frame(
-            frame_key,
-            new_frame->filename,
-            new_frame->name,
-            new_frame->location.line, new_frame->location.line_end,
-            new_frame->location.column, new_frame->location.column_end);
-        frame_cache->store(frame_key, std::move(new_frame));
-        return f;
-    }
-}
-
-// ----------------------------------------------------------------------------
-Frame &Frame::get(unw_cursor_t &cursor)
-{
-    unw_word_t pc;
-    unw_get_reg(&cursor, UNW_REG_IP, &pc);
-    if (pc == 0)
-        throw Error();
-
-    uintptr_t frame_key = (uintptr_t)pc;
-    try
-    {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        try
-        {
-            auto frame = std::make_unique<Frame>(cursor, pc);
-            frame->cache_key = frame_key;
-            auto &f = *frame;
-            mojo.frame(
-                frame_key,
-                frame->filename,
-                frame->name,
-                frame->location.line, frame->location.line_end,
-                frame->location.column, frame->location.column_end);
-            frame_cache->store(frame_key, std::move(frame));
-            return f;
-        }
-        catch (Frame::Error &)
-        {
-            return UNKNOWN_FRAME;
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-Frame &Frame::get(StringTable::Key name)
-{
-    uintptr_t frame_key = (uintptr_t)name;
-    try
-    {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        auto frame = std::make_unique<Frame>(name);
-        frame->cache_key = frame_key;
-        auto &f = *frame;
-        mojo.frame(
-            frame_key,
-            frame->filename,
-            frame->name,
-            frame->location.line, frame->location.line_end,
-            frame->location.column, frame->location.column_end);
-        frame_cache->store(frame_key, std::move(frame));
-        return f;
-    }
 }
