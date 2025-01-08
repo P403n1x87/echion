@@ -117,6 +117,7 @@ public:
 
     void
     render_cpu_time(uint64_t cpu_time)
+    override
     {
         *output << " " << cpu_time << std::endl;
     }

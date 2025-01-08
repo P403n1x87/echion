@@ -29,114 +29,6 @@
 #include <echion/strings.h>
 #include <echion/vm.h>
 
-#define MOJO_INT32 ((uintptr_t)(1 << (6 + 7 * 3)) - 1)
-
-class Frame
-{
-public:
-    typedef std::reference_wrapper<Frame> Ref;
-    typedef std::unique_ptr<Frame> Ptr;
-
-    class Error : public std::exception
-    {
-    public:
-        const char *what() const noexcept override
-        {
-            return "Cannot read frame";
-        }
-    };
-
-    class LocationError : public Error
-    {
-    public:
-        const char *what() const noexcept override
-        {
-            return "Cannot determine frame location information";
-        }
-    };
-
-    StringTable::Key filename = 0;
-    StringTable::Key name = 0;
-
-    struct _location
-    {
-        int line = 0;
-        int line_end = 0;
-        int column = 0;
-        int column_end = 0;
-    } location;
-#if PY_VERSION_HEX >= 0x030b0000
-    bool is_entry = false;
-#endif
-
-    void render()
-    {
-        // Ordinarily we could just call string_table.lookup() here, but our
-        // underlying frame is owned by the LRUCache, which may have cleaned it up,
-        // causing the table keys to be garbage.  Since individual frames in
-        // the stack may be bad, this isn't a failable condition.  Instead, populate
-        // some defaults.
-        constexpr std::string_view missing_filename = "<unknown file>";
-        constexpr std::string_view missing_name = "<unknown function>";
-        std::string_view filename_str;
-        std::string_view name_str;
-        try {
-          filename_str = string_table.lookup(filename);
-        } catch (StringTable::Error &) {
-          filename_str = missing_filename;
-        }
-
-        try {
-          name_str = string_table.lookup(name);
-        } catch (StringTable::Error &) {
-          name_str = missing_name;
-        }
-
-        Renderer::get().render_python_frame(name_str, filename_str, location.line);
-    }
-
-    void render_where()
-    {
-        auto name_str = string_table.lookup(name);
-        auto filename_str = string_table.lookup(filename);
-        auto line = location.line;
-        if (filename_str.rfind("native@", 0) == 0)
-            Renderer::get().render_python_frame(name_str, filename_str, line);
-        else
-            Renderer::get().render_native_frame(name_str, filename_str, line);
-    }
-
-    Frame(StringTable::Key name) : name(name){};
-
-    static Frame &read(PyObject *, PyObject **);
-    static Frame &read(PyObject *frame_addr)
-    {
-        PyObject *unused;
-        return Frame::read(frame_addr, &unused);
-    }
-
-    static Frame &get(PyCodeObject *, int);
-    static Frame &get(StringTable::Key);
-
-    Frame(PyCodeObject *, int);
-
-#ifndef UNWIND_NATIVE_DISABLE
-    Frame(unw_cursor_t &, unw_word_t);
-    static Frame &get(unw_cursor_t &);
-#endif
-
-private:
-    void infer_location(PyCodeObject *, int);
-
-    static inline uintptr_t key(PyCodeObject *code, int lasti)
-    {
-        return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
-    }
-};
-
-static auto INVALID_FRAME = Frame(StringTable::INVALID);
-static auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);
-
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int
@@ -286,27 +178,42 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline render(std::ostream &stream)
+    void render()
     {
-        stream
-            << ";" << string_table.lookup(filename)
-            << ":" << string_table.lookup(name)
-            << ":" << location.line;
+        // Ordinarily we could just call string_table.lookup() here, but our
+        // underlying frame is owned by the LRUCache, which may have cleaned it up,
+        // causing the table keys to be garbage.  Since individual frames in
+        // the stack may be bad, this isn't a failable condition.  Instead, populate
+        // some defaults.
+        constexpr std::string_view missing_filename = "<unknown file>";
+        constexpr std::string_view missing_name = "<unknown function>";
+        std::string_view filename_str;
+        std::string_view name_str;
+        try {
+          filename_str = string_table.lookup(filename);
+        } catch (StringTable::Error &) {
+          filename_str = missing_filename;
+        }
+
+        try {
+          name_str = string_table.lookup(name);
+        } catch (StringTable::Error &) {
+          name_str = missing_name;
+        }
+
+        Renderer::get().render_python_frame(name_str, filename_str, location.line);
     }
 
     // ------------------------------------------------------------------------
     void render_where(std::ostream &stream)
     {
-        if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
-            stream << "          \033[38;5;248;1m" << string_table.lookup(name)
-                   << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
-                   << "\033[0m:\033[38;5;246m" << location.line
-                   << ")\033[0m" << std::endl;
+        auto name_str = string_table.lookup(name);
+        auto filename_str = string_table.lookup(filename);
+        auto line = location.line;
+        if (filename_str.rfind("native@", 0) == 0)
+            Renderer::get().render_python_frame(name_str, filename_str, line);
         else
-            stream << "          \033[33;1m" << string_table.lookup(name)
-                   << "\033[0m (\033[36m" << string_table.lookup(filename)
-                   << "\033[0m:\033[32m" << location.line
-                   << "\033[0m)" << std::endl;
+            Renderer::get().render_native_frame(name_str, filename_str, line);
     }
 
     // ------------------------------------------------------------------------
