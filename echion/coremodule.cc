@@ -227,10 +227,8 @@ _sampler()
                 });
         }
 
-        while (now < end_time && running) {
-            auto sleep_duration = std::chrono::microseconds(end_time - now);
-            std::this_thread::sleep_for(sleep_duration);
-            now = gettime();
+        if (running) {
+            std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
         }
 
         last_time = now;
