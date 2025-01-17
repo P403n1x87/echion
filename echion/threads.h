@@ -375,7 +375,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
                 task_stack->render();
 
             // Hide for now, since we don't have good task rendering
-            //Renderer::get().render_cpu_time(delta);
+            // Renderer::get().render_cpu_time(delta);
             mojo.metric_time(delta);
         }
 
