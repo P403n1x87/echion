@@ -406,7 +406,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     const int lasti = ((int)(iframe.previous->instr_ptr - (_Py_CODEUNIT *)(iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
 #else
-    const int lasti = ((int)(iframeprev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
 #endif
 
