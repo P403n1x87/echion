@@ -34,7 +34,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifact-wheel
+          name: artifact-wheel-linux
           path: ./wheelhouse/*.whl
 
   build_wheels_macos:
@@ -53,7 +53,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifact-wheel
+          name: artifact-wheel-macos
           path: ./wheelhouse/*.whl
 
   build_sdist:
