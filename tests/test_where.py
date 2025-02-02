@@ -16,7 +16,8 @@ def test_where():
         sleep(1)
         try:
             # attach multiple times
-            for _ in range(10):
+            for i in range(10):
+                print(i, " th iteration")
                 result = run_echion("-w", str(target.pid))
                 assert result.returncode == 0
 
