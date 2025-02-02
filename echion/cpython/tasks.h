@@ -163,7 +163,7 @@ extern "C"
 
             _Py_CODEUNIT next;
 #if PY_VERSION_HEX >= 0x030d0000
-            if (copy_type(frame.instr_ptr + 1, next))
+            if (copy_type(frame.previous->instr_ptr + 1, next))
 #else
             if (copy_type(frame.prev_instr + 1, next))
 #endif // PY_VERSION_HEX >= 0x030d0000
