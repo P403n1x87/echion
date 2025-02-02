@@ -11,8 +11,8 @@ on:
 
 jobs:
   build_wheels_linux:
-    name: Build wheels on ubuntu-20.04
-    runs-on: ubuntu-20.04
+    name: Build wheels on ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
@@ -24,7 +24,7 @@ jobs:
           platforms: all
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.20.0
+        uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_BEFORE_ALL: './.github/workflows/cibw_before_all.sh'
           # TODO: libunwind fails to compile on aarch64
@@ -32,26 +32,28 @@ jobs:
           CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
           CIBW_SKIP: "*-musllinux_i686"
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: artifact-wheel-linux
           path: ./wheelhouse/*.whl
 
   build_wheels_macos:
-    name: Build wheels on macos
+    name: Build wheels on macos-latest
     runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v3
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.20.0
+        uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_ARCHS: x86_64 arm64 universal2
           CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
           CIBW_SKIP: "*-macosx_10_9_*"
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: artifact-wheel-macos
           path: ./wheelhouse/*.whl
 
   build_sdist:
@@ -63,8 +65,9 @@ jobs:
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: artifact-dist
           path: dist/*.tar.gz
 
   upload_pypi:
@@ -76,10 +79,9 @@ jobs:
       id-token: write
     if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
+          name: artifact-*
           path: dist
 
       - uses: pypa/gh-action-pypi-publish@release/v1
-  
