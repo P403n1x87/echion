@@ -12,13 +12,13 @@ concurrency:
 
 jobs:
   tests-linux:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 
-    name: Tests with Python ${{ matrix.python-version }} on ubuntu-20.04
+    name: Tests with Python ${{ matrix.python-version }} on ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
