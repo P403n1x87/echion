@@ -26,18 +26,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}-dev
 
-      - name: Install dependencies and Echion
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gdb liblzma-dev
           sudo -E bash scripts/build_libunwind.sh
-          pip install -v '.[test]'
+          pip install pygments
+
+      - name: Install Hatch
+        uses: pypa/hatch@install
 
       - name: Run tests
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" pytest --cov=echion --cov-report=term-missing --cov-report=xml -svv
+          sudo -E env PATH="$PATH" hatch run tests.py${{ matrix.python-version }}:tests -svv
 
       - name: Print core dumps
         run: |
@@ -71,9 +74,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}-dev
 
-      - name: Install dependencies and Echion
-        run: |
-          pip install -v '.[test]'
+      - name: Install Hatch
+        uses: pypa/hatch@install
 
       - name: Run tests
-        run: sudo -E pytest --cov=echion --cov-report=term-missing --cov-report=xml -svv
+        run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
