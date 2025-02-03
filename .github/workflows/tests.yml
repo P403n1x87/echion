@@ -6,19 +6,19 @@ on:
       - main
   pull_request:
 
-concurrency: 
+concurrency:
   group: ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   tests-linux:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
-    name: Tests with Python ${{ matrix.python-version }} on ubuntu-20.04
+    name: Tests with Python ${{ matrix.python-version }} on ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -29,16 +29,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gdb
+          sudo apt-get install -y gdb liblzma-dev
           sudo -E bash scripts/build_libunwind.sh
-          pip install hatch pygments
+          pip install pygments
+
+      - name: Install Hatch
+        uses: pypa/hatch@install
 
       - name: Run tests
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
           sudo -E env PATH="$PATH" hatch run tests.py${{ matrix.python-version }}:tests -svv
-      
+
       - name: Print core dumps
         run: |
           ls -l core.* || pwd
@@ -71,8 +74,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}-dev
 
-      - name: Install test dependencies
-        run: pip install hatch
-  
+      - name: Install Hatch
+        uses: pypa/hatch@install
+
       - name: Run tests
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv

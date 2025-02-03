@@ -18,9 +18,8 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        run: |
-          pip install hatch
+      - name: Install Hatch
+        uses: pypa/hatch@install
 
       - name: Type checking
         run: |
@@ -37,9 +36,8 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        run: |
-          pip install hatch
+      - name: Install Hatch
+        uses: pypa/hatch@install
 
       - name: Linting
         run: |
