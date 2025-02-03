@@ -37,20 +37,13 @@ issues = "https://github.com/P403n1x87/echion/issues"
 [project.scripts]
 echion = "echion.__main__:main"
 
-[tool.hatch.envs.tests]
-template = "tests"
-dependencies = [
+[project.optional-dependencies]
+test = [
   "pytest>=5.4.2",
   "pytest-cov>=2.8.1",
   "austin-python~=1.7",
   "bytecode",
 ]
-
-[tool.hatch.envs.tests.scripts]
-tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
-
-[[tool.hatch.envs.tests.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
 [tool.hatch.envs.checks]
 detached = true
