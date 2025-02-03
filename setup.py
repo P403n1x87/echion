@@ -13,7 +13,7 @@ from setuptools import setup
 PLATFORM = sys.platform.lower()
 
 LDADD = {
-    "linux": ["-l:libunwind.so", "-l:libunwind.a", "-l:liblzma.a"],
+    "linux": ["-l:libunwind.a", "-l:liblzma.a"],
 }
 
 # add option to colorize compiler output
