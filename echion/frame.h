@@ -148,7 +148,6 @@ public:
         name = string_table.key_unsafe(code->co_name);
 #endif
         filename = string_table.key_unsafe(code->co_filename);
-        std::cerr << "filename:" << string_table.lookup(filename) << ", function_name:" <<string_table.lookup(name) << std::endl;
     }
 
     // ------------------------------------------------------------------------
