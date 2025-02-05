@@ -11,6 +11,7 @@
 #include <cpython/genobject.h>
 
 #define Py_BUILD_CORE
+#include <internal/pycore_opcode.h>
 #else
 #include <genobject.h>
 #include <opcode.h>
