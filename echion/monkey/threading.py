@@ -21,10 +21,12 @@ def thread_set_native_id(self, *args: t.Any, **kwargs: t.Any) -> None:
 
 
 def thread_bootstrap_inner(self) -> None:
-    _thread_bootstrap_inner(self)
-    # This is the point when the thread is about to exit, so we can unmap the
-    # thread identifier from the thread name.
-    echion.untrack_thread(self.ident)
+    try:
+        _thread_bootstrap_inner(self)
+    finally:
+        # This is the point when the thread is about to exit, so we can unmap the
+        # thread identifier from the thread name.
+        echion.untrack_thread(self.ident)
 
 
 def patch():
