@@ -392,7 +392,6 @@ static void reset_frame_cache()
 // ------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
-    std::cout << "In Frame::read " << std::endl;
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
 
@@ -448,8 +447,6 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
 #endif
-
-    std::cout << "frame.filename: " << string_table.lookup(frame.filename) << ", frame.name:" << string_table.lookup(frame.name) << ", frame.location.line:" << frame.location.line << ", frame.location.column" << frame.location.column << std::endl;
 
     return frame;
 }
