@@ -129,9 +129,6 @@ def run_target(
             f"tests.{target}",
         )
 
-        print(result.stderr)
-        print(result.stdout)
-
         if not output_file.is_file():
             return result, None
 
