@@ -93,6 +93,7 @@ void unwind_native_stack()
 static size_t
 unwind_frame(PyObject *frame_addr, FrameStack &stack)
 {
+    std::cout << "In unwind_frame" << std::endl;
     std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
     int count = 0;
 
@@ -156,9 +157,12 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 static void
 unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
+    std::cout << "In unwind_python_stack()" << std::endl;
     stack.clear();
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+#elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
     if (copy_type(cframe_addr, cframe))
@@ -178,7 +182,9 @@ unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+#elif PY_VERSION_HEX >= 0x030b0000
     PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
 #else // Python < 3.11
     PyObject *frame_addr = (PyObject *)tstate->frame;

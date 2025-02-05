@@ -11,7 +11,11 @@
 #include <cpython/genobject.h>
 
 #define Py_BUILD_CORE
+#if PY_VERSION_HEX >= 0x030d0000
+#include <opcode.h>
+#else
 #include <internal/pycore_opcode.h>
+#endif // PY_VERSION_HEX >= 0x030d0000
 #else
 #include <genobject.h>
 #include <opcode.h>
@@ -157,7 +161,11 @@ extern "C"
                 return NULL;
 
             _Py_CODEUNIT next;
+#if PY_VERSION_HEX >= 0x030d0000
+            if (copy_type(frame.instr_ptr, next))
+#else
             if (copy_type(frame.prev_instr + 1, next))
+#endif
                 return NULL;
             if (!(_Py_OPCODE(next) == RESUME || _Py_OPCODE(next) == RESUME_QUICK) || _Py_OPARG(next) < 2)
                 return NULL;

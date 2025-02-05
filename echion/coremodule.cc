@@ -43,6 +43,8 @@ static void do_where(std::ostream &stream)
            << "🐴 Echion reporting for duty" << std::endl
            << std::endl;
 
+    std::cout << "Echion reporting for duty" << std::endl;
+
     for_each_interp(
         [&stream](PyInterpreterState *interp) -> void
         {
@@ -114,8 +116,11 @@ _start()
     {
         return;
     }
+    std::cout << "Sucessfully opened mojo output file" << std::endl;
 
     install_signals();
+    std::cout << "Sucessfully installed signals" << std::endl;
+
 
 #if defined PL_DARWIN
     // Get the wall time clock resource.
@@ -135,6 +140,8 @@ _start()
         running = 0;
 
         return;
+    } else {
+        std::cout << "Where not configured" << std::endl;
     }
 
     setup_where();

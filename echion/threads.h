@@ -201,6 +201,8 @@ void ThreadInfo::unwind(PyThreadState *tstate)
             {
                 // We failed to unwind tasks
             }
+        } else {
+            std::cout << "No Asyncio loop" << std::endl;
         }
     }
 }
@@ -208,12 +210,15 @@ void ThreadInfo::unwind(PyThreadState *tstate)
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind_tasks()
 {
+    std::cout << "In ThreadInfo::unwind_tasks" << std::endl;
     std::vector<TaskInfo::Ref> leaf_tasks;
     std::unordered_set<PyObject *> parent_tasks;
     std::unordered_map<PyObject *, TaskInfo::Ref> waitee_map; // Indexed by task origin
     std::unordered_map<PyObject *, TaskInfo::Ref> origin_map; // Indexed by task origin
 
     auto all_tasks = get_all_tasks((PyObject *)asyncio_loop);
+
+    std::cout << "Number of all tasks is " << all_tasks.size() << std::endl;
 
     {
         std::lock_guard<std::mutex> lock(task_link_map_lock);
@@ -252,6 +257,8 @@ void ThreadInfo::unwind_tasks()
             leaf_tasks.push_back(std::ref(*task));
     }
 
+    std::cout << "Number of leaf_tasks is " << leaf_tasks.size() << std::endl;
+
     for (auto &task : leaf_tasks)
     {
         auto stack = std::make_unique<FrameStack>();
@@ -285,6 +292,7 @@ void ThreadInfo::unwind_tasks()
             }
 
             // Add the task name frame
+            std::cout << "Inserting task name frame " << task.name << std::endl;
             stack->push_back(Frame::get(task.name));
 
             // Get the next task in the chain

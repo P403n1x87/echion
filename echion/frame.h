@@ -7,6 +7,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <frameobject.h>
+#if PY_VERSION_HEX >= 0x030d0000
+#include <internal/pycore_code.h>
+#endif // PY_VERSION_HEX >= 0x030d0000
 #if PY_VERSION_HEX >= 0x030b0000
 #include <internal/pycore_frame.h>
 #endif
@@ -116,10 +119,16 @@ public:
     Frame(PyObject *frame)
     {
 #if PY_VERSION_HEX >= 0x030b0000
+
+#if PY_VERSION_HEX >= 0x030d0000
+        _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
+        const int lasti = _PyInterpreterFrame_LASTI(iframe);
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+#else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
-
+#endif // PY_VERSION_HEX >= 0x030d0000
         PyCode_Addr2Location(code, lasti << 1, &location.line, &location.column, &location.line_end, &location.column_end);
         location.column++;
         location.column_end++;
@@ -139,6 +148,7 @@ public:
         name = string_table.key_unsafe(code->co_name);
 #endif
         filename = string_table.key_unsafe(code->co_filename);
+        std::cerr << "filename:" << string_table.lookup(filename) << ", function_name:" <<string_table.lookup(name) << std::endl;
     }
 
     // ------------------------------------------------------------------------
@@ -339,7 +349,12 @@ private:
     // ------------------------------------------------------------------------
     static inline Key key(PyObject *frame)
     {
-#if PY_VERSION_HEX >= 0x030b0000
+
+#if PY_VERSION_HEX >= 0x030d0000
+        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        const int lasti = _PyInterpreterFrame_LASTI(iframe);
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+#elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
@@ -377,6 +392,7 @@ static void reset_frame_cache()
 // ------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
+    std::cout << "In Frame::read " << std::endl;
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
 
@@ -385,8 +401,29 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
+#if PY_VERSION_HEX >= 0x030d0000
+    // Go back a few frames if f_executable is not a code object
+    PyObject f_executable;
+    if (copy_type(iframe.f_executable, f_executable)) {
+        throw Error();
+    }
+    while (f_executable.ob_type != &PyCode_Type) {
+        frame_addr = (PyObject*) iframe.previous;
+
+        if (copy_type(frame_addr, iframe)) {
+            throw Error();
+        }
+        if (copy_type(iframe.f_executable, f_executable)) {
+            throw Error();
+        }
+    }
+
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
+#else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
+#endif // PY_VERSION_HEX >= 0x030d0000
 
     if (&frame != &INVALID_FRAME)
     {
@@ -411,6 +448,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
 #endif
+
+    std::cout << "frame.filename: " << string_table.lookup(frame.filename) << ", frame.name:" << string_table.lookup(frame.name) << ", frame.location.line:" << frame.location.line << ", frame.location.column" << frame.location.column << std::endl;
 
     return frame;
 }
