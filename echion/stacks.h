@@ -138,6 +138,33 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 
         count++;
 
+#if PY_VERSION_HEX >= 0x030d0000
+        _PyInterpreterFrame iframe;
+        if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
+            throw Frame::Error();
+        }
+
+        PyObject f_executable;
+        if (copy_type(iframe.f_executable, f_executable)) {
+            throw Frame::Error();
+        }
+
+        while(f_executable.ob_type != &PyCode_Type) {
+            current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
+            if (current_frame == NULL) {
+                break;
+            }
+            if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
+                throw Frame::Error();
+            }
+            if (copy_type(iframe.f_executable, f_executable)) {
+                throw Frame::Error();
+            }
+        }
+        if (current_frame == NULL) {
+            break;
+        }
+#endif // PY_VERSION_HEX >= 0x030d0000
         seen_frames.insert(current_frame);
 
         stack.push_back(Frame::get(current_frame));
