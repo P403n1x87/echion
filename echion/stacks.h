@@ -158,9 +158,7 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 
-#if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject *)tstate->current_frame;
-#elif PY_VERSION_HEX >= 0x030b0000
+if PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
     if (copy_type(cframe_addr, cframe))
@@ -179,9 +177,7 @@ static void
 unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
-#if PY_VERSION_HEX >= 0x030d0000
-    PyObject *frame_addr = (PyObject *)tstate->current_frame;
-#elif PY_VERSION_HEX >= 0x030b0000
+if PY_VERSION_HEX >= 0x030b0000
     PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
 #else // Python < 3.11
     PyObject *frame_addr = (PyObject *)tstate->frame;

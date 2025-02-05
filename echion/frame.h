@@ -118,12 +118,7 @@ public:
 #if PY_VERSION_HEX >= 0x030b0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-#if PY_VERSION_HEX >= 0x030d0000
-        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
-#else
         PyCodeObject *code = iframe->f_code;
-#endif
-
 
         PyCode_Addr2Location(code, lasti << 1, &location.line, &location.column, &location.line_end, &location.column_end);
         location.column++;
@@ -138,11 +133,7 @@ public:
 #else
         PyFrameObject *py_frame = (PyFrameObject *)frame;
         const int lasti = py_frame->f_lasti;
-#if PY_VERSION_HEX >= 0x030d0000
-        PyCodeObject *code = (PyCodeObject *)py_frame->f_executable;
-#else
         PyCodeObject *code = py_frame->f_code;
-#endif
 
         location.line = PyFrame_GetLineNumber(py_frame);
         name = string_table.key_unsafe(code->co_name);
@@ -351,19 +342,11 @@ private:
 #if PY_VERSION_HEX >= 0x030b0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-#if PY_VERSION_HEX >= 0x030d0000
-        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
-#else
         PyCodeObject *code = iframe->f_code;
-#endif // PY_VERSION_HEX >= 0x030d0000
 #else
         const PyFrameObject *py_frame = (PyFrameObject *)frame;
         const int lasti = py_frame->f_lasti;
-#if PY_VERSION_HEX >= 0x030d0000
-        PyCodeObject *code = (PyCodeObject *)py_frame->f_executable;
-#else
         PyCodeObject *code = py_frame->f_code;
-#endif // PY_VERSION_HEX >= 0x030d0000
 #endif
         return key(code, lasti);
     }
@@ -402,13 +385,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-#if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)(iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
-#else
-    const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    const int lasti = _PyInterpreterFrame_LASTI(&iframe);
     auto &frame = Frame::get(iframe.f_code, lasti);
-#endif
 
     if (&frame != &INVALID_FRAME)
     {
