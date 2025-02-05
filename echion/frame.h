@@ -116,7 +116,7 @@ public:
     Frame(PyObject *frame)
     {
 #if PY_VERSION_HEX >= 0x030b0000
-        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
 
@@ -340,7 +340,7 @@ private:
     static inline Key key(PyObject *frame)
     {
 #if PY_VERSION_HEX >= 0x030b0000
-        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
 #else
@@ -385,7 +385,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-    const int lasti = _PyInterpreterFrame_LASTI(&iframe);
+    const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
 
     if (&frame != &INVALID_FRAME)
@@ -406,6 +406,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     if (copy_type(frame_addr, py_frame))
         throw Error();
+
     auto &frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
