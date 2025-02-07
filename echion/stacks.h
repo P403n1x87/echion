@@ -104,6 +104,10 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
             break;
 
 #if PY_VERSION_HEX >= 0x030d0000
+        // From Python versions 3.13, f_executable can have objects other than
+        // code objects for an internal frame. We need to skip some frames if
+        // its f_executable is not code as suggested here:
+        // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
         _PyInterpreterFrame iframe;
         if (copy_type((_PyInterpreterFrame*)current_frame_addr, iframe)) {
             break;
@@ -140,6 +144,8 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 
         try
         {
+            // Note to self: Frame::read updates current_frame_addr to the
+            // previous
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
 
             stack.push_back(frame);
@@ -169,6 +175,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 
 
 #if PY_VERSION_HEX >= 0x030d0000
+        // See the comment in unwind_frame()
         _PyInterpreterFrame iframe;
         if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
             throw Frame::Error();
@@ -179,17 +186,21 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
             throw Frame::Error();
         }
 
-        while(f_executable.ob_type != &PyCode_Type) {
-            current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
-            if (current_frame == NULL) {
-                break;
+        try {
+            while(f_executable.ob_type != &PyCode_Type) {
+                current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
+                if (current_frame == NULL) {
+                    break;
+                }
+                if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
+                    throw Frame::Error();
+                }
+                if (copy_type(iframe.f_executable, f_executable)) {
+                    throw Frame::Error();
+                }
             }
-            if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
-                throw Frame::Error();
-            }
-            if (copy_type(iframe.f_executable, f_executable)) {
-                throw Frame::Error();
-            }
+        } catch (Frame::Error &e) {
+            break;
         }
         if (current_frame == NULL) {
             break;
