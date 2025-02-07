@@ -136,7 +136,6 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
         if (seen_frames.find(current_frame) != seen_frames.end())
             break;
 
-        count++;
 
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame iframe;
@@ -165,6 +164,8 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
             break;
         }
 #endif // PY_VERSION_HEX >= 0x030d0000
+        count++;
+
         seen_frames.insert(current_frame);
 
         stack.push_back(Frame::get(current_frame));
