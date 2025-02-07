@@ -208,13 +208,6 @@ public:
                    << "\033[0m)" << std::endl;
     }
 
-    // ------------------------------------------------------------------------
-    static Frame &read(PyObject *frame_addr)
-    {
-        PyObject *unused;
-        return read(frame_addr, &unused);
-    }
-
 private:
     // ------------------------------------------------------------------------
     void inline infer_location(PyCodeObject *code, int lasti)
