@@ -10,11 +10,11 @@ def cpu_sleep(t):
 
 
 def foo():
-    cpu_sleep(0.5)
+    cpu_sleep(1)
 
 
 def bar():
-    sleep(1)
+    sleep(2)
     foo()
 
 
