@@ -108,13 +108,8 @@ public:
 
     Frame(StringTable::Key name) : name(name){};
 
-#if PY_VERSION_HEX >= 0x030d0000
-    static Frame &read(_PyInterpreterFrame *iframe, PyObject **prev_addr);
-#else
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
-#endif // PY_VERSION_HEX >= 0x030d0000
 
-    static Frame &get(PyCodeObject &code_obj, int lasti);
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
     static Frame &get(unw_cursor_t &cursor);
@@ -211,6 +206,13 @@ public:
                    << "\033[0m (\033[36m" << string_table.lookup(filename)
                    << "\033[0m:\033[32m" << location.line
                    << "\033[0m)" << std::endl;
+    }
+
+    // ------------------------------------------------------------------------
+    static Frame &read(PyObject *frame_addr)
+    {
+        PyObject *unused;
+        return read(frame_addr, &unused);
     }
 
 private:
@@ -387,20 +389,6 @@ static void reset_frame_cache()
 }
 
 // ------------------------------------------------------------------------
-#if PY_VERSION_HEX >= 0x030d0000
-Frame &Frame::read(_PyInterpreterFrame* iframe, PyObject **prev_addr) {
-    const int lasti = _PyInterpreterFrame_LASTI(iframe);
-    auto &frame = Frame::get(*(PyCodeObject*)iframe->f_executable, lasti);
-
-    if (&frame != &INVALID_FRAME) {
-        frame.is_entry = (iframe->owner == FRAME_OWNED_BY_CSTACK); // Shim frame
-    }
-
-    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe->previous;
-
-    return frame;
-}
-#else
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030b0000
@@ -411,8 +399,13 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
+#if PY_VERSION_HEX >= 0x030d0000
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
+#else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
+#endif // PY_VERSION_HEX >= 0x030d0000
 
     if (&frame != &INVALID_FRAME)
     {
@@ -440,37 +433,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
-#endif // PY_VERSION_HEX >= 0x030d0000
 
 // ----------------------------------------------------------------------------
-Frame &Frame::get(PyCodeObject& code_obj, int lasti) {
-    auto frame_key = Frame::key(&code_obj, lasti);
-
-    try {
-        return frame_cache->lookup(frame_key);
-    } catch (LRUCache<uintptr_t, Frame>::LookupError &)
-    {
-        try
-        {
-            auto new_frame = std::make_unique<Frame>(&code_obj, lasti);
-            new_frame->cache_key = frame_key;
-            auto &f = *new_frame;
-            mojo.frame(
-                frame_key,
-                new_frame->filename,
-                new_frame->name,
-                new_frame->location.line, new_frame->location.line_end,
-                new_frame->location.column, new_frame->location.column_end);
-            frame_cache->store(frame_key, std::move(new_frame));
-            return f;
-        }
-        catch (Frame::Error &)
-        {
-            return INVALID_FRAME;
-        }
-    }
-}
-
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 {
     PyCodeObject code;
