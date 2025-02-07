@@ -109,27 +109,17 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         // its f_executable is not code as suggested here:
         // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
         _PyInterpreterFrame iframe;
-        if (copy_type((_PyInterpreterFrame*)current_frame_addr, iframe)) {
-            break;
-        }
-
         PyObject f_executable;
-        if (copy_type(iframe.f_executable, f_executable)) {
-            break;
-        }
-
         try {
-            while(f_executable.ob_type != &PyCode_Type) {
-                current_frame_addr = (PyObject*)((_PyInterpreterFrame *)current_frame_addr)->previous;
-                if (current_frame_addr == NULL) {
+            while (current_frame_addr != NULL) {
+                if (copy_type((_PyInterpreterFrame*) current_frame_addr, iframe) ||
+                    copy_type(iframe.f_executable, f_executable)) {
+                        throw Frame::Error();
+                }
+                if (f_executable.ob_type == &PyCode_Type) {
                     break;
                 }
-                if (copy_type((_PyInterpreterFrame*)current_frame_addr, iframe)) {
-                    throw Frame::Error();
-                }
-                if (copy_type((_PyInterpreterFrame*)iframe.f_executable, f_executable)) {
-                    throw Frame::Error();
-                }
+                current_frame_addr = (PyObject*)((_PyInterpreterFrame *)current_frame_addr)->previous;
             }
         } catch (Frame::Error &e) {
             break;
@@ -177,27 +167,18 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
         _PyInterpreterFrame iframe;
-        if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
-            throw Frame::Error();
-        }
-
         PyObject f_executable;
-        if (copy_type(iframe.f_executable, f_executable)) {
-            throw Frame::Error();
-        }
-
         try {
-            while(f_executable.ob_type != &PyCode_Type) {
-                current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
-                if (current_frame == NULL) {
+            while(current_frame != NULL) {
+                if (copy_type((_PyInterpreterFrame*)current_frame, iframe) ||
+                    copy_type(iframe.f_executable, f_executable)) {
+                    throw Frame::Error();
+                }
+                if (f_executable.ob_type == &PyCode_Type) {
+
                     break;
                 }
-                if (copy_type((_PyInterpreterFrame*)current_frame, iframe)) {
-                    throw Frame::Error();
-                }
-                if (copy_type(iframe.f_executable, f_executable)) {
-                    throw Frame::Error();
-                }
+                current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
             }
         } catch (Frame::Error &e) {
             break;
