@@ -400,22 +400,6 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    // Go back a few frames if f_executable is not a code object
-    PyObject f_executable;
-    if (copy_type(iframe.f_executable, f_executable)) {
-        throw Error();
-    }
-    while (f_executable.ob_type != &PyCode_Type) {
-        frame_addr = (PyObject*) iframe.previous;
-
-        if (copy_type(frame_addr, iframe)) {
-            throw Error();
-        }
-        if (copy_type(iframe.f_executable, f_executable)) {
-            throw Error();
-        }
-    }
-
     const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
 #else

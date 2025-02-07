@@ -35,7 +35,27 @@ extern "C"
         STATE_FINISHED
     } fut_state;
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+#define FutureObj_HEAD(prefix)                                              \
+    PyObject_HEAD                                                           \
+    PyObject *prefix##_loop;                                                \
+    PyObject *prefix##_callback0;                                           \
+    PyObject *prefix##_context0;                                            \
+    PyObject *prefix##_callbacks;                                           \
+    PyObject *prefix##_exception;                                           \
+    PyObject *prefix##_exception_tb;                                        \
+    PyObject *prefix##_result;                                              \
+    PyObject *prefix##_source_tb;                                           \
+    PyObject *prefix##_cancel_msg;                                          \
+    PyObject *prefix##_cancelled_exc;                                       \
+    fut_state prefix##_state;                                               \
+    /* These bitfields need to be at the end of the struct
+       so that these and bitfields from TaskObj are contiguous.
+    */                                                                      \
+    unsigned prefix##_log_tb: 1;                                            \
+    unsigned prefix##_blocking: 1;
+
+#elif PY_VERSION_HEX >= 0x030b0000
 #define FutureObj_HEAD(prefix)       \
     PyObject_HEAD                    \
         PyObject *prefix##_loop;     \
@@ -113,7 +133,20 @@ extern "C"
         FutureObj_HEAD(fut)
     } FutureObj;
 
-#if PY_VERSION_HEX >= 0x030a0000
+#if PY_VERSION_HEX >= 0x030d0000
+    typedef struct
+    {
+        FutureObj_HEAD(task);
+        unsigned task_must_cancel: 1;
+        unsigned task_log_destroy_pending: 1;
+        int task_num_cancels_requested;
+        PyObject *task_fut_waiter;
+        PyObject *task_coro;
+        PyObject *task_name;
+        PyObject *task_context;
+    } TaskObj;
+
+#elif PY_VERSION_HEX >= 0x030a0000
     typedef struct
     {
         FutureObj_HEAD(task)
