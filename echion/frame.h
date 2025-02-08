@@ -108,8 +108,11 @@ public:
 
     Frame(StringTable::Key name) : name(name){};
 
+#if PY_VERSION_HEX >= 0x030d0000
     static Frame &read(_PyInterpreterFrame &iframe, PyObject **prev_addr);
+#else
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
+#endif // PY_VERSION_HEX >= 0x030d0000
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
@@ -381,9 +384,12 @@ static void reset_frame_cache()
     frame_cache = nullptr;
 }
 
+#if PY_VERSION_HEX >= 0x030d0000
 // ------------------------------------------------------------------------
 Frame &Frame::read(_PyInterpreterFrame &iframe, PyObject **prev_addr)
 {
+    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
+    // from the code object.
     const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get((PyCodeObject*)iframe.f_executable,lasti);
     if (&frame != &INVALID_FRAME) {
@@ -394,7 +400,7 @@ Frame &Frame::read(_PyInterpreterFrame &iframe, PyObject **prev_addr)
 
     return frame;
 }
-
+#else
 // ------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
@@ -406,13 +412,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-#if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
-#else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
-#endif // PY_VERSION_HEX >= 0x030d0000
 
     if (&frame != &INVALID_FRAME)
     {
@@ -440,6 +441,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
+#endif // PY_VERSION_HEX >= 0x030d0000
 
 // ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)
