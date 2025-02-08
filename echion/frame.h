@@ -142,7 +142,6 @@ public:
 
 #else
         PyFrameObject *py_frame = (PyFrameObject *)frame;
-        const int lasti = py_frame->f_lasti;
         PyCodeObject *code = py_frame->f_code;
 
         location.line = PyFrame_GetLineNumber(py_frame);
