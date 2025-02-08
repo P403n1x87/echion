@@ -163,26 +163,15 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
         if (seen_frames.find(current_frame) != seen_frames.end())
             break;
 
-
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
-        _PyInterpreterFrame iframe;
-        PyObject f_executable;
-        try {
-            while(current_frame != NULL) {
-                if (copy_type((_PyInterpreterFrame*)current_frame, iframe) ||
-                    copy_type(iframe.f_executable, f_executable)) {
-                    throw Frame::Error();
-                }
-                if (f_executable.ob_type == &PyCode_Type) {
-
-                    break;
-                }
-                current_frame = (PyObject*) ((_PyInterpreterFrame *)current_frame)->previous;
+        while (current_frame != NULL) {
+            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
+                break;
             }
-        } catch (Frame::Error &e) {
-            break;
+            current_frame = (PyObject *)((_PyInterpreterFrame *) current_frame)->previous;
         }
+
         if (current_frame == NULL) {
             break;
         }
