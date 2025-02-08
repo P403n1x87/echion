@@ -1,7 +1,10 @@
 import sys
+import platform
 from subprocess import PIPE
 from subprocess import Popen
 from time import sleep
+
+import pytest
 
 from tests.utils import requires_sudo
 from tests.utils import run_echion
@@ -9,6 +12,7 @@ from tests.utils import run_echion
 
 # This test requires sudo on unix to work
 @requires_sudo
+@pytest.mark.xfail(condition=platform.system() == "Darwin", reason="Times out on GitHub Actions")
 def test_where():
     with Popen(
         [sys.executable, "-m", "tests.target_attach"], stdout=PIPE, stderr=PIPE

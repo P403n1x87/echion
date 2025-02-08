@@ -28,7 +28,7 @@ from time import sleep
 
 
 def idle():
-    sleep(0.5)
+    sleep(1)
 
 
 def keep_cpu_busy():
