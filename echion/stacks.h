@@ -136,7 +136,11 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         {
             // Note to self: Frame::read updates current_frame_addr to the
             // previous
+#if PY_VERSION_HEX >= 0x030d0000
+            Frame &frame = Frame::read(iframe, &current_frame_addr);
+#else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
+#endif
 
             stack.push_back(frame);
         }

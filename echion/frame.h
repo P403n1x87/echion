@@ -108,6 +108,7 @@ public:
 
     Frame(StringTable::Key name) : name(name){};
 
+    static Frame &read(_PyInterpreterFrame &iframe, PyObject **prev_addr);
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
@@ -379,6 +380,20 @@ static void reset_frame_cache()
 {
     delete frame_cache;
     frame_cache = nullptr;
+}
+
+// ------------------------------------------------------------------------
+Frame &Frame::read(_PyInterpreterFrame &iframe, PyObject **prev_addr)
+{
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable,lasti);
+    if (&frame != &INVALID_FRAME) {
+        frame.is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+    }
+
+    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
+
+    return frame;
 }
 
 // ------------------------------------------------------------------------
