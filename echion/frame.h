@@ -176,15 +176,6 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline render(std::ostream &stream)
-    {
-        stream
-            << ";" << string_table.lookup(filename)
-            << ":" << string_table.lookup(name)
-            << ":" << location.line;
-    }
-
-    // ------------------------------------------------------------------------
     void render_where(std::ostream &stream)
     {
         if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
@@ -197,13 +188,6 @@ public:
                    << "\033[0m (\033[36m" << string_table.lookup(filename)
                    << "\033[0m:\033[32m" << location.line
                    << "\033[0m)" << std::endl;
-    }
-
-    // ------------------------------------------------------------------------
-    static Frame &read(PyObject *frame_addr)
-    {
-        PyObject *unused;
-        return read(frame_addr, &unused);
     }
 
 private:
