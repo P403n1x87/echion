@@ -188,15 +188,6 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline render(std::ostream &stream)
-    {
-        stream
-            << ";" << string_table.lookup(filename)
-            << ":" << string_table.lookup(name)
-            << ":" << location.line;
-    }
-
-    // ------------------------------------------------------------------------
     void render_where(std::ostream &stream)
     {
         if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
