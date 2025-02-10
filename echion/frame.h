@@ -7,6 +7,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <frameobject.h>
+#if PY_VERSION_HEX >= 0x030d0000
+#include <internal/pycore_code.h>
+#endif // PY_VERSION_HEX >= 0x030d0000
 #if PY_VERSION_HEX >= 0x030b0000
 #include <internal/pycore_frame.h>
 #endif
@@ -105,7 +108,11 @@ public:
 
     Frame(StringTable::Key name) : name(name){};
 
+#if PY_VERSION_HEX >= 0x030d0000
+    static Frame &read(_PyInterpreterFrame &iframe, PyObject **prev_addr);
+#else
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
+#endif // PY_VERSION_HEX >= 0x030d0000
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
@@ -116,10 +123,16 @@ public:
     Frame(PyObject *frame)
     {
 #if PY_VERSION_HEX >= 0x030b0000
+
+#if PY_VERSION_HEX >= 0x030d0000
+        _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
+        const int lasti = _PyInterpreterFrame_LASTI(iframe);
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+#else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
-
+#endif // PY_VERSION_HEX >= 0x030d0000
         PyCode_Addr2Location(code, lasti << 1, &location.line, &location.column, &location.line_end, &location.column_end);
         location.column++;
         location.column_end++;
@@ -132,7 +145,6 @@ public:
 
 #else
         PyFrameObject *py_frame = (PyFrameObject *)frame;
-        const int lasti = py_frame->f_lasti;
         PyCodeObject *code = py_frame->f_code;
 
         location.line = PyFrame_GetLineNumber(py_frame);
@@ -323,7 +335,12 @@ private:
     // ------------------------------------------------------------------------
     static inline Key key(PyObject *frame)
     {
-#if PY_VERSION_HEX >= 0x030b0000
+
+#if PY_VERSION_HEX >= 0x030d0000
+        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        const int lasti = _PyInterpreterFrame_LASTI(iframe);
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+#elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
         PyCodeObject *code = iframe->f_code;
@@ -358,6 +375,23 @@ static void reset_frame_cache()
     frame_cache = nullptr;
 }
 
+#if PY_VERSION_HEX >= 0x030d0000
+// ------------------------------------------------------------------------
+Frame &Frame::read(_PyInterpreterFrame &iframe, PyObject **prev_addr)
+{
+    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
+    // from the code object.
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable,lasti);
+    if (&frame != &INVALID_FRAME) {
+        frame.is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+    }
+
+    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
+
+    return frame;
+}
+#else
 // ------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
@@ -398,6 +432,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
+#endif // PY_VERSION_HEX >= 0x030d0000
 
 // ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)

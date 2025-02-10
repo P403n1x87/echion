@@ -12,11 +12,15 @@
 #include <cpython/genobject.h>
 
 #define Py_BUILD_CORE
+#if PY_VERSION_HEX >= 0x030d0000
+#include <opcode.h>
+#else
 #include <internal/pycore_opcode.h>
+#endif // PY_VERSION_HEX >= 0x030d0000
 #else
 #include <genobject.h>
 #include <opcode.h>
-#endif
+#endif // PY_VERSION_HEX >= 0x30b0000
 
 #include <exception>
 #include <mutex>
