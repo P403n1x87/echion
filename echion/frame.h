@@ -108,11 +108,7 @@ public:
 
     Frame(StringTable::Key name) : name(name){};
 
-#if PY_VERSION_HEX >= 0x030d0000
-    static Frame &read(_PyInterpreterFrame &iframe, PyObject **prev_addr);
-#else
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
-#endif // PY_VERSION_HEX >= 0x030d0000
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
@@ -375,37 +371,47 @@ static void reset_frame_cache()
     frame_cache = nullptr;
 }
 
-#if PY_VERSION_HEX >= 0x030d0000
-// ------------------------------------------------------------------------
-Frame &Frame::read(_PyInterpreterFrame &iframe, PyObject **prev_addr)
-{
-    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
-    // from the code object.
-    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable,lasti);
-    if (&frame != &INVALID_FRAME) {
-        frame.is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
-    }
-
-    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
-
-    return frame;
-}
-#else
 // ------------------------------------------------------------------------
 Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
+#if PY_VERSION_HEX >= 0x030d0000
+    // From Python versions 3.13, f_executable can have objects other than
+    // code objects for an internal frame. We need to skip some frames if
+    // its f_executable is not code as suggested here:
+    // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
+    PyObject f_executable;
+
+    while (frame_addr != NULL) {
+        if (copy_type((_PyInterpreterFrame*)frame_addr, iframe) ||
+            copy_type(iframe.f_executable, f_executable)) {
+            throw Frame::Error();
+        }
+        if (f_executable.ob_type == &PyCode_Type) {
+            break;
+        }
+        frame_addr = (PyObject*)((_PyInterpreterFrame *)frame_addr)->previous;
+    }
+
+    if (frame_addr == NULL) {
+        throw Frame::Error();
+    }
+
+#endif // PY_VERSION_HEX >= 0x030d0000
 
     if (copy_type(frame_addr, iframe))
         throw Error();
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
+#if PY_VERSION_HEX >= 0x030d0000
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
+#else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
-
+#endif // PY_VERSION_HEX >= 0x030d0000
     if (&frame != &INVALID_FRAME)
     {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -418,8 +424,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
 #else // Python < 3.11
-      // Unwind the stack from leaf to root and store it in a stack. This way we
-      // can print it from root to leaf.
+    // Unwind the stack from leaf to root and store it in a stack. This way we
+    // can print it from root to leaf.
     PyFrameObject py_frame;
 
     if (copy_type(frame_addr, py_frame))
@@ -432,7 +438,6 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
-#endif // PY_VERSION_HEX >= 0x030d0000
 
 // ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)

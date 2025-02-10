@@ -99,49 +99,16 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
     PyObject *current_frame_addr = frame_addr;
     while (current_frame_addr != NULL && stack.size() < MAX_FRAMES)
     {
-
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
 
-#if PY_VERSION_HEX >= 0x030d0000
-        // From Python versions 3.13, f_executable can have objects other than
-        // code objects for an internal frame. We need to skip some frames if
-        // its f_executable is not code as suggested here:
-        // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
-        _PyInterpreterFrame iframe;
-        PyObject f_executable;
-        try {
-            while (current_frame_addr != NULL) {
-                if (copy_type((_PyInterpreterFrame*) current_frame_addr, iframe) ||
-                    copy_type(iframe.f_executable, f_executable)) {
-                        throw Frame::Error();
-                }
-                if (f_executable.ob_type == &PyCode_Type) {
-                    break;
-                }
-                current_frame_addr = (PyObject*)((_PyInterpreterFrame *)current_frame_addr)->previous;
-            }
-        } catch (Frame::Error &e) {
-            break;
-        }
-        if (current_frame_addr == NULL) {
-            break;
-        }
-#endif // PY_VERSION_HEX >= 0x030d0000
         count++;
 
         seen_frames.insert(current_frame_addr);
 
         try
         {
-            // Note to self: Frame::read updates current_frame_addr to the
-            // previous
-#if PY_VERSION_HEX >= 0x030d0000
-            Frame &frame = Frame::read(iframe, &current_frame_addr);
-#else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
-#endif
-
             stack.push_back(frame);
         }
         catch (Frame::Error &e)
@@ -173,7 +140,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
             if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
                 break;
             }
-            current_frame = (PyObject *)((_PyInterpreterFrame *) current_frame)->previous;
+            current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
         }
 
         if (current_frame == NULL) {
