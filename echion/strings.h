@@ -99,10 +99,15 @@ public:
             {
 #if PY_VERSION_HEX >= 0x030c0000
                 // The task name might hold a PyLong for deferred task name formatting.
-                PyLongObject l;
-                auto str = (!copy_type(s, l) && PyLong_CheckExact(&l))
-                               ? "Task-" + std::to_string(PyLong_AsLong((PyObject *)&l))
-                               : pyunicode_to_utf8(s);
+                std::string str = "Task-";
+                try
+                {
+                  str += std::to_string(pylong_to_llong(s));
+                }
+                catch (LongError &)
+                {
+                  str = pyunicode_to_utf8(s);
+                }
 #else
                 auto str = pyunicode_to_utf8(s);
 #endif
