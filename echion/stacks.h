@@ -12,8 +12,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifndef UNWIND_NATIVE_DISABLE
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif // UNWIND_NATIVE_DISABLE
 
 #include <echion/frame.h>
 #include <echion/mojo.h>
@@ -66,6 +68,7 @@ static FrameStack native_stack;
 static FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
+#ifndef UNWIND_NATIVE_DISABLE
 void unwind_native_stack()
 {
     unw_cursor_t cursor;
@@ -88,6 +91,7 @@ void unwind_native_stack()
         }
     }
 }
+#endif // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
 static size_t

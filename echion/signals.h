@@ -19,7 +19,9 @@ static std::mutex sigprof_handler_lock;
 // ----------------------------------------------------------------------------
 void sigprof_handler([[maybe_unused]] int signum)
 {
+#ifndef UNWIND_NATIVE_DISABLE
     unwind_native_stack();
+#endif // UNWIND_NATIVE_DISABLE
     unwind_python_stack(current_tstate);
     // NOTE: Native stacks for tasks is non-trivial, so we skip it for now.
 

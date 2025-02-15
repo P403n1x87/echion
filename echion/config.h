@@ -72,12 +72,16 @@ set_memory(PyObject *Py_UNUSED(m), PyObject *args)
 static PyObject *
 set_native(PyObject *Py_UNUSED(m), PyObject *args)
 {
+#ifndef UNWIND_NATIVE_DISABLE
     int new_native;
     if (!PyArg_ParseTuple(args, "p", &new_native))
         return NULL;
 
     native = new_native;
-
+#else
+    PyErr_SetString(PyExc_RuntimeError, "Native profiling is disabled, please re-build/install echion without UNWIND_NATIVE_DISABLE env var");
+    return NULL;
+#endif // UNWIND_NATIVE_DISABLE
     Py_RETURN_NONE;
 }
 
