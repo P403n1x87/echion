@@ -21,9 +21,11 @@
 #include <functional>
 #include <iostream>
 
+#ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif // UNWIND_NATIVE_DISABLE
 
 #include <echion/cache.h>
 #include <echion/mojo.h>
@@ -112,7 +114,9 @@ public:
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
+#ifndef UNWIND_NATIVE_DISABLE
     static Frame &get(unw_cursor_t &cursor);
+#endif // UNWIND_NATIVE_DISABLE
     static Frame &get(StringTable::Key name);
 
     // ------------------------------------------------------------------------
@@ -170,6 +174,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
+#ifndef UNWIND_NATIVE_DISABLE
     Frame(unw_cursor_t &cursor, unw_word_t pc)
     {
         try
@@ -182,6 +187,7 @@ public:
             throw Error();
         }
     }
+#endif // UNWIND_NATIVE_DISABLE
 
     // ------------------------------------------------------------------------
     void render_where(std::ostream &stream)
@@ -501,6 +507,7 @@ Frame &Frame::get(PyObject *frame)
 }
 
 // ----------------------------------------------------------------------------
+#ifndef UNWIND_NATIVE_DISABLE
 Frame &Frame::get(unw_cursor_t &cursor)
 {
     unw_word_t pc;
@@ -535,6 +542,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
         }
     }
 }
+#endif // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
 Frame &Frame::get(StringTable::Key name)
