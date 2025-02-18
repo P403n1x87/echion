@@ -74,7 +74,6 @@ static FrameStack interleaved_stack;
 #ifndef UNWIND_NATIVE_DISABLE
 void unwind_native_stack()
 {
-#ifndef UNWIND_NATIVE_DISABLE
     unw_cursor_t cursor;
     unw_context_t context;
 
@@ -94,7 +93,6 @@ void unwind_native_stack()
             break;
         }
     }
-#endif
 }
 #endif // UNWIND_NATIVE_DISABLE
 
