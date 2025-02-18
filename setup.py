@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
+import os
 import sys
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from setuptools import setup
 
 PLATFORM = sys.platform.lower()
 
+DISABLE_NATIVE = os.environ.get("UNWIND_NATIVE_DISABLE")
+
 LDADD = {
-    "linux": ["-l:libunwind.a", "-l:libunwind-x86_64.a", "-l:liblzma.a"],
+    "linux": ["-l:libunwind.a", "-l:liblzma.a"] if not DISABLE_NATIVE else [],
 }
 
 # add option to colorize compiler output
@@ -25,6 +28,9 @@ if PLATFORM == "darwin":
     CFLAGS = ["-mmacosx-version-min=10.15"]
 else:
     CFLAGS = []
+
+if DISABLE_NATIVE:
+    CFLAGS += ["-DUNWIND_NATIVE_DISABLE"]
 
 echionmodule = Extension(
     "echion.core",

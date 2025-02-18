@@ -207,7 +207,7 @@ public:
 
         return k;
     }
-#endif
+#endif // UNWIND_NATIVE_DISABLE
 
     inline std::string &lookup(Key key)
     {
