@@ -52,8 +52,8 @@ ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct io
 
 class VmReader
 {
-    void *buffer;
-    size_t sz;
+    void *buffer{nullptr};
+    size_t sz{0};
     int fd{-1};
     inline static VmReader *instance{nullptr}; // Prevents having to set this in implementation
 
