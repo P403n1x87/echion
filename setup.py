@@ -35,8 +35,7 @@ if DISABLE_NATIVE:
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc"],
-    include_dirs=[".", "vendor/libunwind-1.6.2/include"],
-    library_dirs=["vendor/libunwind-1.6.2/src/.libs"],
+    include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
