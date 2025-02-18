@@ -103,11 +103,11 @@ public:
                 std::string str = "Task-";
                 try
                 {
-                    str += std::to_string(pylong_to_llong(s));
+                  str += std::to_string(pylong_to_llong(s));
                 }
                 catch (LongError &)
                 {
-                    str = pyunicode_to_utf8(s);
+                  str = pyunicode_to_utf8(s);
                 }
 #else
                 std::string str = pyunicode_to_utf8(s);

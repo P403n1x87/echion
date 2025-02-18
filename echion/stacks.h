@@ -106,7 +106,6 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
     PyObject *current_frame_addr = frame_addr;
     while (current_frame_addr != NULL && stack.size() < MAX_FRAMES)
     {
-
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
 
@@ -117,7 +116,6 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         try
         {
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
-
             stack.push_back(frame);
         }
         catch (Frame::Error &e)
@@ -143,6 +141,19 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
         if (seen_frames.find(current_frame) != seen_frames.end())
             break;
 
+#if PY_VERSION_HEX >= 0x030d0000
+        // See the comment in unwind_frame()
+        while (current_frame != NULL) {
+            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
+                break;
+            }
+            current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
+        }
+
+        if (current_frame == NULL) {
+            break;
+        }
+#endif // PY_VERSION_HEX >= 0x030d0000
         count++;
 
         seen_frames.insert(current_frame);
@@ -165,7 +176,9 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+#elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
     if (copy_type(cframe_addr, cframe))
@@ -185,7 +198,9 @@ unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030d0000
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+#elif PY_VERSION_HEX >= 0x030b0000
     PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
 #else // Python < 3.11
     PyObject *frame_addr = (PyObject *)tstate->frame;
