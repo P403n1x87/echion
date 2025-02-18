@@ -146,6 +146,7 @@ public:
         return k;
     };
 
+#ifndef UNWIND_NATIVE_DISABLE
     // Native filename by program counter
     inline Key key(unw_word_t pc)
     {
@@ -206,6 +207,7 @@ public:
 
         return k;
     }
+#endif // UNWIND_NATIVE_DISABLE
 
     inline std::string &lookup(Key key)
     {
