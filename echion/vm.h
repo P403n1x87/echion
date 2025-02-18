@@ -239,7 +239,9 @@ __attribute__((constructor)) void init_safe_copy()
     // Else, we have to setup the writev method
     if (!read_process_vm_init())
     {
-        std::cerr << "Failed to initialize all safe copy interfaces" << std::endl;
+        // std::cerr might not have been fully initialized at this point, so use
+        // fprintf instead.
+        fprintf(stderr, "Failed to initialize all safe copy interfaces\n");
         failed_safe_copy = true;
         return;
     }
