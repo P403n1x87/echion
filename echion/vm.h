@@ -172,7 +172,14 @@ public:
 
     ~VmReader()
     {
-        munmap(buffer, sz);
+        if (buffer)
+        {
+            munmap(buffer, sz);
+        }
+        if (fd != -1)
+        {
+            close(fd);
+        }
         instance = nullptr;
     }
 };
