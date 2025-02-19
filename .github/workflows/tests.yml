@@ -17,8 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        echion-alt-vm-force: ["1", "0"]
 
-    name: Tests with Python ${{ matrix.python-version }} on ubuntu-latest
+    name: Tests with Python ${{ matrix.python-version }}, ECHION_ALT_VM_FORCE=${{ matrix.echion-alt-vm-force }} on ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +41,7 @@ jobs:
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" hatch run tests.py${{ matrix.python-version }}:tests -svv
+          sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests -svv
 
       - name: Print core dumps
         run: |
