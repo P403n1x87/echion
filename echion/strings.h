@@ -110,7 +110,7 @@ public:
                   str = pyunicode_to_utf8(s);
                 }
 #else
-                std::string str = pyunicode_to_utf8(s);
+                auto str = pyunicode_to_utf8(s);
 #endif
                 this->emplace(k, str);
                 mojo.string(k, str);
