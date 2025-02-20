@@ -219,10 +219,8 @@ _sampler()
                 });
         }
 
-        if (running)
-        {
-            std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
-        }
+        while (gettime() < end_time && running)
+            sched_yield();
 
         last_time = now;
     }
