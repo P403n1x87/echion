@@ -26,6 +26,26 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
+
+#if defined PL_LINUX
+class fd
+{
+public:
+    fd(int fd) : fd_(fd) {}
+
+    ~fd()
+    {
+        if (fd_ != -1)
+            close(fd_);
+    }
+
+    operator int() const { return fd_; }
+
+private:
+    int fd_;
+};
+#endif
+
 class ThreadInfo
 {
 public:
@@ -47,6 +67,7 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
+    std::unique_ptr<fd> stat_fd;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -73,12 +94,10 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        // Try to check that the thread_id is a valid pointer to a pthread
-        // structure. Calling pthread_getcpuclockid on an invalid memory address
-        // will cause a segmentation fault.
-        char buffer[32] = "";
-        if (copy_generic((void *)thread_id, buffer, sizeof(buffer)))
-            throw Error();
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
+        stat_fd = std::make_unique<fd>(open(buffer, O_RDONLY));
+        
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -113,22 +132,10 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048] = "";
+    char buffer[2048];
 
-    std::ostringstream file_name_stream;
-    file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
-
-    int fd = open(file_name_stream.str().c_str(), O_RDONLY);
-    if (fd == -1)
+    if (pread((int)*stat_fd, buffer, sizeof(buffer), 0) <= 0)
         return -1;
-
-    if (read(fd, buffer, 2047) == 0)
-    {
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
 
     char *p = strchr(buffer, ')');
     if (p == NULL)
