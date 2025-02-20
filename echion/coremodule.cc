@@ -37,8 +37,9 @@
 #include <echion/timing.h>
 
 // ----------------------------------------------------------------------------
-static void do_where()
+static void do_where(std::ostream &stream)
 {
+    Renderer::get().set_output(stream);
     Renderer::get().render_message("\r");
     Renderer::get().render_message("🐴 Echion reporting for duty");
     Renderer::get().render_message("");
@@ -74,7 +75,7 @@ static void where_listener()
         if (!running)
             break;
 
-        do_where();
+        do_where(std::cerr);
     }
 }
 
@@ -124,9 +125,10 @@ _start()
 
     if (where)
     {
-        if (Renderer::get().set_output(pipe_name)) {
-            do_where();
-        }
+        std::ofstream pipe(pipe_name, std::ios::out);
+
+        if (pipe)
+            do_where(pipe);
 
         else
             std::cerr << "Failed to open pipe " << pipe_name << std::endl;

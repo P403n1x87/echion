@@ -35,7 +35,7 @@ public:
   virtual ~RendererInterface() = default;
 };
 
-class DefaultRenderer : public RendererInterface
+class WhereRenderer : public RendererInterface
 {
   std::ostream *output;
   std::ofstream file_stream;
@@ -113,7 +113,7 @@ class Renderer
 {
 private:
   std::shared_ptr<RendererInterface> default_renderer =
-      std::make_shared<DefaultRenderer>();
+      std::make_shared<WhereRenderer>();
   std::weak_ptr<RendererInterface> currentRenderer;
 
   std::shared_ptr<RendererInterface> getActiveRenderer()
@@ -137,14 +137,14 @@ public:
 
   bool set_output(std::string_view file_name)
   {
-    // Have to cause default_renderer to a DefaultRenderer type before calling
-    return std::dynamic_pointer_cast<DefaultRenderer>(default_renderer)
+    // Have to cause default_renderer to a WhereRenderer type before calling
+    return std::dynamic_pointer_cast<WhereRenderer>(default_renderer)
         ->set_output(file_name);
   }
 
   bool set_output(std::ostream &new_output)
   {
-    return std::dynamic_pointer_cast<DefaultRenderer>(default_renderer)
+    return std::dynamic_pointer_cast<WhereRenderer>(default_renderer)
         ->set_output(new_output);
   }
 
