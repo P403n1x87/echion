@@ -121,7 +121,8 @@ bool ThreadInfo::is_running()
 
     // Open the file
     int fd = open(file_path, O_RDONLY);
-    if (fd == -1) {
+    if (fd == -1)
+    {
         return false; // Failed to open file
     }
 
@@ -129,12 +130,13 @@ bool ThreadInfo::is_running()
     ssize_t bytes_read = read(fd, buffer.data(), buffer.size() - 1);
     close(fd);
 
-    if (bytes_read <= 0) {
+    if (bytes_read <= 0)
+    {
         return false; // Failed to read or empty file
     }
 
     buffer[bytes_read] = '\0';
-    const char* p = strchr(buffer.data(), ')');
+    const char *p = strchr(buffer.data(), ')');
     return p != nullptr && strlen(p) > 2 && p[2] == 'R';
 
 #elif defined PL_DARWIN
@@ -320,7 +322,6 @@ void ThreadInfo::unwind_tasks()
 void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
 
-
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
     if (cpu)
     {
@@ -329,8 +330,13 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
         // If this thread isn't running, we observe it, but set CPU time to zero
         if (is_running())
+        {
             Renderer::get().render_cpu_time(cpu_time - previous_cpu_time);
-
+        }
+        else
+        {
+            return;
+        }
     }
     unwind(tstate);
 
@@ -338,7 +344,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        mojo.stack(pid, iid, name);
+        Renderer::get().stack(pid, iid, name);
 
         // Print the stack
         if (native)
@@ -350,19 +356,22 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             python_stack.render();
 
         // Print the metric
-        mojo.metric_time(delta);
+        Renderer::get().metric_time(delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
-            try {
+            try
+            {
                 auto &task_name = string_table.lookup(task_stack->front().get().name);
                 Renderer::get().render_task_begin(task_name);
-            } catch (StringTable::Error &) {
+            }
+            catch (StringTable::Error &)
+            {
                 Renderer::get().render_task_begin("[Unknown]");
             }
-            mojo.stack(pid, iid, name);
+            Renderer::get().stack(pid, iid, name);
 
             if (native)
             {
@@ -376,7 +385,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
             // Hide for now, since we don't have good task rendering
             // Renderer::get().render_cpu_time(delta);
-            mojo.metric_time(delta);
+            Renderer::get().metric_time(delta);
         }
 
         current_tasks.clear();

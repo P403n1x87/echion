@@ -107,15 +107,6 @@ _start()
 {
     init_frame_cache(MAX_FRAMES * (1 + native));
 
-    try
-    {
-        mojo.open();
-    }
-    catch (MojoWriter::Error &)
-    {
-        return;
-    }
-
     install_signals();
 
 #if defined PL_DARWIN
@@ -140,27 +131,27 @@ _start()
 
     setup_where();
 
-    mojo.header();
+    Renderer::get().header();
 
     if (memory)
     {
-        mojo.metadata("mode", "memory");
+        Renderer::get().metadata("mode", "memory");
     }
     else
     {
-        mojo.metadata("mode", (cpu ? "cpu" : "wall"));
+        Renderer::get().metadata("mode", (cpu ? "cpu" : "wall"));
     }
-    mojo.metadata("interval", std::to_string(interval));
-    mojo.metadata("sampler", "echion");
+    Renderer::get().metadata("interval", std::to_string(interval));
+    Renderer::get().metadata("sampler", "echion");
 
     // DEV: Workaround for the austin-python library: we send an empty sample
     // to set the PID. We also map the key value 0 to the empty string, to
     // support task name frames.
-    mojo.stack(pid, 0, "MainThread");
-    mojo.string(0, "");
-    mojo.string(1, "<invalid>");
-    mojo.string(2, "<unknown>");
-    mojo.metric_time(0);
+    Renderer::get().stack(pid, 0, "MainThread");
+    Renderer::get().string(0, "");
+    Renderer::get().string(1, "<invalid>");
+    Renderer::get().string(2, "<unknown>");
+    Renderer::get().metric_time(0);
 
     if (memory)
         setup_memory();
@@ -190,7 +181,7 @@ _stop()
 
     restore_signals();
 
-    mojo.close();
+    Renderer::get().close();
 
     reset_frame_cache();
 }
@@ -229,7 +220,8 @@ _sampler()
                 });
         }
 
-        if (running) {
+        if (running)
+        {
             std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
         }
 
