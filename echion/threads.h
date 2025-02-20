@@ -331,7 +331,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         // If this thread isn't running, we observe it, but set CPU time to zero
         if (is_running())
         {
-            Renderer::get().render_cpu_time(cpu_time - previous_cpu_time);
+            delta = cpu_time - previous_cpu_time;
+            Renderer::get().render_cpu_time(delta);
         }
         else
         {
