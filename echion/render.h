@@ -16,20 +16,19 @@ class RendererInterface
 {
 public:
   // Mojo specific functions
-  virtual void header() {};
-  virtual void metadata(const std::string &label, const std::string &value) {};
-  virtual void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) {};
-  virtual void string(mojo_ref_t key, const std::string &value) {};
+  virtual void close() = 0;
+  virtual void header() = 0;
+  virtual void metadata(const std::string &label, const std::string &value) = 0;
+  virtual void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) = 0;
   virtual void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
                      mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
-                     mojo_int_t column_end) {};
-  virtual void frame_ref(mojo_ref_t key) {};
-  virtual void frame_kernel(const std::string &scope) {};
-  virtual void metric_time(mojo_int_t value) {};
-  virtual void metric_memory(mojo_int_t value) {};
-  virtual void string(mojo_ref_t key, const char *value) {};
-  virtual void string_ref(mojo_ref_t key) {};
-  virtual void close() {};
+                     mojo_int_t column_end) = 0;
+  virtual void frame_ref(mojo_ref_t key) = 0;
+  virtual void frame_kernel(const std::string &scope) = 0;
+  virtual void metric_time(mojo_int_t value) = 0;
+  virtual void metric_memory(mojo_int_t value) = 0;
+  virtual void string(mojo_ref_t key, const std::string &value) = 0;
+  virtual void string_ref(mojo_ref_t key) = 0;
 
   virtual void render_message(std::string_view msg) = 0;
   virtual void render_thread_begin(PyThreadState *tstate, std::string_view name,
@@ -91,6 +90,20 @@ public:
     output = &new_output;
     return true;
   }
+
+   void header() override {};
+   void metadata(const std::string &label, const std::string &value) override {};
+   void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override {};
+   void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
+                     mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
+                     mojo_int_t column_end) override {};
+   void frame_ref(mojo_ref_t key) override {};
+   void frame_kernel(const std::string &scope) override {};
+   void metric_time(mojo_int_t value) override {};
+   void metric_memory(mojo_int_t value) override {};
+   void string(mojo_ref_t key, const std::string &value) override {};
+   void string_ref(mojo_ref_t key) override {};
+   void close() override {};
 
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
