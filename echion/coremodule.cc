@@ -40,8 +40,7 @@
 static void do_where(std::ostream &stream)
 {
     WhereRenderer::get().set_output(stream);
-    WhereRenderer::get().render_message("\r");
-    WhereRenderer::get().render_message("🐴 Echion reporting for duty");
+    WhereRenderer::get().render_message("\r🐴 Echion reporting for duty");
     WhereRenderer::get().render_message("");
 
     for_each_interp(

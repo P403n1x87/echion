@@ -64,6 +64,8 @@ public:
 
     void render_where(FrameStack &stack)
     {
+        WhereRenderer::get().render_message("🧵 " + name + ":");
+
         for (auto it = stack.rbegin(); it != stack.rend(); ++it)
             (*it).get().render_where();
     }
