@@ -108,9 +108,12 @@ public:
 
     // ------------------------------------------------------------------------
 
-    Frame(StringTable::Key name) : name(name){};
+    Frame(StringTable::Key name) : name(name) {};
 
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
+#if PY_VERSION_HEX >= 0x030b0000
+    static Frame &read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr);
+#endif
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
     static Frame &get(PyObject *frame);
@@ -468,6 +471,57 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     return frame;
 }
+
+#if PY_VERSION_HEX >= 0x030b0000
+// ------------------------------------------------------------------------
+Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
+{
+#if PY_VERSION_HEX >= 0x030d0000
+    // From Python versions 3.13, f_executable can have objects other than
+    // code objects for an internal frame. We need to skip some frames if
+    // its f_executable is not code as suggested here:
+    // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
+    PyObject f_executable;
+
+    for (;frame_addr; frame_addr = frame_addr->previous) {
+        // TODO: Cache the executable address for faster reads.
+        if (copy_type(frame_addr->f_executable, f_executable)) {
+            throw Frame::Error();
+        }
+        if (f_executable.ob_type == &PyCode_Type) {
+            break;
+        }
+    }
+
+    if (frame_addr == NULL) {
+        throw Frame::Error();
+    }
+
+#endif // PY_VERSION_HEX >= 0x030d0000
+
+    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
+    // from the code object.
+#if PY_VERSION_HEX >= 0x030d0000
+    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject*)frame_addr->f_executable, lasti);
+#else
+    const int lasti = ((int)(frame_addr->prev_instr - (_Py_CODEUNIT *)(frame_addr->f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get(frame_addr->f_code, lasti);
+#endif // PY_VERSION_HEX >= 0x030d0000
+    if (&frame != &INVALID_FRAME)
+    {
+#if PY_VERSION_HEX >= 0x030c0000
+        frame.is_entry = (frame_addr->owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+#else
+        frame.is_entry = frame_addr->is_entry;
+#endif
+    }
+
+    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)frame_addr->previous;
+
+    return frame;
+}
+#endif
 
 // ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)

@@ -51,6 +51,7 @@ void _set_cpu(int new_cpu) {
     cpu = new_cpu;
 }
 
+// ----------------------------------------------------------------------------
 static PyObject *
 set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
 {
