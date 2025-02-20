@@ -19,9 +19,6 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
 
 typedef pid_t proc_ref_t;
 
@@ -297,16 +294,6 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
         return -1;
 
 #endif
-
-    static int count = 0;
-    static int mod = 1; // multiplied by 10 every time
-    if (len != result) {
-      count++;
-      if (count % mod == 0) {
-        // TODO we used to print an error here; can we do better?
-        mod *= 10;
-      }
-    }
 
     return len != result;
 }
