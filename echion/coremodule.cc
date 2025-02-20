@@ -59,7 +59,7 @@ static void do_where(std::ostream &stream)
                     }
                     else
                         thread.render_where(python_stack);
-                        WhereRenderer::get().render_message("");
+                    WhereRenderer::get().render_message("");
                 });
         });
 }
