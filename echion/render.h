@@ -109,71 +109,11 @@ public:
   bool is_valid() override { return true; }
 };
 
-class NullRenderer : public RendererInterface
-{
-public:
-  void render_thread_begin(PyThreadState *tstate, std::string_view name,
-                           microsecond_t cpu_time, uintptr_t thread_id,
-                           unsigned long native_id) override
-  {
-    (void)tstate;
-    (void)name;
-    (void)cpu_time;
-    (void)thread_id;
-    (void)native_id;
-    return;
-  }
-
-  void render_task_begin(std::string_view name) override
-  {
-    (void)name;
-    return;
-  }
-
-  void render_stack_begin() override { return; }
-
-  void render_message(std::string_view msg) override
-  {
-    (void)msg;
-    return;
-  }
-
-  void render_python_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    (void)name;
-    (void)filename;
-    (void)line;
-    return;
-  }
-
-  void render_native_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    (void)name;
-    (void)filename;
-    (void)line;
-    return;
-  }
-
-  void render_stack_end() override { return; };
-
-  void render_cpu_time(uint64_t cpu_time) override
-  {
-    (void)cpu_time;
-    return;
-  }
-
-  bool is_valid() override { return true; }
-};
-
 class Renderer
 {
 private:
   std::shared_ptr<RendererInterface> default_renderer =
       std::make_shared<DefaultRenderer>();
-  std::shared_ptr<RendererInterface> null_renderer =
-      std::make_shared<NullRenderer>();
   std::weak_ptr<RendererInterface> currentRenderer;
 
   std::shared_ptr<RendererInterface> getActiveRenderer()
