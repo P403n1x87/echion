@@ -1,3 +1,4 @@
+from itertools import count
 import os
 import sys
 import typing as t
@@ -8,7 +9,6 @@ from subprocess import CalledProcessError
 from subprocess import CompletedProcess
 from subprocess import Popen
 from subprocess import run
-from tempfile import TemporaryDirectory
 from time import sleep
 
 import pytest
@@ -16,6 +16,8 @@ from austin.format.mojo import MojoFile
 
 
 PY = sys.version_info[:2]
+PROFILES = Path("profiles")
+PROFILES.mkdir(exist_ok=True)
 
 
 class DataSummary:
@@ -117,24 +119,27 @@ def run_echion(*args: str) -> CompletedProcess:
 def run_target(
     target: Path, *args: str
 ) -> t.Tuple[CompletedProcess, t.Optional[MojoFile]]:
-    with TemporaryDirectory(prefix="echion") as td:
-        output_file = Path(td) / "output.echion"
+    test_name = sys._getframe(1).f_code.co_name
+    output_file = (PROFILES / test_name).with_suffix(".mojo")
+    n = count(1)
+    while output_file.exists():
+        output_file = (PROFILES / f"{test_name}-{next(n)}").with_suffix(".mojo")
 
-        result = run_echion(
-            "-o",
-            str(output_file),
-            *args,
-            sys.executable,
-            "-m",
-            f"tests.{target}",
-        )
+    result = run_echion(
+        "-o",
+        str(output_file),
+        *args,
+        sys.executable,
+        "-m",
+        f"tests.{target}",
+    )
 
-        if not output_file.is_file():
-            return result, None
+    if not output_file.is_file():
+        return result, None
 
-        m = MojoFile(output_file.open(mode="rb"))
-        m.unwind()
-        return result, m
+    m = MojoFile(output_file.open(mode="rb"))
+    m.unwind()
+    return result, m
 
 
 def run_with_signal(target: Path, signal: int, delay: float, *args: str) -> Popen:

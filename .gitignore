@@ -145,3 +145,6 @@ protoc*
 
 # setuptools-scm
 _version.py
+
+# profiles
+profiles/
