@@ -10,6 +10,8 @@
 
 #include "timing.h" // microsecond_t
 
+#include <echion/mojo.h>
+
 class RendererInterface
 {
 public:
@@ -37,10 +39,24 @@ public:
 
 class WhereRenderer : public RendererInterface
 {
+private:
   std::ostream *output;
   std::ofstream file_stream;
 
+  WhereRenderer() {}
+  ~WhereRenderer() {}
+
 public:
+  static WhereRenderer &get()
+  {
+    static WhereRenderer instance;
+    return instance;
+  }
+
+  WhereRenderer(WhereRenderer &) = delete;
+  WhereRenderer(WhereRenderer &&) = delete;
+  void operator=(const WhereRenderer &) = delete;
+
   bool set_output(std::string_view file_name)
   {
     file_stream.close();
@@ -109,11 +125,35 @@ public:
   bool is_valid() override { return true; }
 };
 
+class MojoRenderer : public RendererInterface
+{
+private:
+  MojoWriter mojo;
+
+public:
+  void render_message(std::string_view msg) {};
+  void render_thread_begin(PyThreadState *tstate, std::string_view name,
+                           microsecond_t cpu_time, uintptr_t thread_id,
+                           unsigned long native_id) {};
+  void render_task_begin(std::string_view name) {};
+  void render_stack_begin() {};
+  void render_python_frame(std::string_view name, std::string_view file,
+                           uint64_t line) {};
+  void render_native_frame(std::string_view name, std::string_view file,
+                           uint64_t line) {};
+  void render_cpu_time(uint64_t cpu_time) {};
+  void render_stack_end() {};
+  bool is_valid() override
+  {
+    return true;
+  }
+};
+
 class Renderer
 {
 private:
   std::shared_ptr<RendererInterface> default_renderer =
-      std::make_shared<WhereRenderer>();
+      std::make_shared<MojoRenderer>();
   std::weak_ptr<RendererInterface> currentRenderer;
 
   std::shared_ptr<RendererInterface> getActiveRenderer()

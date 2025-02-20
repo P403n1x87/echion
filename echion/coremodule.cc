@@ -39,10 +39,10 @@
 // ----------------------------------------------------------------------------
 static void do_where(std::ostream &stream)
 {
-    Renderer::get().set_output(stream);
-    Renderer::get().render_message("\r");
-    Renderer::get().render_message("🐴 Echion reporting for duty");
-    Renderer::get().render_message("");
+    WhereRenderer::get().set_output(stream);
+    WhereRenderer::get().render_message("\r");
+    WhereRenderer::get().render_message("🐴 Echion reporting for duty");
+    WhereRenderer::get().render_message("");
 
     for_each_interp(
         [](PyInterpreterState *interp) -> void
@@ -59,7 +59,7 @@ static void do_where(std::ostream &stream)
                     }
                     else
                         thread.render_where(python_stack);
-                    Renderer::get().render_message("");
+                        WhereRenderer::get().render_message("");
                 });
         });
 }
