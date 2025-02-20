@@ -89,9 +89,6 @@ public:
     };
 
 private:
-#if defined PL_LINUX
-    std::array<char, 1024> buffer; // Buffer for reading file contents
-#endif
     void unwind_tasks();
 };
 
@@ -118,28 +115,32 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    static char file_path[128];
-    snprintf(file_path, sizeof(file_path), "/proc/self/task/%ld/stat", this->native_id);
+    char buffer[2048] = "";
 
-    // Open the file
-    int fd = open(file_path, O_RDONLY);
+    std::ostringstream file_name_stream;
+    file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
+
+    int fd = open(file_name_stream.str().c_str(), O_RDONLY);
     if (fd == -1)
+        return -1;
+
+    if (read(fd, buffer, 2047) == 0)
     {
-        return false; // Failed to open file
+        close(fd);
+        return -1;
     }
 
-    // Read from the file
-    ssize_t bytes_read = read(fd, buffer.data(), buffer.size() - 1);
     close(fd);
 
-    if (bytes_read <= 0)
-    {
-        return false; // Failed to read or empty file
-    }
+    char *p = strchr(buffer, ')');
+    if (p == NULL)
+        return -1;
 
-    buffer[bytes_read] = '\0';
-    const char *p = strchr(buffer.data(), ')');
-    return p != nullptr && strlen(p) > 2 && p[2] == 'R';
+    p += 2;
+    if (*p == ' ')
+        p++;
+
+    return (*p == 'R');
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
