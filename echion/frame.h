@@ -541,6 +541,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
         try
         {
             auto new_frame = std::make_unique<Frame>(&code, lasti);
+            new_frame->cache_key = frame_key;
             auto &f = *new_frame;
             Renderer::get().frame(
                 frame_key,
