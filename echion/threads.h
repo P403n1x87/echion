@@ -15,6 +15,7 @@
 #include <unordered_map>
 
 #if defined PL_LINUX
+#include <map>
 #include <time.h>
 #elif defined PL_DARWIN
 #include <mach/clock.h>
@@ -26,6 +27,80 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
+#if defined PL_LINUX
+class ProcFdMap
+{
+private:
+    // TODO: cleanup threads that have exited. We can use similar mechanism
+    // as we do for thread_info_map, but that requires synchronization. Instead
+    // we can periodically check for threads that have invalid file descriptors
+    // and remove them.
+    std::unordered_map<unsigned long, int> tid_to_fd_;
+
+    static ProcFdMap &get_instance()
+    {
+        static ProcFdMap instance;
+        return instance;
+    }
+
+    ProcFdMap() = default;
+
+    ~ProcFdMap()
+    {
+        for (const auto &[tid, fd] : tid_to_fd_)
+        {
+            if (fd != -1)
+            {
+                close(fd);
+            }
+        }
+    }
+
+public:
+    static int get_fd(unsigned long thread_id)
+    {
+        auto &instance = get_instance();
+
+        auto it = instance.tid_to_fd_.find(thread_id);
+        if (it != instance.tid_to_fd_.end())
+        {
+            // Return the cached file descriptor
+            return it->second;
+        }
+
+        // Open the file and cache the file descriptor
+        char file_path[128];
+        int path_len = snprintf(file_path, sizeof(file_path), "/proc/self/task/%ld/stat", thread_id);
+        if (path_len < 0 || path_len >= sizeof(file_path))
+        {
+            return -1;
+        }
+        int fd = open(file_path, O_RDONLY | O_CLOEXEC);
+        if (fd != -1)
+        {
+            instance.tid_to_fd_[thread_id] = fd;
+        }
+        return fd;
+    }
+
+    static void remove_fd(unsigned long thread_id)
+    {
+        auto &instance = get_instance();
+
+        auto it = instance.tid_to_fd_.find(thread_id);
+        if (it != instance.tid_to_fd_.end())
+        {
+            if (it->second != -1)
+            {
+                close(it->second);
+            }
+            instance.tid_to_fd_.erase(it);
+        }
+    }
+};
+#endif
+
+// ----------------------------------------------------------------------------
 class ThreadInfo
 {
 public:
@@ -87,6 +162,11 @@ public:
     };
 
 private:
+#if defined PL_LINUX
+    static constexpr size_t buffer_size = 128;
+    std::array<char, buffer_size> buffer;
+#endif // PL_LINUX
+
     void unwind_tasks();
 };
 
@@ -113,32 +193,27 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048] = "";
 
-    std::ostringstream file_name_stream;
-    file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
-
-    int fd = open(file_name_stream.str().c_str(), O_RDONLY);
+    int fd = ProcFdMap::get_fd(this->native_id);
     if (fd == -1)
-        return -1;
-
-    if (read(fd, buffer, 2047) == 0)
     {
-        close(fd);
-        return -1;
+        std::cout << "Failed to open file" << std::endl;
+        return false; // Failed to open file
+    }
+    // Read from the file
+    ssize_t bytes_read = pread(fd, buffer.data(), buffer.size() - 1, 0);
+
+    if (bytes_read <= 0)
+    {
+        std::cout << "Failed to read or empty file" << std::endl;
+        // Failed to read or empty file, remove the file descriptor
+        ProcFdMap::remove_fd(this->native_id);
+        return false;
     }
 
-    close(fd);
-
-    char *p = strchr(buffer, ')');
-    if (p == NULL)
-        return -1;
-
-    p += 2;
-    if (*p == ' ')
-        p++;
-
-    return (*p == 'R');
+    buffer[bytes_read] = '\0';
+    const char *p = strchr(buffer.data(), ')');
+    return p != nullptr && strlen(p) > 2 && p[2] == 'R';
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
