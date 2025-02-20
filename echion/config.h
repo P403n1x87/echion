@@ -30,10 +30,6 @@ static int where = 0;
 static std::string pipe_name;
 
 // ----------------------------------------------------------------------------
-void _set_interval(unsigned int new_interval) {
-    interval = new_interval;
-}
-
 static PyObject *
 set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 {
@@ -41,7 +37,7 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
     if (!PyArg_ParseTuple(args, "I", &new_interval))
         return NULL;
 
-    _set_interval(new_interval);
+    interval = new_interval;
 
     Py_RETURN_NONE;
 }
