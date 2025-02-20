@@ -361,15 +361,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     {
         for (auto &task_stack : current_tasks)
         {
-            try
-            {
-                auto &task_name = string_table.lookup(task_stack->front().get().name);
-                Renderer::get().render_task_begin(task_name);
-            }
-            catch (StringTable::Error &)
-            {
-                Renderer::get().render_task_begin("[Unknown]");
-            }
+            Renderer::get().render_task_begin();
             Renderer::get().stack(pid, iid, name);
 
             if (native)

@@ -34,7 +34,7 @@ public:
   virtual void render_thread_begin(PyThreadState *tstate, std::string_view name,
                                    microsecond_t cpu_time, uintptr_t thread_id,
                                    unsigned long native_id) = 0;
-  virtual void render_task_begin(std::string_view name) = 0;
+  virtual void render_task_begin() = 0;
   virtual void render_stack_begin() = 0;
   virtual void render_python_frame(std::string_view name, std::string_view file,
                                    uint64_t line) = 0;
@@ -91,19 +91,19 @@ public:
     return true;
   }
 
-   void header() override {};
-   void metadata(const std::string &label, const std::string &value) override {};
-   void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override {};
-   void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
-                     mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
-                     mojo_int_t column_end) override {};
-   void frame_ref(mojo_ref_t key) override {};
-   void frame_kernel(const std::string &scope) override {};
-   void metric_time(mojo_int_t value) override {};
-   void metric_memory(mojo_int_t value) override {};
-   void string(mojo_ref_t key, const std::string &value) override {};
-   void string_ref(mojo_ref_t key) override {};
-   void close() override {};
+  void header() override {};
+  void metadata(const std::string &label, const std::string &value) override {};
+  void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override {};
+  void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
+             mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
+             mojo_int_t column_end) override {};
+  void frame_ref(mojo_ref_t key) override {};
+  void frame_kernel(const std::string &scope) override {};
+  void metric_time(mojo_int_t value) override {};
+  void metric_memory(mojo_int_t value) override {};
+  void string(mojo_ref_t key, const std::string &value) override {};
+  void string_ref(mojo_ref_t key) override {};
+  void close() override {};
 
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
@@ -117,9 +117,8 @@ public:
     *output << "    🧵 " << name << ":" << std::endl;
   }
 
-  void render_task_begin(std::string_view name) override
+  void render_task_begin() override
   {
-    *output << "  📝 " << name << ":" << std::endl;
   }
 
   void render_stack_begin() override { return; }
@@ -326,7 +325,7 @@ public:
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
                            unsigned long native_id) override {};
-  void render_task_begin(std::string_view name) override {};
+  void render_task_begin() override {};
   void render_stack_begin() override {};
   void render_python_frame(std::string_view name, std::string_view file,
                            uint64_t line) override {};
@@ -444,9 +443,9 @@ public:
                                              native_id);
   }
 
-  void render_task_begin(std::string_view name)
+  void render_task_begin()
   {
-    getActiveRenderer()->render_task_begin(name);
+    getActiveRenderer()->render_task_begin();
   }
 
   void render_stack_begin() { getActiveRenderer()->render_stack_begin(); }
