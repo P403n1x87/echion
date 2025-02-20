@@ -187,6 +187,15 @@ public:
   }
 
   // ------------------------------------------------------------------------
+  void close() override
+  {
+    std::lock_guard<std::mutex> guard(lock);
+
+    output.flush();
+    output.close();
+  }
+
+  // ------------------------------------------------------------------------
   void inline header() override
   {
     std::lock_guard<std::mutex> guard(lock);
@@ -298,15 +307,6 @@ public:
 
     event(MOJO_STRING_REF);
     ref(key);
-  }
-
-  // ------------------------------------------------------------------------
-  void inline close() override
-  {
-    std::lock_guard<std::mutex> guard(lock);
-
-    output.flush();
-    output.close();
   }
 
   void render_message(std::string_view msg) override {};
