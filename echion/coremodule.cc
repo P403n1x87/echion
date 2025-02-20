@@ -318,7 +318,6 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
 
         auto entry = thread_info_map.find(thread_id);
         if (entry != thread_info_map.end())
-            // Thread is already tracked so we update its info
             entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
         else
             // Thread is already tracked so we update its info

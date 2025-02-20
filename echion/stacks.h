@@ -22,6 +22,82 @@
 
 #define MAX_FRAMES 2048
 
+#if PY_VERSION_HEX >= 0x030b0000
+// ----------------------------------------------------------------------------
+
+class StackChunkError : public std::exception
+{
+public:
+    const char *what() const noexcept override
+    {
+        return "Cannot create stack chunk object";
+    }
+};
+
+// ----------------------------------------------------------------------------
+class StackChunk
+{
+public:
+    StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
+
+    void* resolve(void *frame_addr);
+
+private:
+    void* origin = NULL;
+    std::unique_ptr<char[]> data = nullptr;
+    std::unique_ptr<StackChunk> previous = nullptr;
+
+    StackChunk(_PyStackChunk *chunk_addr);
+};
+
+// ----------------------------------------------------------------------------
+StackChunk::StackChunk(_PyStackChunk *chunk_addr)
+{
+    _PyStackChunk chunk;
+
+    // Copy the chunk header first
+    if (copy_type(chunk_addr, chunk))
+        throw StackChunkError();
+
+    origin = chunk_addr;
+    data = std::make_unique<char[]>(chunk.size);
+
+    // Copy the full chunk
+    if (copy_generic(chunk_addr, data.get(), chunk.size))
+        throw StackChunkError();
+
+    if (chunk.previous != NULL) {
+        try {
+            previous = std::unique_ptr<StackChunk>{ new StackChunk((_PyStackChunk*)chunk.previous) };
+        }
+        catch (StackChunkError &e) {
+            previous = nullptr;
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+void* StackChunk::resolve(void *address)
+{
+    _PyStackChunk *chunk = (_PyStackChunk *)data.get();
+
+    // Check if this chunk contains the address
+    if (address >= origin && address < (char *)origin + chunk->size)
+        return (char *)chunk + ((char *)address - (char *)origin);
+
+    if (previous)
+        return previous->resolve(address);
+
+    return address;
+}
+
+// ----------------------------------------------------------------------------
+
+static std::unique_ptr<StackChunk> stack_chunk = nullptr;
+#endif
+
+// ----------------------------------------------------------------------------
+
 class FrameStack : public std::deque<Frame::Ref>
 {
 public:
@@ -112,7 +188,14 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 
         try
         {
+#if PY_VERSION_HEX >= 0x030b0000
+            auto resolved_address = stack_chunk ? stack_chunk->resolve(current_frame_addr) : current_frame_addr;
+            Frame &frame = resolved_address != current_frame_addr
+                ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
+                : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
+#else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
+#endif
             stack.push_back(frame);
         }
         catch (Frame::Error &e)
@@ -172,6 +255,14 @@ static void
 unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
+#if PY_VERSION_HEX >= 0x030b0000
+    try {
+        stack_chunk = std::make_unique<StackChunk>(tstate);
+    }
+    catch (StackChunkError &e) {
+        stack_chunk = nullptr;
+    }
+#endif
 
 #if PY_VERSION_HEX >= 0x030d0000
     PyObject* frame_addr = (PyObject*)tstate->current_frame;
@@ -194,6 +285,14 @@ static void
 unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
+#if PY_VERSION_HEX >= 0x030b0000
+    try {
+        stack_chunk = std::make_unique<StackChunk>(tstate);
+    }
+    catch (StackChunkError &e) {
+        stack_chunk = nullptr;
+    }
+#endif
 
 #if PY_VERSION_HEX >= 0x030d0000
     PyObject* frame_addr = (PyObject*)tstate->current_frame;
