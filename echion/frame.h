@@ -6,13 +6,6 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#if defined __GNUC__ && defined HAVE_STD_ATOMIC
-#undef HAVE_STD_ATOMIC
-#endif
-#if PY_VERSION_HEX >= 0x030c0000
-// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
-#undef _PyGC_FINALIZED
-#endif
 #include <frameobject.h>
 #if PY_VERSION_HEX >= 0x030d0000
 #define Py_BUILD_CORE
@@ -124,7 +117,6 @@ static LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
 static void init_frame_cache(size_t capacity)
 {
     frame_cache = new LRUCache<uintptr_t, Frame>(capacity);
-    std::cout << "Frame cache initialized" << std::endl;
 }
 
 // ----------------------------------------------------------------------------

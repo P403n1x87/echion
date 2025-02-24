@@ -6,19 +6,10 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#if defined __GNUC__ && defined HAVE_STD_ATOMIC
-#undef HAVE_STD_ATOMIC
-#endif
-#if PY_VERSION_HEX >= 0x030c0000
-// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
-#undef _PyGC_FINALIZED
-#endif
 
 #include <functional>
 #include <fstream>
 #include <iostream>
-#include <memory>
-#include <mutex>
 #include <ostream>
 #include <string_view>
 
@@ -293,7 +284,7 @@ public:
                            unsigned long native_id) override {}
   void render_task_begin() override {}
   void render_stack_begin() override {}
-  void render_frame(Frame &frame) override;
+  inline void render_frame(Frame &frame) override;
   void render_cpu_time(uint64_t cpu_time) override {}
   void render_stack_end() override {}
   bool is_valid() override
