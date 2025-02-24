@@ -37,8 +37,8 @@ echionmodule = Extension(
     sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
-    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
-    extra_link_args=LDADD.get(PLATFORM, []),
+    extra_compile_args=["-std=c++17", "-Wall", "-Wextra", "-ggdb3", "-O0"] + CFLAGS + COLORS,
+    extra_link_args=LDADD.get(PLATFORM, []) + ["-g"],
 )
 
 setup(

@@ -48,7 +48,7 @@ typedef mach_port_t proc_ref_t;
 static bool failed_safe_copy = false;
 
 #if defined PL_LINUX
-ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
+static ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
 
 class VmReader
 {
@@ -187,13 +187,13 @@ public:
 /**
  * Initialize the safe copy operation on Linux
  */
-bool read_process_vm_init()
+static bool read_process_vm_init()
 {
     VmReader *_ = VmReader::get_instance();
     return !!_;
 }
 
-ssize_t vmreader_safe_copy(pid_t pid,
+static ssize_t vmreader_safe_copy(pid_t pid,
                            const struct iovec *local_iov, unsigned long liovcnt,
                            const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
 {
@@ -208,7 +208,7 @@ ssize_t vmreader_safe_copy(pid_t pid,
  *
  * This occurs at static init
  */
-__attribute__((constructor)) void init_safe_copy()
+__attribute__((constructor)) static void init_safe_copy()
 {
     char src[128];
     char dst[128];
