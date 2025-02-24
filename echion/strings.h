@@ -13,6 +13,7 @@
 #include <string>
 
 #include <echion/long.h>
+#include <echion/render.h>
 #include <echion/vm.h>
 
 class StringError : public std::exception

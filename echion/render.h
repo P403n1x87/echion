@@ -4,13 +4,21 @@
 
 #pragma once
 
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 #include <functional>
+#include <fstream>
 #include <iostream>
+#include <ostream>
 #include <string_view>
 
 #include "timing.h" // microsecond_t
 
 #include <echion/mojo.h>
+
+// Forward declaration
+class Frame;
 
 class RendererInterface
 {
@@ -23,7 +31,6 @@ public:
   virtual void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
                      mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
                      mojo_int_t column_end) = 0;
-  virtual void frame_ref(mojo_ref_t key) = 0;
   virtual void frame_kernel(const std::string &scope) = 0;
   virtual void metric_time(mojo_int_t value) = 0;
   virtual void metric_memory(mojo_int_t value) = 0;
@@ -36,10 +43,7 @@ public:
                                    unsigned long native_id) = 0;
   virtual void render_task_begin() = 0;
   virtual void render_stack_begin() = 0;
-  virtual void render_python_frame(std::string_view name, std::string_view file,
-                                   uint64_t line) = 0;
-  virtual void render_native_frame(std::string_view name, std::string_view file,
-                                   uint64_t line) = 0;
+  virtual void render_frame(Frame &frame) = 0;
   virtual void render_cpu_time(uint64_t cpu_time) = 0;
   virtual void render_stack_end() = 0;
 
@@ -97,7 +101,6 @@ public:
   void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
              mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
              mojo_int_t column_end) override {};
-  void frame_ref(mojo_ref_t key) override {};
   void frame_kernel(const std::string &scope) override {};
   void metric_time(mojo_int_t value) override {};
   void metric_memory(mojo_int_t value) override {};
@@ -107,49 +110,19 @@ public:
 
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
-                           unsigned long native_id) override
-  {
-    (void)tstate;
-    (void)cpu_time;
-    (void)thread_id;
-    (void)native_id;
-    ;
-    *output << "    🧵 " << name << ":" << std::endl;
-  }
-
-  void render_task_begin() override
-  {
-  }
-
-  void render_stack_begin() override { return; }
-
+                           unsigned long native_id) override;
+  void render_task_begin() override {}
+  void render_stack_begin() override {}
   void render_message(std::string_view msg) override
   {
     *output << msg << std::endl;
   }
-
-  void render_python_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    *output << "\033[38;5;248;1m" << name << "\033[0m \033[38;5;246m("
-            << filename << "\033[0m:\033[38;5;246m" << line << ")\033[0m"
-            << std::endl;
-  }
-
-  void render_native_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    *output << "\033[33;1m" << name << "\033[0m (\033[36m" << filename
-            << "\033[0m:\033[32m" << line << "\033[0m)" << std::endl;
-  }
-
-  void render_stack_end() override { return; }
-
+  void render_frame(Frame &frame) override;
+  void render_stack_end() override {}
   void render_cpu_time(uint64_t cpu_time) override
   {
     *output << " " << cpu_time << std::endl;
   }
-
   bool is_valid() override { return true; }
 };
 
@@ -260,22 +233,6 @@ public:
   }
 
   // ------------------------------------------------------------------------
-  void inline frame_ref(mojo_ref_t key) override
-  {
-    std::lock_guard<std::mutex> guard(lock);
-
-    if (key == 0)
-    {
-      event(MOJO_FRAME_INVALID);
-    }
-    else
-    {
-      event(MOJO_FRAME_REF);
-      ref(key);
-    }
-  }
-
-  // ------------------------------------------------------------------------
   void inline frame_kernel(const std::string &scope) override
   {
     std::lock_guard<std::mutex> guard(lock);
@@ -321,18 +278,15 @@ public:
     ref(key);
   }
 
-  void render_message(std::string_view msg) override {};
+  void render_message(std::string_view msg) override {}
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
-                           unsigned long native_id) override {};
-  void render_task_begin() override {};
-  void render_stack_begin() override {};
-  void render_python_frame(std::string_view name, std::string_view file,
-                           uint64_t line) override {};
-  void render_native_frame(std::string_view name, std::string_view file,
-                           uint64_t line) override {};
-  void render_cpu_time(uint64_t cpu_time) override {};
-  void render_stack_end() override {};
+                           unsigned long native_id) override {}
+  void render_task_begin() override {}
+  void render_stack_begin() override {}
+  inline void render_frame(Frame &frame) override;
+  void render_cpu_time(uint64_t cpu_time) override {}
+  void render_stack_end() override {}
   bool is_valid() override
   {
     return true;
@@ -401,8 +355,6 @@ public:
                                column_end);
   }
 
-  void frame_ref(mojo_ref_t key) { getActiveRenderer()->frame_ref(key); }
-
   void frame_kernel(const std::string &scope)
   {
     getActiveRenderer()->frame_kernel(scope);
@@ -450,17 +402,7 @@ public:
 
   void render_stack_begin() { getActiveRenderer()->render_stack_begin(); }
 
-  void render_python_frame(std::string_view name, std::string_view filename,
-                           uint64_t line)
-  {
-    getActiveRenderer()->render_python_frame(name, filename, line);
-  }
-
-  void render_native_frame(std::string_view name, std::string_view filename,
-                           uint64_t line)
-  {
-    getActiveRenderer()->render_native_frame(name, filename, line);
-  }
+  void render_frame(Frame &frame) { getActiveRenderer()->render_frame(frame); }
 
   void render_cpu_time(uint64_t cpu_time)
   {
