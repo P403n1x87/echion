@@ -344,7 +344,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     {
         // Print the PID and thread name
         Renderer::get().stack(pid, iid, name);
-        Renderer::get().render_stack_begin();
+
         // Print the stack
         if (native)
         {
@@ -354,7 +354,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         else
             python_stack.render();
 
-        Renderer::get().render_stack_end();
         // Print the metric
         Renderer::get().metric_time(delta);
     }
@@ -364,7 +363,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         {
             Renderer::get().render_task_begin();
             Renderer::get().stack(pid, iid, name);
-            Renderer::get().render_stack_begin();
 
             if (native)
             {
@@ -376,7 +374,6 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render();
 
-            Renderer::get().render_stack_end();
             // Hide for now, since we don't have good task rendering
             // Renderer::get().render_cpu_time(delta);
             Renderer::get().metric_time(delta);

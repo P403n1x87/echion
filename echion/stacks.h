@@ -19,7 +19,6 @@
 
 #include <echion/frame.h>
 #include <echion/mojo.h>
-#include <echion/render.h>
 
 #define MAX_FRAMES 2048
 
@@ -41,10 +40,10 @@ class StackChunk
 public:
     StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
 
-    void *resolve(void *frame_addr);
+    void* resolve(void *frame_addr);
 
 private:
-    void *origin = NULL;
+    void* origin = NULL;
     std::unique_ptr<char[]> data = nullptr;
     std::unique_ptr<StackChunk> previous = nullptr;
 
@@ -67,21 +66,18 @@ StackChunk::StackChunk(_PyStackChunk *chunk_addr)
     if (copy_generic(chunk_addr, data.get(), chunk.size))
         throw StackChunkError();
 
-    if (chunk.previous != NULL)
-    {
-        try
-        {
-            previous = std::unique_ptr<StackChunk>{new StackChunk((_PyStackChunk *)chunk.previous)};
+    if (chunk.previous != NULL) {
+        try {
+            previous = std::unique_ptr<StackChunk>{ new StackChunk((_PyStackChunk*)chunk.previous) };
         }
-        catch (StackChunkError &e)
-        {
+        catch (StackChunkError &e) {
             previous = nullptr;
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-void *StackChunk::resolve(void *address)
+void* StackChunk::resolve(void *address)
 {
     _PyStackChunk *chunk = (_PyStackChunk *)data.get();
 
@@ -122,6 +118,7 @@ public:
     // ------------------------------------------------------------------------
     void render()
     {
+        Renderer::get().render_stack_begin();
         for (auto it = this->rbegin(); it != this->rend(); ++it)
         {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -129,8 +126,10 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            Renderer::get().render_frame((*it).get());
+            (*it).get().render();
+            Renderer::get().frame_ref((*it).get().cache_key);
         }
+        Renderer::get().render_stack_end();
     }
 
 private:
@@ -195,8 +194,8 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030b0000
             auto resolved_address = stack_chunk ? stack_chunk->resolve(current_frame_addr) : current_frame_addr;
             Frame &frame = resolved_address != current_frame_addr
-                               ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
-                               : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
+                ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
+                : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
 #else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
@@ -227,17 +226,14 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
-        while (current_frame != NULL)
-        {
-            if (((_PyInterpreterFrame *)current_frame)->f_executable->ob_type == &PyCode_Type)
-            {
+        while (current_frame != NULL) {
+            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
                 break;
             }
             current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
         }
 
-        if (current_frame == NULL)
-        {
+        if (current_frame == NULL) {
             break;
         }
 #endif // PY_VERSION_HEX >= 0x030d0000
@@ -263,18 +259,16 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
-    {
+    try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
     }
-    catch (StackChunkError &e)
-    {
+    catch (StackChunkError &e) {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject *frame_addr = (PyObject *)tstate->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
@@ -295,18 +289,16 @@ unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
-    {
+    try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
     }
-    catch (StackChunkError &e)
-    {
+    catch (StackChunkError &e) {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject *frame_addr = (PyObject *)tstate->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
 #else // Python < 3.11

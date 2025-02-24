@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <exception>
+#include <ostream>
+
 #define MOJO_VERSION 3
 
 enum MojoEvent
