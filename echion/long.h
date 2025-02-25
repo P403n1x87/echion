@@ -5,6 +5,7 @@
 
 #include <Python.h>
 #if PY_VERSION_HEX >= 0x030c0000
+#define Py_BUILD_CORE
 #include <internal/pycore_long.h>
 #endif
 
