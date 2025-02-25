@@ -366,7 +366,7 @@ static void reset_frame_cache()
 }
 
 // ------------------------------------------------------------------------
-Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
+inline Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
@@ -439,7 +439,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
 #if PY_VERSION_HEX >= 0x030b0000
 // ------------------------------------------------------------------------
-Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
+inline Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
 {
 #if PY_VERSION_HEX >= 0x030d0000
     // From Python versions 3.13, f_executable can have objects other than
