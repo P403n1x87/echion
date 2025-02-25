@@ -192,33 +192,6 @@ public:
     }
 #endif // UNWIND_NATIVE_DISABLE
 
-    // ------------------------------------------------------------------------
-    // void render()
-    // {
-        // // Ordinarily we could just call string_table.lookup() here, but our
-        // // underlying frame is owned by the LRUCache, which may have cleaned it up,
-        // // causing the table keys to be garbage.  Since individual frames in
-        // // the stack may be bad, this isn't a failable condition.  Instead, populate
-        // // some defaults.
-        // constexpr std::string_view missing_filename = "<unknown file>";
-        // constexpr std::string_view missing_name = "<unknown function>";
-        // std::string_view filename_str;
-        // std::string_view name_str;
-        // try {
-        //   filename_str = string_table.lookup(filename);
-        // } catch (StringTable::Error &) {
-        //   filename_str = missing_filename;
-        // }
-
-        // try {
-        //   name_str = string_table.lookup(name);
-        // } catch (StringTable::Error &) {
-        //   name_str = missing_name;
-        // }
-
-        // Renderer::get().render_python_frame(name_str, filename_str, location.line);
-    // }
-
 private:
     // ------------------------------------------------------------------------
     void inline infer_location(PyCodeObject *code, int lasti)
