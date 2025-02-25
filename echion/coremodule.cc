@@ -107,6 +107,15 @@ _start()
 {
     init_frame_cache(MAX_FRAMES * (1 + native));
 
+    try
+    {
+        Renderer::get().open();
+    }
+    catch (std::exception &e)
+    {
+        return;
+    }
+
     install_signals();
 
 #if defined PL_DARWIN

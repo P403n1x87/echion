@@ -19,6 +19,7 @@ class RendererInterface
 {
 public:
   // Mojo specific functions
+  virtual void open() = 0;
   virtual void close() = 0;
   virtual void header() = 0;
   virtual void metadata(const std::string &label, const std::string &value) = 0;
@@ -91,6 +92,8 @@ public:
     return true;
   }
 
+  void open() override {};
+  void close() override {};
   void header() override {};
   void metadata(const std::string &label, const std::string &value) override {};
   void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override {};
@@ -103,7 +106,6 @@ public:
   void metric_memory(mojo_int_t value) override {};
   void string(mojo_ref_t key, const std::string &value) override {};
   void string_ref(mojo_ref_t key) override {};
-  void close() override {};
 
   void render_thread_begin(PyThreadState *tstate, std::string_view name,
                            microsecond_t cpu_time, uintptr_t thread_id,
@@ -175,7 +177,9 @@ class MojoRenderer : public RendererInterface
   }
 
 public:
-  MojoRenderer()
+  MojoRenderer() = default;
+
+  void open() override
   {
     output.open(std::getenv("ECHION_OUTPUT"));
     if (!output.is_open())
@@ -412,6 +416,11 @@ public:
   void render_message(std::string_view msg)
   {
     getActiveRenderer()->render_message(msg);
+  }
+
+  void open()
+  {
+    getActiveRenderer()->open();
   }
 
   void close()
