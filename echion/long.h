@@ -11,6 +11,8 @@
 
 #include <exception>
 
+#include <echion/vm.h>
+
 class LongError : public std::exception {
   const char *what() const noexcept override { return "LongError"; }
 };
