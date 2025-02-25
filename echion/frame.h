@@ -493,7 +493,7 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
 #endif
 
 // ----------------------------------------------------------------------------
-Frame &Frame::get(PyCodeObject *code_addr, int lasti)
+inline Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 {
     PyCodeObject code;
     if (copy_type(code_addr, code))
@@ -529,7 +529,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 }
 
 // ----------------------------------------------------------------------------
-Frame &Frame::get(PyObject *frame)
+inline Frame &Frame::get(PyObject *frame)
 {
     auto frame_key = Frame::key(frame);
 
@@ -555,7 +555,7 @@ Frame &Frame::get(PyObject *frame)
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-Frame &Frame::get(unw_cursor_t &cursor)
+inline Frame &Frame::get(unw_cursor_t &cursor)
 {
     unw_word_t pc;
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
@@ -592,7 +592,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
 #endif // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-Frame &Frame::get(StringTable::Key name)
+inline Frame &Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = (uintptr_t)name;
     try
