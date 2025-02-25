@@ -128,9 +128,9 @@ public:
 #if PY_VERSION_HEX >= 0x030b0000
 
 #if PY_VERSION_HEX >= 0x030d0000
-        _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
+        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
 #else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -195,40 +195,35 @@ public:
     // ------------------------------------------------------------------------
     void render()
     {
-        // Ordinarily we could just call string_table.lookup() here, but our
-        // underlying frame is owned by the LRUCache, which may have cleaned it up,
-        // causing the table keys to be garbage.  Since individual frames in
-        // the stack may be bad, this isn't a failable condition.  Instead, populate
-        // some defaults.
-        constexpr std::string_view missing_filename = "<unknown file>";
-        constexpr std::string_view missing_name = "<unknown function>";
-        std::string_view filename_str;
-        std::string_view name_str;
-        try {
-          filename_str = string_table.lookup(filename);
-        } catch (StringTable::Error &) {
-          filename_str = missing_filename;
-        }
+        Renderer::get().render_frame(*this);
+        // // Ordinarily we could just call string_table.lookup() here, but our
+        // // underlying frame is owned by the LRUCache, which may have cleaned it up,
+        // // causing the table keys to be garbage.  Since individual frames in
+        // // the stack may be bad, this isn't a failable condition.  Instead, populate
+        // // some defaults.
+        // constexpr std::string_view missing_filename = "<unknown file>";
+        // constexpr std::string_view missing_name = "<unknown function>";
+        // std::string_view filename_str;
+        // std::string_view name_str;
+        // try {
+        //   filename_str = string_table.lookup(filename);
+        // } catch (StringTable::Error &) {
+        //   filename_str = missing_filename;
+        // }
 
-        try {
-          name_str = string_table.lookup(name);
-        } catch (StringTable::Error &) {
-          name_str = missing_name;
-        }
+        // try {
+        //   name_str = string_table.lookup(name);
+        // } catch (StringTable::Error &) {
+        //   name_str = missing_name;
+        // }
 
-        Renderer::get().render_python_frame(name_str, filename_str, location.line);
+        // Renderer::get().render_python_frame(name_str, filename_str, location.line);
     }
 
     // ------------------------------------------------------------------------
     void render_where()
     {
-        auto name_str = string_table.lookup(name);
-        auto filename_str = string_table.lookup(filename);
-        auto line = location.line;
-        if (filename_str.rfind("native@", 0) == 0)
-            WhereRenderer::get().render_python_frame(name_str, filename_str, line);
-        else
-            WhereRenderer::get().render_native_frame(name_str, filename_str, line);
+        WhereRenderer::get().render_frame(*this);
     }
 
 private:
@@ -368,7 +363,7 @@ private:
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
 #elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -416,18 +411,22 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
     PyObject f_executable;
 
-    while (frame_addr != NULL) {
-        if (copy_type((_PyInterpreterFrame*)frame_addr, iframe) ||
-            copy_type(iframe.f_executable, f_executable)) {
+    while (frame_addr != NULL)
+    {
+        if (copy_type((_PyInterpreterFrame *)frame_addr, iframe) ||
+            copy_type(iframe.f_executable, f_executable))
+        {
             throw Frame::Error();
         }
-        if (f_executable.ob_type == &PyCode_Type) {
+        if (f_executable.ob_type == &PyCode_Type)
+        {
             break;
         }
-        frame_addr = (PyObject*)((_PyInterpreterFrame *)frame_addr)->previous;
+        frame_addr = (PyObject *)((_PyInterpreterFrame *)frame_addr)->previous;
     }
 
-    if (frame_addr == NULL) {
+    if (frame_addr == NULL)
+    {
         throw Frame::Error();
     }
 
@@ -439,8 +438,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject *)iframe.f_executable, lasti);
 #else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
@@ -483,17 +482,21 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
     PyObject f_executable;
 
-    for (;frame_addr; frame_addr = frame_addr->previous) {
+    for (; frame_addr; frame_addr = frame_addr->previous)
+    {
         // TODO: Cache the executable address for faster reads.
-        if (copy_type(frame_addr->f_executable, f_executable)) {
+        if (copy_type(frame_addr->f_executable, f_executable))
+        {
             throw Frame::Error();
         }
-        if (f_executable.ob_type == &PyCode_Type) {
+        if (f_executable.ob_type == &PyCode_Type)
+        {
             break;
         }
     }
 
-    if (frame_addr == NULL) {
+    if (frame_addr == NULL)
+    {
         throw Frame::Error();
     }
 
@@ -502,8 +505,8 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)frame_addr->f_executable, lasti);
+    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject *)frame_addr->f_executable, lasti);
 #else
     const int lasti = ((int)(frame_addr->prev_instr - (_Py_CODEUNIT *)(frame_addr->f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(frame_addr->f_code, lasti);
@@ -644,4 +647,37 @@ Frame &Frame::get(StringTable::Key name)
         frame_cache->store(frame_key, std::move(frame));
         return f;
     }
+}
+
+// ------------------------------------------------------------------------
+// Renderer functions defined in render.h that need to know about Frame
+// are implemented here.
+// ------------------------------------------------------------------------
+
+// ------------------------------------------------------------------------
+inline void WhereRenderer::render_frame(Frame &frame)
+{
+    auto name_str = string_table.lookup(frame.name);
+    auto filename_str = string_table.lookup(frame.filename);
+    auto line = frame.location.line;
+
+    if (filename_str.rfind("native@", 0) == 0)
+    {
+        WhereRenderer::get().render_message(
+            "\033[38;5;248;1m" + name_str + "\033[0m \033[38;5;246m(" +
+            filename_str + "\033[0m:\033[38;5;246m" + std::to_string(line) +
+            ")\033[0m");
+    }
+    else
+    {
+        WhereRenderer::get().render_message(
+            "\033[33;1m" + name_str + "\033[0m (\033[36m" + filename_str +
+            "\033[0m:\033[32m" + std::to_string(line) + "\033[0m)");
+    }
+}
+
+// ------------------------------------------------------------------------
+inline void MojoRenderer::render_frame(Frame &frame)
+{
+    frame_ref(frame.cache_key);
 }

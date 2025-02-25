@@ -12,6 +12,9 @@
 
 #include <echion/mojo.h>
 
+// Forward declaration
+class Frame;
+
 class RendererInterface
 {
 public:
@@ -36,10 +39,7 @@ public:
                                    unsigned long native_id) = 0;
   virtual void render_task_begin() = 0;
   virtual void render_stack_begin() = 0;
-  virtual void render_python_frame(std::string_view name, std::string_view file,
-                                   uint64_t line) = 0;
-  virtual void render_native_frame(std::string_view name, std::string_view file,
-                                   uint64_t line) = 0;
+  virtual void render_frame(Frame &frame) = 0;
   virtual void render_cpu_time(uint64_t cpu_time) = 0;
   virtual void render_stack_end() = 0;
 
@@ -128,20 +128,7 @@ public:
     *output << msg << std::endl;
   }
 
-  void render_python_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    *output << "\033[38;5;248;1m" << name << "\033[0m \033[38;5;246m("
-            << filename << "\033[0m:\033[38;5;246m" << line << ")\033[0m"
-            << std::endl;
-  }
-
-  void render_native_frame(std::string_view name, std::string_view filename,
-                           uint64_t line) override
-  {
-    *output << "\033[33;1m" << name << "\033[0m (\033[36m" << filename
-            << "\033[0m:\033[32m" << line << "\033[0m)" << std::endl;
-  }
+  void render_frame(Frame &frame) override;
 
   void render_stack_end() override { return; }
 
@@ -327,10 +314,7 @@ public:
                            unsigned long native_id) override {};
   void render_task_begin() override {};
   void render_stack_begin() override {};
-  void render_python_frame(std::string_view name, std::string_view file,
-                           uint64_t line) override {};
-  void render_native_frame(std::string_view name, std::string_view file,
-                           uint64_t line) override {};
+  void render_frame(Frame &frame) override;
   void render_cpu_time(uint64_t cpu_time) override {};
   void render_stack_end() override {};
   bool is_valid() override
@@ -450,17 +434,7 @@ public:
 
   void render_stack_begin() { getActiveRenderer()->render_stack_begin(); }
 
-  void render_python_frame(std::string_view name, std::string_view filename,
-                           uint64_t line)
-  {
-    getActiveRenderer()->render_python_frame(name, filename, line);
-  }
-
-  void render_native_frame(std::string_view name, std::string_view filename,
-                           uint64_t line)
-  {
-    getActiveRenderer()->render_native_frame(name, filename, line);
-  }
+  void render_frame(Frame &frame) { getActiveRenderer()->render_frame(frame); }
 
   void render_cpu_time(uint64_t cpu_time)
   {

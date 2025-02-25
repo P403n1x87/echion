@@ -127,7 +127,6 @@ public:
                 continue;
 #endif
             (*it).get().render();
-            Renderer::get().frame_ref((*it).get().cache_key);
         }
         Renderer::get().render_stack_end();
     }
