@@ -45,7 +45,7 @@ typedef mach_port_t proc_ref_t;
 #endif
 
 // Some checks are done at static initialization, so use this to read them at runtime
-static bool failed_safe_copy = false;
+bool failed_safe_copy = false;
 
 #if defined PL_LINUX
 ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
@@ -300,7 +300,6 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
 
 static pid_t pid = 0;
 
-inline void _set_pid(pid_t _pid)
-{
+void _set_pid(pid_t _pid) {
     pid = _pid;
 }
