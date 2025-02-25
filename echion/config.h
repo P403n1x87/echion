@@ -12,22 +12,22 @@
 #include <signal.h>
 
 // Sampling interval
-static unsigned int interval = 1000;
+inline unsigned int interval = 1000;
 
 // CPU Time mode
-static int cpu = 0;
+inline int cpu = 0;
 
 // Memory events
-static int memory = 0;
+inline int memory = 0;
 
 // Native stack sampling
-static int native = 0;
+inline int native = 0;
 
 // Where mode
-static int where = 0;
+inline int where = 0;
 
 // Pipe name (where mode IPC)
-static std::string pipe_name;
+inline std::string pipe_name;
 
 // ----------------------------------------------------------------------------
 static PyObject *

@@ -96,7 +96,7 @@ void *StackChunk::resolve(void *address)
 
 // ----------------------------------------------------------------------------
 
-static std::unique_ptr<StackChunk> stack_chunk = nullptr;
+inline std::unique_ptr<StackChunk> stack_chunk = nullptr;
 #endif
 
 // ----------------------------------------------------------------------------
@@ -156,9 +156,9 @@ private:
 
 // ----------------------------------------------------------------------------
 
-static FrameStack python_stack;
-static FrameStack native_stack;
-static FrameStack interleaved_stack;
+inline FrameStack python_stack;
+inline FrameStack native_stack;
+inline FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
@@ -449,4 +449,4 @@ private:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static auto &stack_table = *(new StackTable());
+inline auto &stack_table = *(new StackTable());

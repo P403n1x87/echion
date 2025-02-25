@@ -5,12 +5,15 @@
 #pragma once
 
 #include <functional>
+#include <fstream>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <ostream>
 #include <string_view>
 
-#include "timing.h" // microsecond_t
-
 #include <echion/mojo.h>
+#include <echion/timing.h>
 
 // Forward declaration
 class Frame;

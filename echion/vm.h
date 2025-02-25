@@ -298,7 +298,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
     return len != result;
 }
 
-static pid_t pid = 0;
+inline pid_t pid = 0;
 
 inline void _set_pid(pid_t _pid) {
     pid = _pid;
