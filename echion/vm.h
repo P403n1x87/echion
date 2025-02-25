@@ -48,7 +48,7 @@ typedef mach_port_t proc_ref_t;
 inline bool failed_safe_copy = false;
 
 #if defined PL_LINUX
-ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
+inline ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
 
 class VmReader
 {
