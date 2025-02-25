@@ -12,6 +12,7 @@
 #endif
 #include <frameobject.h>
 #if PY_VERSION_HEX >= 0x030d0000
+#define Py_BUILD_CORE
 #include <internal/pycore_code.h>
 #endif // PY_VERSION_HEX >= 0x030d0000
 #if PY_VERSION_HEX >= 0x030b0000
