@@ -150,3 +150,5 @@ _version.py
 profiles/
 
 compile_commands.json
+
+%%(pid).echion
