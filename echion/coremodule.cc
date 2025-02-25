@@ -54,10 +54,10 @@ static void do_where(std::ostream &stream)
                     if (native)
                     {
                         interleave_stacks();
-                        thread.render_where(interleaved_stack);
+                        interleaved_stack.render_where();
                     }
                     else
-                        thread.render_where(python_stack);
+                        python_stack.render_where();
                     WhereRenderer::get().render_message("");
                 });
         });

@@ -193,9 +193,8 @@ public:
 #endif // UNWIND_NATIVE_DISABLE
 
     // ------------------------------------------------------------------------
-    void render()
-    {
-        Renderer::get().render_frame(*this);
+    // void render()
+    // {
         // // Ordinarily we could just call string_table.lookup() here, but our
         // // underlying frame is owned by the LRUCache, which may have cleaned it up,
         // // causing the table keys to be garbage.  Since individual frames in
@@ -218,13 +217,7 @@ public:
         // }
 
         // Renderer::get().render_python_frame(name_str, filename_str, location.line);
-    }
-
-    // ------------------------------------------------------------------------
-    void render_where()
-    {
-        WhereRenderer::get().render_frame(*this);
-    }
+    // }
 
 private:
     // ------------------------------------------------------------------------

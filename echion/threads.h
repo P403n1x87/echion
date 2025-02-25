@@ -62,14 +62,6 @@ public:
     void sample(int64_t, PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
 
-    void render_where(FrameStack &stack)
-    {
-        WhereRenderer::get().render_message("🧵 " + name + ":");
-
-        for (auto it = stack.rbegin(); it != stack.rend(); ++it)
-            (*it).get().render_where();
-    }
-
     // ------------------------------------------------------------------------
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
         : thread_id(thread_id), native_id(native_id), name(name)
