@@ -187,13 +187,13 @@ public:
 /**
  * Initialize the safe copy operation on Linux
  */
-bool read_process_vm_init()
+inline bool read_process_vm_init()
 {
     VmReader *_ = VmReader::get_instance();
     return !!_;
 }
 
-ssize_t vmreader_safe_copy(pid_t pid,
+inline ssize_t vmreader_safe_copy(pid_t pid,
                            const struct iovec *local_iov, unsigned long liovcnt,
                            const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
 {
@@ -208,7 +208,7 @@ ssize_t vmreader_safe_copy(pid_t pid,
  *
  * This occurs at static init
  */
-__attribute__((constructor)) void init_safe_copy()
+__attribute__((constructor)) inline void init_safe_copy()
 {
     char src[128];
     char dst[128];
