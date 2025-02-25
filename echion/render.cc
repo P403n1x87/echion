@@ -60,7 +60,7 @@ void WhereRenderer::render_frame(Frame &frame)
   }
 }
 
-inline void MojoRenderer::render_frame(Frame &frame)
+void MojoRenderer::render_frame(Frame &frame)
 {
   std::lock_guard<std::mutex> guard(lock);
 
