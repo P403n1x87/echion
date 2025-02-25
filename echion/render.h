@@ -110,37 +110,21 @@ public:
   void string(mojo_ref_t key, const std::string &value) override {};
   void string_ref(mojo_ref_t key) override {};
 
-  void render_thread_begin(PyThreadState *tstate, std::string_view name,
-                           microsecond_t cpu_time, uintptr_t thread_id,
-                           unsigned long native_id) override
+  void render_thread_begin(PyThreadState *, std::string_view name,
+                           microsecond_t, uintptr_t,
+                           unsigned long) override
   {
-    (void)tstate;
-    (void)cpu_time;
-    (void)thread_id;
-    (void)native_id;
-    ;
     *output << "    🧵 " << name << ":" << std::endl;
   }
-
-  void render_task_begin() override
-  {
-  }
-
-  void render_stack_begin() override { return; }
-
+  void render_task_begin() override {}
+  void render_stack_begin() override {}
   void render_message(std::string_view msg) override
   {
     *output << msg << std::endl;
   }
-
-  void render_frame(Frame &frame) override;
-
-  void render_stack_end() override { return; }
-
-  void render_cpu_time(uint64_t cpu_time) override
-  {
-    *output << " " << cpu_time << std::endl;
-  }
+  void render_frame(Frame &) override;
+  void render_stack_end() override {}
+  void render_cpu_time(uint64_t) override {}
 
   bool is_valid() override { return true; }
 };
