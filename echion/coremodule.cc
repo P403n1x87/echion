@@ -51,6 +51,7 @@ static void do_where(std::ostream &stream)
                 [](PyThreadState *tstate, ThreadInfo &thread) -> void
                 {
                     thread.unwind(tstate);
+                    WhereRenderer::get().render_message("🧵 " + thread.name + ":");
                     if (native)
                     {
                         interleave_stacks();
