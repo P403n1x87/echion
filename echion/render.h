@@ -26,13 +26,11 @@ public:
   virtual void close() = 0;
   virtual void header() = 0;
   virtual void metadata(const std::string &label, const std::string &value) = 0;
-  virtual void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) = 0;
   virtual void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
                      mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
                      mojo_int_t column_end) = 0;
   virtual void frame_ref(mojo_ref_t key) = 0;
   virtual void frame_kernel(const std::string &scope) = 0;
-  virtual void metric_time(mojo_int_t value) = 0;
   virtual void metric_memory(mojo_int_t value) = 0;
   virtual void string(mojo_ref_t key, const std::string &value) = 0;
   virtual void string_ref(mojo_ref_t key) = 0;
@@ -42,10 +40,10 @@ public:
                                    microsecond_t cpu_time, uintptr_t thread_id,
                                    unsigned long native_id) = 0;
   virtual void render_task_begin() = 0;
-  virtual void render_stack_begin() = 0;
+  virtual void render_stack_begin(long long pid, long long iid, const std::string &thread_name) = 0;
   virtual void render_frame(Frame &frame) = 0;
   virtual void render_cpu_time(uint64_t cpu_time) = 0;
-  virtual void render_stack_end() = 0;
+  virtual void render_stack_end(uint64_t delta) = 0;
 
   // The validity of the interface is a two-step process
   // 1. If the RendererInterface has been destroyed, obviously it's invalid
@@ -99,13 +97,11 @@ public:
   void close() override {};
   void header() override {};
   void metadata(const std::string &label, const std::string &value) override {};
-  void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override {};
   void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
              mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
              mojo_int_t column_end) override {};
   void frame_ref(mojo_ref_t key) override {};
   void frame_kernel(const std::string &scope) override {};
-  void metric_time(mojo_int_t value) override {};
   void metric_memory(mojo_int_t value) override {};
   void string(mojo_ref_t key, const std::string &value) override {};
   void string_ref(mojo_ref_t key) override {};
@@ -117,13 +113,13 @@ public:
     *output << "    🧵 " << name << ":" << std::endl;
   }
   void render_task_begin() override {}
-  void render_stack_begin() override {}
+  void render_stack_begin(long long, long long, const std::string &) override {}
   void render_message(std::string_view msg) override
   {
     *output << msg << std::endl;
   }
   void render_frame(Frame &) override;
-  void render_stack_end() override {}
+  void render_stack_end(uint64_t) override {}
   void render_cpu_time(uint64_t) override {}
 
   bool is_valid() override { return true; }
@@ -205,7 +201,7 @@ public:
   }
 
   // ------------------------------------------------------------------------
-  void inline stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name) override
+  void inline stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name)
   {
     std::lock_guard<std::mutex> guard(lock);
 
@@ -263,7 +259,7 @@ public:
   }
 
   // ------------------------------------------------------------------------
-  void inline metric_time(mojo_int_t value) override
+  void inline metric_time(mojo_int_t value)
   {
     std::lock_guard<std::mutex> guard(lock);
 
@@ -304,10 +300,16 @@ public:
                            microsecond_t cpu_time, uintptr_t thread_id,
                            unsigned long native_id) override {};
   void render_task_begin() override {};
-  void render_stack_begin() override {};
+  void render_stack_begin(long long pid, long long iid, const std::string &name) override
+  {
+    stack(pid, iid, name);
+  };
   void render_frame(Frame &frame) override;
   void render_cpu_time(uint64_t cpu_time) override {};
-  void render_stack_end() override {};
+  void render_stack_end(uint64_t delta) override
+  {
+    metric_time(delta);
+  };
   bool is_valid() override
   {
     return true;
@@ -358,11 +360,6 @@ public:
     getActiveRenderer()->metadata(label, value);
   }
 
-  void stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name)
-  {
-    getActiveRenderer()->stack(pid, iid, thread_name);
-  }
-
   void string(mojo_ref_t key, const std::string &value)
   {
     getActiveRenderer()->string(key, value);
@@ -381,11 +378,6 @@ public:
   void frame_kernel(const std::string &scope)
   {
     getActiveRenderer()->frame_kernel(scope);
-  }
-
-  void metric_time(mojo_int_t value)
-  {
-    getActiveRenderer()->metric_time(value);
   }
 
   void metric_memory(mojo_int_t value)
@@ -428,7 +420,10 @@ public:
     getActiveRenderer()->render_task_begin();
   }
 
-  void render_stack_begin() { getActiveRenderer()->render_stack_begin(); }
+  void render_stack_begin(long long pid, long long iid, const std::string &thread_name)
+  {
+    getActiveRenderer()->render_stack_begin(pid, iid, thread_name);
+  }
 
   void render_frame(Frame &frame) { getActiveRenderer()->render_frame(frame); }
 
@@ -437,5 +432,8 @@ public:
     getActiveRenderer()->render_cpu_time(cpu_time);
   }
 
-  void render_stack_end() { getActiveRenderer()->render_stack_end(); }
+  void render_stack_end(uint64_t delta)
+  {
+    getActiveRenderer()->render_stack_end(delta);
+  }
 };

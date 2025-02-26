@@ -72,7 +72,7 @@ public:
     // ------------------------------------------------------------------------
     void inline render()
     {
-        Renderer::get().stack(pid, iid, thread_name);
+        Renderer::get().render_stack_begin(pid, iid, thread_name);
 
         stack_table.retrieve(stack).render();
 

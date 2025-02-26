@@ -158,11 +158,11 @@ _start()
     // DEV: Workaround for the austin-python library: we send an empty sample
     // to set the PID. We also map the key value 0 to the empty string, to
     // support task name frames.
-    Renderer::get().stack(pid, 0, "MainThread");
+    Renderer::get().render_stack_begin(pid, 0, "MainThread");
     Renderer::get().string(0, "");
     Renderer::get().string(1, "<invalid>");
     Renderer::get().string(2, "<unknown>");
-    Renderer::get().metric_time(0);
+    Renderer::get().render_stack_end(0);
 
     if (memory)
         setup_memory();

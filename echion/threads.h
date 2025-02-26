@@ -316,7 +316,6 @@ void ThreadInfo::unwind_tasks()
 // ----------------------------------------------------------------------------
 void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
-
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
     if (cpu)
     {
@@ -329,7 +328,9 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 #ifndef ECHION_OBSERVE_IDLE_THREADS
             return;
 #endif // ECHION_OBSERVE_IDLE_THREADS
-        } else {
+        }
+        else
+        {
             delta = cpu_time - previous_cpu_time;
             Renderer::get().render_cpu_time(delta);
         }
@@ -340,8 +341,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        Renderer::get().stack(pid, iid, name);
-        Renderer::get().render_stack_begin();
+        Renderer::get().render_stack_begin(pid, iid, name);
         // Print the stack
         if (native)
         {
@@ -352,18 +352,14 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         {
             python_stack.render();
         }
-        Renderer::get().render_stack_end();
-
-        // Print the metric
-        Renderer::get().metric_time(delta);
+        Renderer::get().render_stack_end(delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
             Renderer::get().render_task_begin();
-            Renderer::get().stack(pid, iid, name);
-            Renderer::get().render_stack_begin();
+            Renderer::get().render_stack_begin(pid, iid, name);
             if (native)
             {
                 // NOTE: These stacks might be non-sensical, especially with
@@ -375,11 +371,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             {
                 task_stack->render();
             }
-            Renderer::get().render_stack_end();
-
-            // Hide for now, since we don't have good task rendering
-            // Renderer::get().render_cpu_time(delta);
-            Renderer::get().metric_time(delta);
+            Renderer::get().render_stack_end(delta);
         }
 
         current_tasks.clear();
