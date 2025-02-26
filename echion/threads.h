@@ -322,17 +322,18 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         microsecond_t previous_cpu_time = cpu_time;
         update_cpu_time();
 
-        // If this thread isn't running, we observe it, but set CPU time to zero
-        if (!is_running())
-        {
-#ifndef ECHION_OBSERVE_IDLE_THREADS
-            return;
-#endif // ECHION_OBSERVE_IDLE_THREADS
-        }
-        else
+        if (is_running())
         {
             delta = cpu_time - previous_cpu_time;
             Renderer::get().render_cpu_time(delta);
+        }
+        // If this thread isn't running and ignore_non_running_threads is
+        // set, we simply skip unwinding this thread. If ignore_non_running_threads
+        // is not set, we set CPU time to zero.
+        else if (ignore_non_running_threads)
+        {
+
+            return;
         }
     }
     unwind(tstate);
