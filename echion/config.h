@@ -123,7 +123,15 @@ set_pipe_name(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-void _set_max_frames(unsigned int new_max_frames)
+static PyObject *
+set_max_frames(PyObject *Py_UNUSED(m), PyObject *args)
 {
+    unsigned int new_max_frames;
+    if (!PyArg_ParseTuple(args, "I", &new_max_frames))
+        return NULL;
+
     max_frames = new_max_frames;
+
+    Py_RETURN_NONE;
+
 }
