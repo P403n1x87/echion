@@ -16,17 +16,17 @@
 #include <mutex>
 #include <thread>
 
-static _PyRuntimeState *runtime = &_PyRuntime;
-static PyThreadState *current_tstate = NULL;
+inline _PyRuntimeState *runtime = &_PyRuntime;
+inline PyThreadState *current_tstate = NULL;
 
-static std::thread *sampler_thread = nullptr;
+inline std::thread *sampler_thread = nullptr;
 
-static int running = 0;
+inline int running = 0;
 
-static std::thread *where_thread = nullptr;
-static std::condition_variable where_cv;
-static std::mutex where_lock;
+inline std::thread *where_thread = nullptr;
+inline std::condition_variable where_cv;
+inline std::mutex where_lock;
 
-static PyObject *asyncio_current_tasks = NULL;
-static PyObject *asyncio_scheduled_tasks = NULL; // WeakSet
-static PyObject *asyncio_eager_tasks = NULL;     // set
+inline PyObject *asyncio_current_tasks = NULL;
+inline PyObject *asyncio_scheduled_tasks = NULL; // WeakSet
+inline PyObject *asyncio_eager_tasks = NULL;     // set

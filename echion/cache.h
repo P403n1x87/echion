@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <list>
+#include <memory>
 #include <unordered_map>
 
 template <typename K, typename V>
