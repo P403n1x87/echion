@@ -352,7 +352,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         {
             python_stack.render();
         }
-        Renderer::get().render_stack_end(delta);
+        Renderer::get().render_stack_end(MetricType::Time, delta);
     }
     else
     {
@@ -371,7 +371,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             {
                 task_stack->render();
             }
-            Renderer::get().render_stack_end(delta);
+            Renderer::get().render_stack_end(MetricType::Time, delta);
         }
 
         current_tasks.clear();

@@ -162,7 +162,7 @@ _start()
     Renderer::get().string(0, "");
     Renderer::get().string(1, "<invalid>");
     Renderer::get().string(2, "<unknown>");
-    Renderer::get().render_stack_end(0);
+    Renderer::get().render_stack_end(MetricType::Time, 0);
 
     if (memory)
         setup_memory();

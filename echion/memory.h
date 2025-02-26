@@ -76,7 +76,7 @@ public:
 
         stack_table.retrieve(stack).render();
 
-        Renderer::get().metric_memory(size);
+        Renderer::get().render_stack_end(MetricType::Memory, size);
     }
 };
 

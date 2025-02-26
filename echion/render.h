@@ -18,20 +18,28 @@
 // Forward declaration
 class Frame;
 
+enum MetricType
+{
+  Time,
+  Memory
+};
+
 class RendererInterface
 {
 public:
-  // Mojo specific functions
   virtual void open() = 0;
   virtual void close() = 0;
   virtual void header() = 0;
   virtual void metadata(const std::string &label, const std::string &value) = 0;
+  // If a renderer has its own caching mechanism for frames, this can be used
+  // to store frame information.
   virtual void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name,
                      mojo_int_t line, mojo_int_t line_end, mojo_int_t column,
                      mojo_int_t column_end) = 0;
+  // Refers to the frame stored using above function
   virtual void frame_ref(mojo_ref_t key) = 0;
   virtual void frame_kernel(const std::string &scope) = 0;
-  virtual void metric_memory(mojo_int_t value) = 0;
+  // Simlar to frame/frame_ref functions, helpers for string tables
   virtual void string(mojo_ref_t key, const std::string &value) = 0;
   virtual void string_ref(mojo_ref_t key) = 0;
 
@@ -43,7 +51,7 @@ public:
   virtual void render_stack_begin(long long pid, long long iid, const std::string &thread_name) = 0;
   virtual void render_frame(Frame &frame) = 0;
   virtual void render_cpu_time(uint64_t cpu_time) = 0;
-  virtual void render_stack_end(uint64_t delta) = 0;
+  virtual void render_stack_end(MetricType metric_type, uint64_t delta) = 0;
 
   // The validity of the interface is a two-step process
   // 1. If the RendererInterface has been destroyed, obviously it's invalid
@@ -102,7 +110,6 @@ public:
              mojo_int_t column_end) override {};
   void frame_ref(mojo_ref_t key) override {};
   void frame_kernel(const std::string &scope) override {};
-  void metric_memory(mojo_int_t value) override {};
   void string(mojo_ref_t key, const std::string &value) override {};
   void string_ref(mojo_ref_t key) override {};
 
@@ -119,7 +126,7 @@ public:
     *output << msg << std::endl;
   }
   void render_frame(Frame &) override;
-  void render_stack_end(uint64_t) override {}
+  void render_stack_end(MetricType, uint64_t) override {}
   void render_cpu_time(uint64_t) override {}
 
   bool is_valid() override { return true; }
@@ -268,7 +275,7 @@ public:
   }
 
   // ------------------------------------------------------------------------
-  void inline metric_memory(mojo_int_t value) override
+  void inline metric_memory(mojo_int_t value)
   {
     std::lock_guard<std::mutex> guard(lock);
 
@@ -306,9 +313,16 @@ public:
   };
   void render_frame(Frame &frame) override;
   void render_cpu_time(uint64_t cpu_time) override {};
-  void render_stack_end(uint64_t delta) override
+  void render_stack_end(MetricType metric_type, uint64_t delta) override
   {
-    metric_time(delta);
+    if (metric_type == MetricType::Time)
+    {
+      metric_time(delta);
+    }
+    else if (metric_type == MetricType::Memory)
+    {
+      metric_memory(delta);
+    }
   };
   bool is_valid() override
   {
@@ -380,11 +394,6 @@ public:
     getActiveRenderer()->frame_kernel(scope);
   }
 
-  void metric_memory(mojo_int_t value)
-  {
-    getActiveRenderer()->metric_memory(value);
-  }
-
   void string(mojo_ref_t key, const char *value)
   {
     getActiveRenderer()->string(key, value);
@@ -432,8 +441,8 @@ public:
     getActiveRenderer()->render_cpu_time(cpu_time);
   }
 
-  void render_stack_end(uint64_t delta)
+  void render_stack_end(MetricType metric_type, uint64_t delta)
   {
-    getActiveRenderer()->render_stack_end(delta);
+    getActiveRenderer()->render_stack_end(metric_type, delta);
   }
 };
