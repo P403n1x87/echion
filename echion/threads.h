@@ -324,6 +324,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
         if (!is_running())
         {
+            std::cout << "ignore_non_running_threads in echion" << ignore_non_running_threads << std::endl;
             if (ignore_non_running_threads)
             {
                 return;
