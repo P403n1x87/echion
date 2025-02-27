@@ -427,17 +427,17 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
 #endif
                 try
                 {
-                    bool main_thread_tracked = false;
-                    for (auto &kv : thread_info_map)
-                    {
-                        if (kv.second->name == "MainThread")
-                        {
-                            main_thread_tracked = true;
-                            break;
-                        }
-                    }
-                    if (main_thread_tracked)
-                        continue;
+                    // bool main_thread_tracked = false;
+                    // for (auto &kv : thread_info_map)
+                    // {
+                    //     if (kv.second->name == "MainThread")
+                    //     {
+                    //         main_thread_tracked = true;
+                    //         break;
+                    //     }
+                    // }
+                    // if (main_thread_tracked)
+                    //     continue;
 
                     thread_info_map.emplace(
                         tstate.thread_id,
