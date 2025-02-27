@@ -442,11 +442,9 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                             break;
                         }
                     }
-
                     if (main_thread_tracked)
-                    {
                         continue;
-                    }
+
                     thread_info_map.emplace(
                         tstate.thread_id,
                         std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
