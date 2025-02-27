@@ -152,3 +152,5 @@ profiles/
 compile_commands.json
 
 %%(pid).echion
+core.*
+

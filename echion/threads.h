@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <exception>
+#include <iostream>
+#include <fstream>
 #include <functional>
 #include <mutex>
 #include <sstream>
@@ -317,7 +319,11 @@ void ThreadInfo::unwind_tasks()
 void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
-    std::cerr << "ignore_non_running_threads in echion" << ignore_non_running_threads << std::endl;
+
+    std::ofstream file("/tmp/echion.log", std::ios::app);
+    file << "ignore_non_running_threads in echion" << ignore_non_running_threads << std::endl;
+    file.close();
+
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
