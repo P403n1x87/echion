@@ -409,6 +409,12 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
             // We failed to copy the thread so we skip it.
             continue;
 
+        // Enqueue the unseen threads that we can reach from this thread.
+        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
+            threads.insert(tstate.next);
+        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
+            threads.insert(tstate.prev);
+
         {
             const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
@@ -437,12 +443,13 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                         }
                     }
 
-                    if (!main_thread_tracked)
+                    if (main_thread_tracked)
                     {
-                        thread_info_map.emplace(
-                            tstate.thread_id,
-                            std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                        continue;
                     }
+                    thread_info_map.emplace(
+                        tstate.thread_id,
+                        std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
                 }
                 catch (ThreadInfo::Error &)
                 {
@@ -453,17 +460,8 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                 }
             }
 
-            if (thread_info_map.find(tstate.thread_id) != thread_info_map.end())
-            {
-                // Call back with the thread state and thread info.
-                callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
-            }
+            // Call back with the thread state and thread info.
+            callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
         }
-
-        // Enqueue the unseen threads that we can reach from this thread.
-        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
-            threads.insert(tstate.next);
-        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
-            threads.insert(tstate.prev);
     }
 }
