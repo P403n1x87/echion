@@ -327,11 +327,16 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         microsecond_t previous_cpu_time = cpu_time;
         update_cpu_time();
 
-        if (!is_running())
-            // If the thread is not running, then we skip it.
+        bool running = is_running();
+        if (!running && ignore_non_running_threads)
+        {
             return;
+        }
 
-        delta = cpu_time - previous_cpu_time;
+        if (running)
+        {
+            delta = cpu_time - previous_cpu_time;
+        }
     }
 
     unwind(tstate);
@@ -434,7 +439,7 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                     }
                     if (main_thread_tracked)
                         continue;
-                    
+
                     thread_info_map.emplace(
                         tstate.thread_id,
                         std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
