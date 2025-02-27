@@ -441,12 +441,15 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                             break;
                         }
                     }
-                    file.close();
-                    if (!main_thread_tracked) {
+
+                    if (!main_thread_tracked)
+                    {
+                        file << "MainThread not tracked" << std::endl;
                         thread_info_map.emplace(
                             tstate.thread_id,
                             std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
                     }
+                    file.close();
                 }
                 catch (ThreadInfo::Error &)
                 {
@@ -457,8 +460,11 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                 }
             }
 
-            // Call back with the thread state and thread info.
-            callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
+            if (thread_info_map.find(tstate.thread_id) != thread_info_map.end())
+            {
+                // Call back with the thread state and thread info.
+                callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
+            }
         }
 
         // Enqueue the unseen threads that we can reach from this thread.
