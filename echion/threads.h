@@ -427,16 +427,11 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
 #endif
                 try
                 {
-                    std::ofstream file("/tmp/echion.log", std::ios::app);
-                    file << "tid: " << tstate.thread_id << "native_id: " << native_id << std::endl;
-
                     bool main_thread_tracked = false;
                     for (auto &kv : thread_info_map)
                     {
                         if (kv.second->name == "MainThread")
                         {
-                            file << "MainThread already tracked" << std::endl;
-                            file << "Key: " << kv.first << "tid: " << kv.second->thread_id << "native_id: " << kv.second->native_id << std::endl;
                             main_thread_tracked = true;
                             break;
                         }
@@ -444,12 +439,10 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
 
                     if (!main_thread_tracked)
                     {
-                        file << "MainThread not tracked" << std::endl;
                         thread_info_map.emplace(
                             tstate.thread_id,
                             std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
                     }
-                    file.close();
                 }
                 catch (ThreadInfo::Error &)
                 {
