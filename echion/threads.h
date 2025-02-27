@@ -442,12 +442,11 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                         }
                     }
                     file.close();
-                    if (main_thread_tracked)
-                        continue;
-
-                    thread_info_map.emplace(
-                        tstate.thread_id,
-                        std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                    if (!main_thread_tracked) {
+                        thread_info_map.emplace(
+                            tstate.thread_id,
+                            std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                    }
                 }
                 catch (ThreadInfo::Error &)
                 {
