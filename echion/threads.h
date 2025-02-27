@@ -419,7 +419,10 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
             {
                 // If the threading module was not imported in the target then
                 // we mistakenly take the hypno thread as the main thread. We
-                // assume that any missing thread is the actual main thread.
+                // assume that any missing thread is the actual main thread,
+                // provided we don't already have a thread with the name
+                // "MainThread". Note that this can also happen on shutdown, so
+                // we need to avoid doing anything in that case.
 #if PY_VERSION_HEX >= 0x030b0000
                 auto native_id = tstate.native_thread_id;
 #else
@@ -427,6 +430,18 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
 #endif
                 try
                 {
+                    bool main_thread_tracked = false;
+                    for (auto &kv : thread_info_map)
+                    {
+                        if (kv.second->name == "MainThread")
+                        {
+                            main_thread_tracked = true;
+                            break;
+                        }
+                    }
+                    if (main_thread_tracked)
+                        continue;
+                    
                     thread_info_map.emplace(
                         tstate.thread_id,
                         std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
