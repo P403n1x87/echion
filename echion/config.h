@@ -17,6 +17,10 @@ inline unsigned int interval = 1000;
 // CPU Time mode
 inline int cpu = 0;
 
+// For cpu time mode, Echion only unwinds threads that're running by default.
+// Set this to false to unwind all threads.
+inline bool ignore_non_running_threads = true;
+
 // Memory events
 inline int memory = 0;
 
@@ -46,6 +50,12 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 void _set_cpu(int new_cpu)
 {
     cpu = new_cpu;
+}
+
+// ----------------------------------------------------------------------------
+void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
+{
+    ignore_non_running_threads = new_ignore_non_running_threads;
 }
 
 // ----------------------------------------------------------------------------

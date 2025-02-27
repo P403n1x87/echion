@@ -320,6 +320,10 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
 
+    std::ofstream file("/tmp/echion.log", std::ios::app);
+    file << "ignore_non_running_threads in echion" << ignore_non_running_threads << std::endl;
+    file.close();
+
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
@@ -327,9 +331,10 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 
         if (!is_running())
         {
-#ifndef ECHION_OBSERVE_IDLE_THREADS
-            return;
-#endif // ECHION_OBSERVE_IDLE_THREADS
+            if (ignore_non_running_threads)
+            {
+                return;
+            }
         }
         else
         {
