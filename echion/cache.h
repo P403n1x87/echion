@@ -8,6 +8,8 @@
 #include <list>
 #include <unordered_map>
 
+#define CACHE_MAX_ENTRIES 2048
+
 template <typename K, typename V>
 class LRUCache
 {
