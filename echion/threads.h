@@ -412,6 +412,12 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
             // We failed to copy the thread so we skip it.
             continue;
 
+        // Enqueue the unseen threads that we can reach from this thread.
+        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
+            threads.insert(tstate.next);
+        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
+            threads.insert(tstate.prev);
+
         {
             const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
@@ -441,7 +447,7 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                     }
                     if (main_thread_tracked)
                         continue;
-                    
+
                     thread_info_map.emplace(
                         tstate.thread_id,
                         std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
@@ -458,11 +464,5 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
             // Call back with the thread state and thread info.
             callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
         }
-
-        // Enqueue the unseen threads that we can reach from this thread.
-        if (tstate.next != NULL && seen_threads.find(tstate.next) == seen_threads.end())
-            threads.insert(tstate.next);
-        if (tstate.prev != NULL && seen_threads.find(tstate.prev) == seen_threads.end())
-            threads.insert(tstate.prev);
     }
 }

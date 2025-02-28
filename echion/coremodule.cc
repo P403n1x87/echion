@@ -104,7 +104,7 @@ static void teardown_where()
 static inline void
 _start()
 {
-    init_frame_cache(MAX_FRAMES * (1 + native));
+    init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
     try
     {
