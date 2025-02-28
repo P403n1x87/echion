@@ -26,6 +26,9 @@ static int native = 0;
 // Where mode
 static int where = 0;
 
+// Maximum number of frames to unwind
+static unsigned int max_frames = 2048;
+
 // Pipe name (where mode IPC)
 static std::string pipe_name;
 
@@ -43,7 +46,8 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-void _set_cpu(int new_cpu) {
+void _set_cpu(int new_cpu)
+{
     cpu = new_cpu;
 }
 
@@ -85,8 +89,8 @@ set_native(PyObject *Py_UNUSED(m), PyObject *args)
     native = new_native;
 #else
     PyErr_SetString(PyExc_RuntimeError,
-        "Native profiling is disabled, please re-build/install echion without "
-        "UNWIND_NATIVE_DISABLE env var/preprocessor flag");
+                    "Native profiling is disabled, please re-build/install echion without "
+                    "UNWIND_NATIVE_DISABLE env var/preprocessor flag");
     return NULL;
 #endif // UNWIND_NATIVE_DISABLE
     Py_RETURN_NONE;
@@ -116,4 +120,18 @@ set_pipe_name(PyObject *Py_UNUSED(m), PyObject *args)
     pipe_name = name;
 
     Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+set_max_frames(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    unsigned int new_max_frames;
+    if (!PyArg_ParseTuple(args, "I", &new_max_frames))
+        return NULL;
+
+    max_frames = new_max_frames;
+
+    Py_RETURN_NONE;
+
 }
