@@ -88,7 +88,13 @@ bool StackChunk::is_valid(void *address)
 {
   _PyStackChunk *chunk = (_PyStackChunk *)data.get();
 
-  return address >= (void *)chunk && address < (void *)((char *)chunk + chunk->size);
+  if (address >= (void *)chunk && address < (void *)((char *)chunk + chunk->size))
+  {
+    return true;
+  }
+  if (previous)
+    return previous->is_valid(address);
+  return false;
 }
 
 // ----------------------------------------------------------------------------
