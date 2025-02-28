@@ -29,6 +29,7 @@
 
 #include <echion/cache.h>
 #include <echion/mojo.h>
+#include <echion/stack_chunk.h>
 #include <echion/strings.h>
 #include <echion/vm.h>
 
@@ -460,6 +461,12 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     PyObject f_executable;
 
     for (;frame_addr; frame_addr = frame_addr->previous) {
+        // We need to check if the frame address is a valid value that's
+        // within the stack chunk. This is because some of the previous frames
+        // might have not been copied over using the stack chunk.
+        if(!stack_chunk->is_valid(frame_addr)) {
+            throw Frame::Error();
+        }
         // TODO: Cache the executable address for faster reads.
         if (copy_type(frame_addr->f_executable, f_executable)) {
             throw Frame::Error();
