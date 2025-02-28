@@ -17,10 +17,9 @@
 #include <libunwind.h>
 #endif // UNWIND_NATIVE_DISABLE
 
+#include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
-
-#define MAX_FRAMES 2048
 
 #if PY_VERSION_HEX >= 0x030b0000
 // ----------------------------------------------------------------------------
@@ -172,7 +171,7 @@ void unwind_native_stack()
 
     native_stack.clear();
 
-    while (unw_step(&cursor) > 0 && native_stack.size() < MAX_FRAMES)
+    while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
     {
         try
         {
@@ -194,7 +193,7 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
     int count = 0;
 
     PyObject *current_frame_addr = frame_addr;
-    while (current_frame_addr != NULL && stack.size() < MAX_FRAMES)
+    while (current_frame_addr != NULL && stack.size() < max_frames)
     {
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
@@ -232,7 +231,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
     int count = 0;
 
     PyObject *current_frame = frame;
-    while (current_frame != NULL && stack.size() < MAX_FRAMES)
+    while (current_frame != NULL && stack.size() < max_frames)
     {
 
         if (seen_frames.find(current_frame) != seen_frames.end())
