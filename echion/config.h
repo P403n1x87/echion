@@ -31,7 +31,7 @@ inline int native = 0;
 inline int where = 0;
 
 // Maximum number of frames to unwind
-static unsigned int max_frames = 2048;
+inline unsigned int max_frames = 2048;
 
 // Pipe name (where mode IPC)
 inline std::string pipe_name;
