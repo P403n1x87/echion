@@ -29,7 +29,6 @@ public:
   StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
 
   void *resolve(void *frame_addr);
-  bool is_valid(void *frame_addr);
 
 private:
   void *origin = NULL;
@@ -81,20 +80,6 @@ void *StackChunk::resolve(void *address)
     return previous->resolve(address);
 
   return address;
-}
-
-// ----------------------------------------------------------------------------
-bool StackChunk::is_valid(void *address)
-{
-  _PyStackChunk *chunk = (_PyStackChunk *)data.get();
-
-  if (address >= (void *)chunk && address < (void *)((char *)chunk + chunk->size))
-  {
-    return true;
-  }
-  if (previous)
-    return previous->is_valid(address);
-  return false;
 }
 
 // ----------------------------------------------------------------------------
