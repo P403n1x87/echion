@@ -528,29 +528,24 @@ Frame &Frame::read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **
 
     for (; frame_addr; frame_addr = frame_addr->previous)
     {
-        std::cout << "Frame address: " << frame_addr << std::endl;
         auto resolved_address = stack_chunk->resolve(frame_addr);
 
         if (resolved_address == frame_addr)
         {
-            std::cout << "Need to copy from address" << std::endl;
             // We need to copy from the profiled thread
             if (copy_type(frame_addr, iframe))
             {
-                std::cout << "Copy failed for frame address " << (void *)frame_addr << std::endl;
                 throw Frame::Error();
             }
         }
         else
         {
-            std::cout << "Resolved to address in stack chunk" << std::endl;
             // We can safely read from resolved_address
             iframe = *(_PyInterpreterFrame *)resolved_address;
         }
         // TODO: Cache the executable address for faster reads.
         if (copy_type(iframe.f_executable, f_executable))
         {
-            std::cout << "Copy failed for f_executable " << (void *)iframe.f_executable << std::endl;
             throw Frame::Error();
         }
         if (f_executable.ob_type == &PyCode_Type)
@@ -568,10 +563,8 @@ Frame &Frame::read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **
     auto resolved_addr = stack_chunk->resolve(frame_addr);
     if (resolved_addr == frame_addr)
     {
-        std::cout << "Resolved to address in stack chunk" << std::endl;
         if (copy_type(frame_addr, iframe))
         {
-            std::cout << "Copy failed for frame address " << (void *)frame_addr << std::endl;
             throw Frame::Error();
         }
     }
