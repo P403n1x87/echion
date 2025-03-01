@@ -467,20 +467,29 @@ Frame &Frame::read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **
 
     for (; frame_addr; frame_addr = frame_addr->previous)
     {
-        auto resolved_address = stack_chunk->resolve(frame_addr);
-
-        if (resolved_address == frame_addr)
+        if (stack_chunk != nullptr)
         {
-            // We need to copy from the profiled thread
-            if (copy_type(frame_addr, iframe))
+            auto resolved_address = stack_chunk->resolve(frame_addr);
+            if (resolved_address == frame_addr)
             {
-                throw Frame::Error();
+                // We need to copy from the profiled thread
+                if (copy_type(frame_addr, iframe))
+                {
+                    throw Frame::Error();
+                }
+            }
+            else
+            {
+                // We can safely read from resolved_address
+                iframe = *(_PyInterpreterFrame *)resolved_address;
             }
         }
         else
         {
-            // We can safely read from resolved_address
-            iframe = *(_PyInterpreterFrame *)resolved_address;
+            if (copy_type(frame_addr, iframe))
+            {
+                throw Frame::Error();
+            }
         }
         // TODO: Cache the executable address for faster reads.
         if (copy_type(iframe.f_executable, f_executable))
@@ -499,17 +508,27 @@ Frame &Frame::read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **
     }
 #endif // PY_VERSION_HEX >= 0x030d0000
 
-    auto resolved_addr = stack_chunk->resolve(frame_addr);
-    if (resolved_addr == frame_addr)
+    if (stack_chunk != nullptr)
+    {
+        auto resolved_addr = stack_chunk->resolve(frame_addr);
+        if (resolved_addr == frame_addr)
+        {
+            if (copy_type(frame_addr, iframe))
+            {
+                throw Frame::Error();
+            }
+        }
+        else
+        {
+            iframe = *(_PyInterpreterFrame *)resolved_addr;
+        }
+    }
+    else
     {
         if (copy_type(frame_addr, iframe))
         {
             throw Frame::Error();
         }
-    }
-    else
-    {
-        iframe = *(_PyInterpreterFrame *)resolved_addr;
     }
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
