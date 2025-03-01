@@ -117,10 +117,8 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         try
         {
 #if PY_VERSION_HEX >= 0x030b0000
-            auto resolved_address = stack_chunk ? stack_chunk->resolve(current_frame_addr) : current_frame_addr;
-            Frame &frame = resolved_address != current_frame_addr
-                               ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
-                               : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
+            Frame &frame = Frame::read_with_stack_chunk(
+                (_PyInterpreterFrame *)current_frame_addr, &current_frame_addr);
 #else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif

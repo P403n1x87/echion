@@ -114,6 +114,7 @@ public:
     static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
 #if PY_VERSION_HEX >= 0x030b0000
     static Frame &read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr);
+    static Frame &read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **prev_addr);
 #endif
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
@@ -129,9 +130,9 @@ public:
 #if PY_VERSION_HEX >= 0x030b0000
 
 #if PY_VERSION_HEX >= 0x030d0000
-        _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
+        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
 #else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -198,14 +199,14 @@ public:
     {
         if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
             stream << "          \033[38;5;248;1m" << string_table.lookup(name)
-            << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
-            << "\033[0m:\033[38;5;246m" << location.line
-            << ")\033[0m" << std::endl;
+                   << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
+                   << "\033[0m:\033[38;5;246m" << location.line
+                   << ")\033[0m" << std::endl;
         else
             stream << "          \033[33;1m" << string_table.lookup(name)
-            << "\033[0m (\033[36m" << string_table.lookup(filename)
-            << "\033[0m:\033[32m" << location.line
-            << "\033[0m)" << std::endl;
+                   << "\033[0m (\033[36m" << string_table.lookup(filename)
+                   << "\033[0m:\033[32m" << location.line
+                   << "\033[0m)" << std::endl;
     }
 
 private:
@@ -345,7 +346,7 @@ private:
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
 #elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -393,18 +394,22 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
     PyObject f_executable;
 
-    while (frame_addr != NULL) {
-        if (copy_type((_PyInterpreterFrame*)frame_addr, iframe) ||
-            copy_type(iframe.f_executable, f_executable)) {
+    while (frame_addr != NULL)
+    {
+        if (copy_type((_PyInterpreterFrame *)frame_addr, iframe) ||
+            copy_type(iframe.f_executable, f_executable))
+        {
             throw Frame::Error();
         }
-        if (f_executable.ob_type == &PyCode_Type) {
+        if (f_executable.ob_type == &PyCode_Type)
+        {
             break;
         }
-        frame_addr = (PyObject*)((_PyInterpreterFrame *)frame_addr)->previous;
+        frame_addr = (PyObject *)((_PyInterpreterFrame *)frame_addr)->previous;
     }
 
-    if (frame_addr == NULL) {
+    if (frame_addr == NULL)
+    {
         throw Frame::Error();
     }
 
@@ -416,8 +421,8 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)iframe.f_executable, lasti);
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject *)iframe.f_executable, lasti);
 #else
     const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(iframe.f_code, lasti);
@@ -460,23 +465,28 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
     PyObject f_executable;
 
-    for (;frame_addr; frame_addr = frame_addr->previous) {
+    for (; frame_addr; frame_addr = frame_addr->previous)
+    {
         // We need to check if the frame address is a valid value that's
         // within the stack chunk. This is because some of the previous frames
         // might have not been copied over using the stack chunk.
-        if(!stack_chunk->is_valid(frame_addr)) {
+        if (!stack_chunk->is_valid(frame_addr))
+        {
             throw Frame::Error();
         }
         // TODO: Cache the executable address for faster reads.
-        if (copy_type(frame_addr->f_executable, f_executable)) {
+        if (copy_type(frame_addr->f_executable, f_executable))
+        {
             throw Frame::Error();
         }
-        if (f_executable.ob_type == &PyCode_Type) {
+        if (f_executable.ob_type == &PyCode_Type)
+        {
             break;
         }
     }
 
-    if (frame_addr == NULL) {
+    if (frame_addr == NULL)
+    {
         throw Frame::Error();
     }
 
@@ -485,8 +495,8 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject*)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject*)frame_addr->f_executable, lasti);
+    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject *)frame_addr->f_executable, lasti);
 #else
     const int lasti = ((int)(frame_addr->prev_instr - (_Py_CODEUNIT *)(frame_addr->f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(frame_addr->f_code, lasti);
@@ -501,6 +511,94 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     }
 
     *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)frame_addr->previous;
+
+    return frame;
+}
+
+// ------------------------------------------------------------------------
+Frame &Frame::read_with_stack_chunk(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
+{
+    _PyInterpreterFrame iframe;
+#if PY_VERSION_HEX >= 0x030d0000
+    // From Python versions 3.13, f_executable can have objects other than
+    // code objects for an internal frame. We need to skip some frames if
+    // its f_executable is not code as suggested here:
+    // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
+    PyObject f_executable;
+
+    for (; frame_addr; frame_addr = frame_addr->previous)
+    {
+        std::cout << "Frame address: " << frame_addr << std::endl;
+        auto resolved_address = stack_chunk->resolve(frame_addr);
+
+        if (resolved_address == frame_addr)
+        {
+            std::cout << "Need to copy from address" << std::endl;
+            // We need to copy from the profiled thread
+            if (copy_type(frame_addr, iframe))
+            {
+                std::cout << "Copy failed for frame address " << (void *)frame_addr << std::endl;
+                throw Frame::Error();
+            }
+        }
+        else
+        {
+            std::cout << "Resolved to address in stack chunk" << std::endl;
+            // We can safely read from resolved_address
+            iframe = *(_PyInterpreterFrame *)resolved_address;
+        }
+        // TODO: Cache the executable address for faster reads.
+        if (copy_type(iframe.f_executable, f_executable))
+        {
+            std::cout << "Copy failed for f_executable " << (void *)iframe.f_executable << std::endl;
+            throw Frame::Error();
+        }
+        if (f_executable.ob_type == &PyCode_Type)
+        {
+            break;
+        }
+    }
+
+    if (frame_addr == NULL)
+    {
+        throw Frame::Error();
+    }
+#endif // PY_VERSION_HEX >= 0x030d0000
+
+    auto resolved_addr = stack_chunk->resolve(frame_addr);
+    if (resolved_addr == frame_addr)
+    {
+        std::cout << "Resolved to address in stack chunk" << std::endl;
+        if (copy_type(frame_addr, iframe))
+        {
+            std::cout << "Copy failed for frame address " << (void *)frame_addr << std::endl;
+            throw Frame::Error();
+        }
+    }
+    else
+    {
+        iframe = *(_PyInterpreterFrame *)resolved_addr;
+    }
+
+    // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
+    // from the code object.
+#if PY_VERSION_HEX >= 0x030d0000
+    const int lasti = ((int)(iframe.instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)iframe.f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get((PyCodeObject *)iframe.f_executable, lasti);
+#else
+    const int lasti = ((int)(iframe.prev_instr - (_Py_CODEUNIT *)(iframe.f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get(iframe.f_code, lasti);
+#endif // PY_VERSION_HEX >= 0x030d0000
+    if (&frame != &INVALID_FRAME)
+    {
+#if PY_VERSION_HEX >= 0x030c0000
+        frame.is_entry = (iframe.owner == FRAME_OWNED_BY_CSTACK); // Shim frame
+#else
+        frame.is_entry = iframe.is_entry;
+#endif
+    }
+
+    *prev_addr = &frame == &INVALID_FRAME ? NULL : (PyObject *)iframe.previous;
 
     return frame;
 }
