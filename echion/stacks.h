@@ -22,8 +22,6 @@
 #include <echion/mojo.h>
 #include <echion/stack_chunk.h>
 
-#define MAX_FRAMES 2048
-
 // ----------------------------------------------------------------------------
 
 class FrameStack : public std::deque<Frame::Ref>
