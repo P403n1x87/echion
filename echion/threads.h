@@ -93,7 +93,7 @@ public:
         char buffer[64];
         snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
         stat_fd = std::make_unique<Fd>(open(buffer, O_RDONLY));
-        
+
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -339,6 +339,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         }
 
         delta = running ? cpu_time - previous_cpu_time : 0;
+        Renderer::get().render_cpu_time(delta);
     }
     unwind(tstate);
 
