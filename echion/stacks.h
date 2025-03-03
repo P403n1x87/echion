@@ -148,7 +148,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
         while (current_frame != NULL) {
-            if (((_PyInterpreterFrame *)current_frame)->f_executable->ob_type == &PyCode_Type) {
+            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
                 break;
             }
             current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
