@@ -58,6 +58,7 @@ detached = true
 python = "3.10"
 template = "checks"
 dependencies = [
+  "clang-format",
   "mypy~=1.0",
   "flake8~=5.0.4",
   "flake8-annotations~=2.9.1",
@@ -71,6 +72,7 @@ dependencies = [
 [tool.hatch.envs.checks.scripts]
 typing = "mypy --install-types --non-interactive --show-error-codes {args} echion/ tests/"
 linting = "flake8 {args} echion/ tests/ "
+cformat = "clang-format {args} echion/*.cc echion/*.h"
 
 [tool.hatch.envs.coverage]
 detached = true
