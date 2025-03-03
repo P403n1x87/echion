@@ -72,11 +72,11 @@ public:
     // ------------------------------------------------------------------------
     void inline render()
     {
-        mojo.stack(pid, iid, thread_name);
+        Renderer::get().render_stack_begin(pid, iid, thread_name);
 
         stack_table.retrieve(stack).render();
 
-        mojo.metric_memory(size);
+        Renderer::get().render_stack_end(MetricType::Memory, size);
     }
 };
 
@@ -203,8 +203,8 @@ private:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static auto &stack_stats = *(new StackStats());
-static auto &memory_table = *(new MemoryTable());
+inline auto &stack_stats = *(new StackStats());
+inline auto &memory_table = *(new MemoryTable());
 
 // ----------------------------------------------------------------------------
 static inline void
@@ -311,8 +311,8 @@ echion_free(void *ctx, void *p)
 //      defined as an enum.
 #define ALLOC_DOMAIN_COUNT 3
 
-static PyMemAllocatorEx original_allocators[ALLOC_DOMAIN_COUNT];
-static PyMemAllocatorEx echion_allocator = {
+inline PyMemAllocatorEx original_allocators[ALLOC_DOMAIN_COUNT];
+inline PyMemAllocatorEx echion_allocator = {
     NULL,
     echion_malloc,
     echion_calloc,

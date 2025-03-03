@@ -148,8 +148,8 @@ public:
     inline size_t unwind(FrameStack &);
 };
 
-static std::unordered_map<PyObject *, PyObject *> task_link_map;
-static std::mutex task_link_map_lock;
+inline std::unordered_map<PyObject *, PyObject *> task_link_map;
+inline std::mutex task_link_map_lock;
 
 // ----------------------------------------------------------------------------
 TaskInfo::TaskInfo(TaskObj *task_addr)
@@ -276,7 +276,7 @@ get_all_tasks(PyObject *loop)
 
 // ----------------------------------------------------------------------------
 
-static std::vector<std::unique_ptr<FrameStack>> current_tasks;
+inline std::vector<std::unique_ptr<FrameStack>> current_tasks;
 
 // ----------------------------------------------------------------------------
 

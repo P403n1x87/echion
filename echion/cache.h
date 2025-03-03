@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <list>
+#include <memory>
 #include <unordered_map>
 
 #define CACHE_MAX_ENTRIES 2048

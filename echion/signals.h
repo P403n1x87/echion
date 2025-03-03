@@ -14,7 +14,7 @@
 
 // ----------------------------------------------------------------------------
 
-static std::mutex sigprof_handler_lock;
+inline std::mutex sigprof_handler_lock;
 
 // ----------------------------------------------------------------------------
 void sigprof_handler([[maybe_unused]] int signum)
