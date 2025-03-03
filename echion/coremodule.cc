@@ -428,6 +428,7 @@ static PyMethodDef echion_core_methods[] = {
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
+    {"set_max_frames", set_max_frames, METH_VARARGS, "Set the maximum number of frames to unwind"},
     {"set_memory", set_memory, METH_VARARGS, "Set whether to sample memory usage"},
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
