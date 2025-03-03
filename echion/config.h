@@ -50,13 +50,13 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-void _set_cpu(int new_cpu)
+inline void _set_cpu(int new_cpu)
 {
     cpu = new_cpu;
 }
 
 // ----------------------------------------------------------------------------
-void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
+inline void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
 {
     ignore_non_running_threads = new_ignore_non_running_threads;
 }
