@@ -72,7 +72,7 @@ dependencies = [
 [tool.hatch.envs.checks.scripts]
 typing = "mypy --install-types --non-interactive --show-error-codes {args} echion/ tests/"
 linting = "flake8 {args} echion/ tests/ "
-cformat = "clang-format {args} echion/*.cc echion/*.h"
+cformat = "find . -name '*.h' -o -name '*.cc' | xargs clang-format {args}"
 
 [tool.hatch.envs.coverage]
 detached = true
