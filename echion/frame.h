@@ -134,7 +134,7 @@ public:
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject *)iframe->f_executable;
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
 #else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -348,7 +348,7 @@ private:
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject* code = (PyCodeObject *)iframe->f_executable;
+        PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
 #elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -419,14 +419,12 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
         {
             throw Frame::Error();
         }
-        if (f_executable.ob_type == &PyCode_Type)
-        {
+        if (f_executable.ob_type == &PyCode_Type) {
             break;
         }
     }
 
-    if (frame_addr == NULL)
-    {
+    if (frame_addr == NULL) {
         throw Frame::Error();
     }
 #else
