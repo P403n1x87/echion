@@ -43,20 +43,17 @@ using mojo_ref_t = unsigned long long;
 // ----------------------------------------------------------------------------
 class MojoWriter
 {
-public:
+  public:
     MojoWriter() {}
 
     class Error : public std::exception
-    {
-    };
+    {};
 
     // ------------------------------------------------------------------------
-    void
-    open()
+    void open()
     {
         output.open(std::getenv("ECHION_OUTPUT"));
-        if (!output.is_open())
-        {
+        if (!output.is_open()) {
             std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
             throw Error();
         }
@@ -81,7 +78,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline metadata(const std::string &label, const std::string &value)
+    void inline metadata(const std::string& label, const std::string& value)
     {
         std::lock_guard<std::mutex> guard(lock);
 
@@ -91,7 +88,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline stack(mojo_int_t pid, mojo_int_t iid, const std::string &thread_name)
+    void inline stack(mojo_int_t pid, mojo_int_t iid, const std::string& thread_name)
     {
         std::lock_guard<std::mutex> guard(lock);
 
@@ -102,14 +99,13 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline frame(
-        mojo_ref_t key,
-        mojo_ref_t filename,
-        mojo_ref_t name,
-        mojo_int_t line,
-        mojo_int_t line_end,
-        mojo_int_t column,
-        mojo_int_t column_end)
+    void inline frame(mojo_ref_t key,
+                      mojo_ref_t filename,
+                      mojo_ref_t name,
+                      mojo_int_t line,
+                      mojo_int_t line_end,
+                      mojo_int_t column,
+                      mojo_int_t column_end)
     {
         std::lock_guard<std::mutex> guard(lock);
 
@@ -128,19 +124,16 @@ public:
     {
         std::lock_guard<std::mutex> guard(lock);
 
-        if (key == 0)
-        {
+        if (key == 0) {
             event(MOJO_FRAME_INVALID);
-        }
-        else
-        {
+        } else {
             event(MOJO_FRAME_REF);
             ref(key);
         }
     }
 
     // ------------------------------------------------------------------------
-    void inline frame_kernel(const std::string &scope)
+    void inline frame_kernel(const std::string& scope)
     {
         std::lock_guard<std::mutex> guard(lock);
 
@@ -167,7 +160,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline string(mojo_ref_t key, const std::string &value)
+    void inline string(mojo_ref_t key, const std::string& value)
     {
         std::lock_guard<std::mutex> guard(lock);
 
@@ -185,13 +178,13 @@ public:
         ref(key);
     }
 
-private:
+  private:
     std::ofstream output;
     std::mutex lock;
 
     void inline event(MojoEvent event) { output.put((char)event); }
-    void inline string(const std::string &string) { output << string << '\0'; }
-    void inline string(const char *string) { output << string << '\0'; }
+    void inline string(const std::string& string) { output << string << '\0'; }
+    void inline string(const char* string) { output << string << '\0'; }
     void inline ref(mojo_ref_t value) { integer(MOJO_INT32 & value); }
     void inline integer(mojo_int_t n)
     {
@@ -208,8 +201,7 @@ private:
 
         output.put(byte);
 
-        while (integer)
-        {
+        while (integer) {
             byte = integer & 0x7f;
             integer >>= 7;
             if (integer)

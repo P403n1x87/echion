@@ -10,37 +10,37 @@
 
 #define CACHE_MAX_ENTRIES 2048
 
-template <typename K, typename V>
+template<typename K, typename V>
 class LRUCache
 {
-public:
-    LRUCache(size_t capacity) : capacity(capacity) {}
+  public:
+    LRUCache(size_t capacity)
+      : capacity(capacity)
+    {
+    }
 
-    V &lookup(const K &k);
+    V& lookup(const K& k);
 
-    void store(const K &k, std::unique_ptr<V> v);
+    void store(const K& k, std::unique_ptr<V> v);
 
     class LookupError : public std::exception
     {
-    public:
-        const char *what() const noexcept override
-        {
-            return "Key not found in cache";
-        }
+      public:
+        const char* what() const noexcept override { return "Key not found in cache"; }
     };
 
-private:
+  private:
     size_t capacity;
     std::list<std::pair<K, std::unique_ptr<V>>> items;
     std::unordered_map<K, typename std::list<std::pair<K, std::unique_ptr<V>>>::iterator> index;
 };
 
-template <typename K, typename V>
-void LRUCache<K, V>::store(const K &k, std::unique_ptr<V> v)
+template<typename K, typename V>
+void
+LRUCache<K, V>::store(const K& k, std::unique_ptr<V> v)
 {
     // Check if cache is full
-    if (items.size() >= capacity)
-    {
+    if (items.size() >= capacity) {
         index.erase(items.back().first);
         items.pop_back();
     }
@@ -52,8 +52,9 @@ void LRUCache<K, V>::store(const K &k, std::unique_ptr<V> v)
     index[k] = items.begin();
 }
 
-template <typename K, typename V>
-V &LRUCache<K, V>::lookup(const K &k)
+template<typename K, typename V>
+V&
+LRUCache<K, V>::lookup(const K& k)
 {
     auto itr = index.find(k);
     if (itr == index.end())

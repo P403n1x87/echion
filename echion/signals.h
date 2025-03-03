@@ -17,7 +17,8 @@
 static std::mutex sigprof_handler_lock;
 
 // ----------------------------------------------------------------------------
-void sigprof_handler([[maybe_unused]] int signum)
+void
+sigprof_handler([[maybe_unused]] int signum)
 {
 #ifndef UNWIND_NATIVE_DISABLE
     unwind_native_stack();
@@ -29,7 +30,8 @@ void sigprof_handler([[maybe_unused]] int signum)
 }
 
 // ----------------------------------------------------------------------------
-void sigquit_handler([[maybe_unused]] int signum)
+void
+sigquit_handler([[maybe_unused]] int signum)
 {
     // Wake up the where thread
     std::lock_guard<std::mutex> lock(where_lock);
@@ -37,7 +39,8 @@ void sigquit_handler([[maybe_unused]] int signum)
 }
 
 // ----------------------------------------------------------------------------
-void install_signals()
+void
+install_signals()
 {
     signal(SIGQUIT, sigquit_handler);
 
@@ -46,7 +49,8 @@ void install_signals()
 }
 
 // ----------------------------------------------------------------------------
-void restore_signals()
+void
+restore_signals()
 {
     signal(SIGQUIT, SIG_DFL);
 
