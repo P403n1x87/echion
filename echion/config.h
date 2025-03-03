@@ -21,10 +21,6 @@ inline int cpu = 0;
 // Set this to false to unwind all threads.
 inline bool ignore_non_running_threads = true;
 
-// For cpu time mode, Echion only unwinds threads that're running by default.
-// Set this to false to unwind all threads.
-inline bool ignore_non_running_threads = true;
-
 // Memory events
 inline int memory = 0;
 
