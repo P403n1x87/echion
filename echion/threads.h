@@ -28,12 +28,12 @@
 
 
 #if defined PL_LINUX
-class fd
+class Fd
 {
 public:
-    fd(int fd) : fd_(fd) {}
+    Fd(int fd) : fd_(fd) {}
 
-    ~fd()
+    ~Fd()
     {
         if (fd_ != -1)
             close(fd_);
@@ -67,7 +67,7 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
-    std::unique_ptr<fd> stat_fd;
+    std::unique_ptr<Fd> stat_fd;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -96,7 +96,7 @@ public:
 #if defined PL_LINUX
         char buffer[64];
         snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
-        stat_fd = std::make_unique<fd>(open(buffer, O_RDONLY));
+        stat_fd = std::make_unique<Fd>(open(buffer, O_RDONLY));
         
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
