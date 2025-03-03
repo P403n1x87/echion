@@ -32,6 +32,10 @@
 #include <echion/strings.h>
 #include <echion/vm.h>
 
+#if PY_VERSION_HEX >= 0x030b0000
+#include <echion/stack_chunk.h>
+#endif
+
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int
@@ -459,13 +463,30 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
     // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
     PyObject f_executable;
 
-    for (;frame_addr; frame_addr = frame_addr->previous) {
+    for (;;) {
         // TODO: Cache the executable address for faster reads.
         if (copy_type(frame_addr->f_executable, f_executable)) {
             throw Frame::Error();
         }
         if (f_executable.ob_type == &PyCode_Type) {
             break;
+        }
+
+        // Get the previous frame
+        auto prev_frame_addr = frame_addr->previous;
+        if (prev_frame_addr == NULL) {
+            break;
+        }
+
+        // There is a previous frame, so we need to resolve it.
+        frame_addr = stack_chunk->resolve(prev_frame_addr);
+        if (frame_addr == prev_frame_addr) {
+            // The frame is not within the stack chunk so we need to copy it
+            _PyInterpreterFrame iframe;
+            if (copy_type(prev_frame_addr, iframe)) {
+                throw Frame::Error();
+            }
+            frame_addr = &iframe;
         }
     }
 
