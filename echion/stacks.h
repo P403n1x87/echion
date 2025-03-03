@@ -118,8 +118,7 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
                 reinterpret_cast<_PyInterpreterFrame *>(current_frame_addr),
                 reinterpret_cast<_PyInterpreterFrame **>(&current_frame_addr));
 #else
-            Frame &frame = Frame::read(
-                current_frame_addr, &current_frame_addr);
+            Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
             stack.push_back(frame);
         }
@@ -184,14 +183,13 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
     try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
     }
-    catch (StackChunkError &e)
-    {
+    catch (StackChunkError &e) {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject *)tstate->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
