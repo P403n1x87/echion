@@ -415,7 +415,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
             }
             frame_addr = &iframe;
         }
-        if (copy_type(iframe.f_executable, f_executable))
+        if (copy_type(frame_addr->f_executable, f_executable))
         {
             throw Frame::Error();
         }
