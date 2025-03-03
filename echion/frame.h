@@ -132,9 +132,9 @@ public:
 #if PY_VERSION_HEX >= 0x030b0000
 
 #if PY_VERSION_HEX >= 0x030d0000
-        _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+        _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
+        PyCodeObject* code = (PyCodeObject *)iframe->f_executable;
 #else
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
@@ -201,14 +201,14 @@ public:
     {
         if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
             stream << "          \033[38;5;248;1m" << string_table.lookup(name)
-                   << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
-                   << "\033[0m:\033[38;5;246m" << location.line
-                   << ")\033[0m" << std::endl;
+            << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
+            << "\033[0m:\033[38;5;246m" << location.line
+            << ")\033[0m" << std::endl;
         else
             stream << "          \033[33;1m" << string_table.lookup(name)
-                   << "\033[0m (\033[36m" << string_table.lookup(filename)
-                   << "\033[0m:\033[32m" << location.line
-                   << "\033[0m)" << std::endl;
+            << "\033[0m (\033[36m" << string_table.lookup(filename)
+            << "\033[0m:\033[32m" << location.line
+            << "\033[0m)" << std::endl;
     }
 
 private:
@@ -348,7 +348,7 @@ private:
 #if PY_VERSION_HEX >= 0x030d0000
         _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
-        PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
+        PyCodeObject* code = (PyCodeObject *)iframe->f_executable;
 #elif PY_VERSION_HEX >= 0x030b0000
         const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
         const int lasti = _PyInterpreterFrame_LASTI(iframe);
