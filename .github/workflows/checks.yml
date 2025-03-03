@@ -59,4 +59,4 @@ jobs:
 
     - name: Clang format
       run: |
-        hatch run checks:cformat --dry_run
+        hatch run checks:cformat --dry-run
