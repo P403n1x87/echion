@@ -26,31 +26,31 @@
 
 class StackChunkError : public std::exception
 {
-public:
-    const char *what() const noexcept override
-    {
-        return "Cannot create stack chunk object";
-    }
+  public:
+    const char* what() const noexcept override { return "Cannot create stack chunk object"; }
 };
 
 // ----------------------------------------------------------------------------
 class StackChunk
 {
-public:
-    StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
+  public:
+    StackChunk(PyThreadState* tstate)
+      : StackChunk((_PyStackChunk*)tstate->datastack_chunk)
+    {
+    }
 
-    void* resolve(void *frame_addr);
+    void* resolve(void* frame_addr);
 
-private:
+  private:
     void* origin = NULL;
     std::unique_ptr<char[]> data = nullptr;
     std::unique_ptr<StackChunk> previous = nullptr;
 
-    StackChunk(_PyStackChunk *chunk_addr);
+    StackChunk(_PyStackChunk* chunk_addr);
 };
 
 // ----------------------------------------------------------------------------
-StackChunk::StackChunk(_PyStackChunk *chunk_addr)
+StackChunk::StackChunk(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 
@@ -68,21 +68,21 @@ StackChunk::StackChunk(_PyStackChunk *chunk_addr)
     if (chunk.previous != NULL) {
         try {
             previous = std::unique_ptr<StackChunk>{ new StackChunk((_PyStackChunk*)chunk.previous) };
-        }
-        catch (StackChunkError &e) {
+        } catch (StackChunkError& e) {
             previous = nullptr;
         }
     }
 }
 
 // ----------------------------------------------------------------------------
-void* StackChunk::resolve(void *address)
+void*
+StackChunk::resolve(void* address)
 {
-    _PyStackChunk *chunk = (_PyStackChunk *)data.get();
+    _PyStackChunk* chunk = (_PyStackChunk*)data.get();
 
     // Check if this chunk contains the address
-    if (address >= origin && address < (char *)origin + chunk->size)
-        return (char *)chunk + ((char *)address - (char *)origin);
+    if (address >= origin && address < (char*)origin + chunk->size)
+        return (char*)chunk + ((char*)address - (char*)origin);
 
     if (previous)
         return previous->resolve(address);
@@ -99,7 +99,7 @@ static std::unique_ptr<StackChunk> stack_chunk = nullptr;
 
 class FrameStack : public std::deque<Frame::Ref>
 {
-public:
+  public:
     using Ptr = std::unique_ptr<FrameStack>;
     using Key = Frame::Key;
 
@@ -117,8 +117,7 @@ public:
     // ------------------------------------------------------------------------
     void render()
     {
-        for (auto it = this->rbegin(); it != this->rend(); ++it)
-        {
+        for (auto it = this->rbegin(); it != this->rend(); ++it) {
 #if PY_VERSION_HEX >= 0x030c0000
             if ((*it).get().is_entry)
                 // This is a shim frame so we skip it.
@@ -128,12 +127,9 @@ public:
         }
     }
 
-private:
+  private:
     // ------------------------------------------------------------------------
-    static inline Frame::Key rotl(Key key)
-    {
-        return (key << 1) | (key >> (CHAR_BIT * sizeof(key) - 1));
-    }
+    static inline Frame::Key rotl(Key key) { return (key << 1) | (key >> (CHAR_BIT * sizeof(key) - 1)); }
 };
 
 // ----------------------------------------------------------------------------
@@ -144,7 +140,8 @@ static FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-void unwind_native_stack()
+void
+unwind_native_stack()
 {
     unw_cursor_t cursor;
     unw_context_t context;
@@ -154,14 +151,10 @@ void unwind_native_stack()
 
     native_stack.clear();
 
-    while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
-    {
-        try
-        {
+    while (unw_step(&cursor) > 0 && native_stack.size() < max_frames) {
+        try {
             native_stack.push_back(Frame::get(cursor));
-        }
-        catch (Frame::Error &)
-        {
+        } catch (Frame::Error&) {
             break;
         }
     }
@@ -170,14 +163,13 @@ void unwind_native_stack()
 
 // ----------------------------------------------------------------------------
 static size_t
-unwind_frame(PyObject *frame_addr, FrameStack &stack)
+unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
-    std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
+    std::unordered_set<PyObject*> seen_frames; // Used to detect cycles in the stack
     int count = 0;
 
-    PyObject *current_frame_addr = frame_addr;
-    while (current_frame_addr != NULL && stack.size() < max_frames)
-    {
+    PyObject* current_frame_addr = frame_addr;
+    while (current_frame_addr != NULL && stack.size() < max_frames) {
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
 
@@ -185,20 +177,17 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 
         seen_frames.insert(current_frame_addr);
 
-        try
-        {
+        try {
 #if PY_VERSION_HEX >= 0x030b0000
             auto resolved_address = stack_chunk ? stack_chunk->resolve(current_frame_addr) : current_frame_addr;
-            Frame &frame = resolved_address != current_frame_addr
-                ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
-                : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
+            Frame& frame = resolved_address != current_frame_addr
+                             ? Frame::read_local((_PyInterpreterFrame*)resolved_address, &current_frame_addr)
+                             : Frame::read((PyObject*)current_frame_addr, &current_frame_addr);
 #else
-            Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
+            Frame& frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
             stack.push_back(frame);
-        }
-        catch (Frame::Error &e)
-        {
+        } catch (Frame::Error& e) {
             break;
         }
     }
@@ -208,14 +197,13 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
 
 // ----------------------------------------------------------------------------
 static size_t
-unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
+unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
 {
-    std::unordered_set<PyObject *> seen_frames; // Used to detect cycles in the stack
+    std::unordered_set<PyObject*> seen_frames; // Used to detect cycles in the stack
     int count = 0;
 
-    PyObject *current_frame = frame;
-    while (current_frame != NULL && stack.size() < max_frames)
-    {
+    PyObject* current_frame = frame;
+    while (current_frame != NULL && stack.size() < max_frames) {
 
         if (seen_frames.find(current_frame) != seen_frames.end())
             break;
@@ -226,7 +214,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
             if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
                 break;
             }
-            current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
+            current_frame = (PyObject*)((_PyInterpreterFrame*)current_frame)->previous;
         }
 
         if (current_frame == NULL) {
@@ -240,9 +228,9 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
         stack.push_back(Frame::get(current_frame));
 
 #if PY_VERSION_HEX >= 0x030b0000
-        current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
+        current_frame = (PyObject*)((_PyInterpreterFrame*)current_frame)->previous;
 #else
-        current_frame = (PyObject *)((PyFrameObject *)current_frame)->f_back;
+        current_frame = (PyObject*)((PyFrameObject*)current_frame)->f_back;
 #endif
     }
 
@@ -251,14 +239,13 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 
 // ----------------------------------------------------------------------------
 static void
-unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
+unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
     try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
-    }
-    catch (StackChunkError &e) {
+    } catch (StackChunkError& e) {
         stack_chunk = nullptr;
     }
 #endif
@@ -267,28 +254,27 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
     PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
-    _PyCFrame *cframe_addr = tstate->cframe;
+    _PyCFrame* cframe_addr = tstate->cframe;
     if (copy_type(cframe_addr, cframe))
         // TODO: Invalid frame
         return;
 
-    PyObject *frame_addr = (PyObject *)cframe.current_frame;
+    PyObject* frame_addr = (PyObject*)cframe.current_frame;
 #else // Python < 3.11
-    PyObject *frame_addr = (PyObject *)tstate->frame;
+    PyObject* frame_addr = (PyObject*)tstate->frame;
 #endif
     unwind_frame(frame_addr, stack);
 }
 
 // ----------------------------------------------------------------------------
 static void
-unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
+unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
     try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
-    }
-    catch (StackChunkError &e) {
+    } catch (StackChunkError& e) {
         stack_chunk = nullptr;
     }
 #endif
@@ -296,51 +282,45 @@ unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030d0000
     PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
-    PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->cframe->current_frame;
 #else // Python < 3.11
-    PyObject *frame_addr = (PyObject *)tstate->frame;
+    PyObject* frame_addr = (PyObject*)tstate->frame;
 #endif
     unwind_frame_unsafe(frame_addr, stack);
 }
 
 // ----------------------------------------------------------------------------
 static void
-unwind_python_stack(PyThreadState *tstate)
+unwind_python_stack(PyThreadState* tstate)
 {
     unwind_python_stack(tstate, python_stack);
 }
 
 // ----------------------------------------------------------------------------
 static void
-interleave_stacks(FrameStack &python_stack)
+interleave_stacks(FrameStack& python_stack)
 {
     interleaved_stack.clear();
 
     auto p = python_stack.rbegin();
     // The last two frames are usually the signal trampoline and the signal
     // handler. We skip them.
-    for (auto n = native_stack.rbegin(); n != native_stack.rend() - 2; ++n)
-    {
+    for (auto n = native_stack.rbegin(); n != native_stack.rend() - 2; ++n) {
         auto native_frame = *n;
 
-        if (string_table.lookup(native_frame.get().name).find("PyEval_EvalFrameDefault") != std::string::npos)
-        {
-            if (p == python_stack.rend())
-            {
+        if (string_table.lookup(native_frame.get().name).find("PyEval_EvalFrameDefault") != std::string::npos) {
+            if (p == python_stack.rend()) {
                 // We expected a Python frame but we found none, so we report
                 // the native frame instead.
                 std::cerr << "Expected Python frame(s), found none!" << std::endl;
                 interleaved_stack.push_front(native_frame);
-            }
-            else
-            {
+            } else {
 
                 // We skip the PyEval_EvalFrameDefault frame because it is the
                 // function that calls the Python code.
 #if PY_VERSION_HEX >= 0x030b0000
                 int cframe_count = 0;
-                while (p != python_stack.rend())
-                {
+                while (p != python_stack.rend()) {
                     // The Python stack will start with an entry frame at the top.
                     // We stop popping at the next entry frame.
                     cframe_count += (*p).get().is_entry;
@@ -353,13 +333,11 @@ interleave_stacks(FrameStack &python_stack)
                 interleaved_stack.push_front(*p++);
 #endif
             }
-        }
-        else
+        } else
             interleaved_stack.push_front(native_frame);
     }
 
-    if (p != python_stack.rend())
-    {
+    if (p != python_stack.rend()) {
         std::cerr << "Python stack not empty after interleaving!" << std::endl;
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
@@ -378,7 +356,7 @@ interleave_stacks()
 // used when profiling memory events to account for deallocations.
 class StackTable
 {
-public:
+  public:
     // ------------------------------------------------------------------------
     FrameStack::Key inline store(FrameStack::Ptr stack)
     {
@@ -387,12 +365,9 @@ public:
         auto stack_key = stack->key();
 
         auto stack_entry = table.find(stack_key);
-        if (stack_entry == table.end())
-        {
+        if (stack_entry == table.end()) {
             table.emplace(stack_key, std::move(stack));
-        }
-        else
-        {
+        } else {
             // TODO: Check for collisions.
         }
 
@@ -400,7 +375,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    FrameStack &retrieve(FrameStack::Key stack_key)
+    FrameStack& retrieve(FrameStack::Key stack_key)
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
@@ -415,7 +390,7 @@ public:
         table.clear();
     }
 
-private:
+  private:
     std::unordered_map<FrameStack::Key, std::unique_ptr<FrameStack>> table;
     std::mutex lock;
 };
@@ -424,4 +399,4 @@ private:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static auto &stack_table = *(new StackTable());
+static auto& stack_table = *(new StackTable());

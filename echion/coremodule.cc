@@ -19,8 +19,8 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <signal.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
@@ -37,37 +37,31 @@
 #include <echion/timing.h>
 
 // ----------------------------------------------------------------------------
-static void do_where(std::ostream &stream)
+static void
+do_where(std::ostream& stream)
 {
     stream << "\r"
            << "🐴 Echion reporting for duty" << std::endl
            << std::endl;
 
-    for_each_interp(
-        [&stream](PyInterpreterState *interp) -> void
-        {
-            for_each_thread(
-                interp,
-                [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
-                {
-                    thread.unwind(tstate);
-                    if (native)
-                    {
-                        interleave_stacks();
-                        thread.render_where(interleaved_stack, stream);
-                    }
-                    else
-                        thread.render_where(python_stack, stream);
-                    stream << std::endl;
-                });
+    for_each_interp([&stream](PyInterpreterState* interp) -> void {
+        for_each_thread(interp, [&stream](PyThreadState* tstate, ThreadInfo& thread) -> void {
+            thread.unwind(tstate);
+            if (native) {
+                interleave_stacks();
+                thread.render_where(interleaved_stack, stream);
+            } else
+                thread.render_where(python_stack, stream);
+            stream << std::endl;
         });
+    });
 }
 
 // ----------------------------------------------------------------------------
-static void where_listener()
+static void
+where_listener()
 {
-    for (;;)
-    {
+    for (;;) {
         std::unique_lock<std::mutex> lock(where_lock);
         where_cv.wait(lock);
 
@@ -79,15 +73,16 @@ static void where_listener()
 }
 
 // ----------------------------------------------------------------------------
-static void setup_where()
+static void
+setup_where()
 {
     where_thread = new std::thread(where_listener);
 }
 
-static void teardown_where()
+static void
+teardown_where()
 {
-    if (where_thread != nullptr)
-    {
+    if (where_thread != nullptr) {
         {
             std::lock_guard<std::mutex> lock(where_lock);
 
@@ -106,12 +101,9 @@ _start()
 {
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
-    try
-    {
+    try {
         mojo.open();
-    }
-    catch (MojoWriter::Error &)
-    {
+    } catch (MojoWriter::Error&) {
         return;
     }
 
@@ -122,8 +114,7 @@ _start()
     host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
 #endif
 
-    if (where)
-    {
+    if (where) {
         std::ofstream pipe(pipe_name, std::ios::out);
 
         if (pipe)
@@ -141,12 +132,9 @@ _start()
 
     mojo.header();
 
-    if (memory)
-    {
+    if (memory) {
         mojo.metadata("mode", "memory");
-    }
-    else
-    {
+    } else {
         mojo.metadata("mode", (cpu ? "cpu" : "wall"));
     }
     mojo.metadata("interval", std::to_string(interval));
@@ -204,28 +192,21 @@ _sampler()
 
     last_time = gettime();
 
-    while (running)
-    {
+    while (running) {
         microsecond_t now = gettime();
         microsecond_t end_time = now + interval;
 
-        if (memory)
-        {
+        if (memory) {
             if (rss_tracker.check())
                 stack_stats.flush();
-        }
-        else
-        {
+        } else {
             microsecond_t wall_time = now - last_time;
 
-            for_each_interp(
-                [=](PyInterpreterState *interp) -> void
-                {
-                    for_each_thread(
-                        interp,
-                        [=](PyThreadState *tstate, ThreadInfo &thread)
-                        { thread.sample(interp->id, tstate, wall_time); });
+            for_each_interp([=](PyInterpreterState* interp) -> void {
+                for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
+                    thread.sample(interp->id, tstate, wall_time);
                 });
+            });
         }
 
         while (gettime() < end_time && running)
@@ -244,21 +225,20 @@ sampler()
 }
 
 // ----------------------------------------------------------------------------
-static void _init()
+static void
+_init()
 {
     pid = getpid();
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject*
+start_async(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
-    if (!running)
-    {
+    if (!running) {
         // TODO: Since we have a global state, we should not allow multiple ways
         // of starting the sampler.
-        if (sampler_thread == nullptr)
-        {
+        if (sampler_thread == nullptr) {
             running = 1;
             sampler_thread = new std::thread(sampler);
         }
@@ -268,11 +248,10 @@ start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject*
+start(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
-    if (!running)
-    {
+    if (!running) {
         // TODO: Since we have a global state, we should not allow multiple ways
         // of starting the sampler.
         running = 1;
@@ -287,14 +266,13 @@ start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject*
+stop(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     running = 0;
 
     // Stop the sampling thread
-    if (sampler_thread != nullptr)
-    {
+    if (sampler_thread != nullptr) {
         sampler_thread->join();
         sampler_thread = nullptr;
     }
@@ -303,11 +281,11 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-track_thread(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject*
+track_thread(PyObject* Py_UNUSED(m), PyObject* args)
 {
     uintptr_t thread_id; // map key
-    const char *thread_name;
+    const char* thread_name;
     pid_t native_id;
 
     if (!PyArg_ParseTuple(args, "lsi", &thread_id, &thread_name, &native_id))
@@ -321,17 +299,15 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
             entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
         else
             // Thread is already tracked so we update its info
-            thread_info_map.emplace(
-                thread_id,
-                std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
+            thread_info_map.emplace(thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
     }
 
     Py_RETURN_NONE;
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject*
+untrack_thread(PyObject* Py_UNUSED(m), PyObject* args)
 {
     unsigned long thread_id;
     if (!PyArg_ParseTuple(args, "l", &thread_id))
@@ -347,8 +323,8 @@ untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject*
+init(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     _init();
 
@@ -356,11 +332,11 @@ init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject*
+track_asyncio_loop(PyObject* Py_UNUSED(m), PyObject* args)
 {
     uintptr_t thread_id; // map key
-    PyObject *loop;
+    PyObject* loop;
 
     if (!PyArg_ParseTuple(args, "lO", &thread_id, &loop))
         return NULL;
@@ -368,11 +344,8 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
     {
         std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
-        if (thread_info_map.find(thread_id) != thread_info_map.end())
-        {
-            thread_info_map.find(thread_id)->second->asyncio_loop = (loop != Py_None)
-                                                                        ? (uintptr_t)loop
-                                                                        : 0;
+        if (thread_info_map.find(thread_id) != thread_info_map.end()) {
+            thread_info_map.find(thread_id)->second->asyncio_loop = (loop != Py_None) ? (uintptr_t)loop : 0;
         }
     }
 
@@ -380,8 +353,8 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject*
+init_asyncio(PyObject* Py_UNUSED(m), PyObject* args)
 {
     if (!PyArg_ParseTuple(args, "OOO", &asyncio_current_tasks, &asyncio_scheduled_tasks, &asyncio_eager_tasks))
         return NULL;
@@ -393,8 +366,8 @@ init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-link_tasks(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject*
+link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 {
     PyObject *parent, *child;
 
@@ -412,24 +385,24 @@ link_tasks(PyObject *Py_UNUSED(m), PyObject *args)
 
 // ----------------------------------------------------------------------------
 static PyMethodDef echion_core_methods[] = {
-    {"start", start, METH_NOARGS, "Start the stack sampler"},
-    {"start_async", start_async, METH_NOARGS, "Start the stack sampler asynchronously"},
-    {"stop", stop, METH_NOARGS, "Stop the stack sampler"},
-    {"track_thread", track_thread, METH_VARARGS, "Map the name of a thread with its identifier"},
-    {"untrack_thread", untrack_thread, METH_VARARGS, "Untrack a terminated thread"},
-    {"init", init, METH_NOARGS, "Initialize the stack sampler (usually after a fork)"},
+    { "start", start, METH_NOARGS, "Start the stack sampler" },
+    { "start_async", start_async, METH_NOARGS, "Start the stack sampler asynchronously" },
+    { "stop", stop, METH_NOARGS, "Stop the stack sampler" },
+    { "track_thread", track_thread, METH_VARARGS, "Map the name of a thread with its identifier" },
+    { "untrack_thread", untrack_thread, METH_VARARGS, "Untrack a terminated thread" },
+    { "init", init, METH_NOARGS, "Initialize the stack sampler (usually after a fork)" },
     // Task support
-    {"track_asyncio_loop", track_asyncio_loop, METH_VARARGS, "Map the name of a task with its identifier"},
-    {"init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking"},
-    {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
+    { "track_asyncio_loop", track_asyncio_loop, METH_VARARGS, "Map the name of a task with its identifier" },
+    { "init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking" },
+    { "link_tasks", link_tasks, METH_VARARGS, "Link two tasks" },
     // Configuration interface
-    {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
-    {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
-    {"set_memory", set_memory, METH_VARARGS, "Set whether to sample memory usage"},
-    {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
-    {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
-    {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
-    {NULL, NULL, 0, NULL} /* Sentinel */
+    { "set_interval", set_interval, METH_VARARGS, "Set the sampling interval" },
+    { "set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time" },
+    { "set_memory", set_memory, METH_VARARGS, "Set whether to sample memory usage" },
+    { "set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks" },
+    { "set_where", set_where, METH_VARARGS, "Set whether to use where mode" },
+    { "set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name" },
+    { NULL, NULL, 0, NULL } /* Sentinel */
 };
 
 // ----------------------------------------------------------------------------
@@ -446,7 +419,7 @@ static struct PyModuleDef coremodule = {
 PyMODINIT_FUNC
 PyInit_core(void)
 {
-    PyObject *m;
+    PyObject* m;
 
     m = PyModule_Create(&coremodule);
     if (m == NULL)

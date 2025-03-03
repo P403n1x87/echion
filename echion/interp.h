@@ -20,11 +20,11 @@
 #include <echion/state.h>
 #include <echion/vm.h>
 
-static void for_each_interp(std::function<void(PyInterpreterState *interp)> callback)
+static void
+for_each_interp(std::function<void(PyInterpreterState* interp)> callback)
 {
     PyInterpreterState interp;
-    for (PyInterpreterState *interp_addr = runtime->interpreters.head;
-         !copy_type(interp_addr, interp);
+    for (PyInterpreterState* interp_addr = runtime->interpreters.head; !copy_type(interp_addr, interp);
          interp_addr = interp.next)
         callback(&interp);
 }
