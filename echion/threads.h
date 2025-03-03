@@ -331,7 +331,9 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             return;
         }
 
-        delta = running ? cpu_time - previous_cpu_time : 0;
+        if (running) {
+          delta = cpu_time - previous_cpu_time;
+        }
     }
     unwind(tstate);
 
