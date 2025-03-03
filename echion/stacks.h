@@ -20,7 +20,6 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
-#include <echion/stack_chunk.h>
 
 // ----------------------------------------------------------------------------
 
@@ -115,10 +114,12 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         try
         {
 #if PY_VERSION_HEX >= 0x030b0000
-            Frame &frame = Frame::read_with_stack_chunk(
-                (_PyInterpreterFrame *)current_frame_addr, &current_frame_addr);
+            Frame &frame = Frame::read(
+                reinterpret_cast<_PyInterpreterFrame *>(current_frame_addr),
+                reinterpret_cast<_PyInterpreterFrame **>(&current_frame_addr));
 #else
-            Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
+            Frame &frame = Frame::read(
+                current_frame_addr, &current_frame_addr);
 #endif
             stack.push_back(frame);
         }
