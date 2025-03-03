@@ -10,7 +10,6 @@
 #include <exception>
 #include <memory>
 
-#if PY_VERSION_HEX >= 0x030b0000
 // ----------------------------------------------------------------------------
 
 class StackChunkError : public std::exception
@@ -85,4 +84,3 @@ void *StackChunk::resolve(void *address)
 // ----------------------------------------------------------------------------
 
 static std::unique_ptr<StackChunk> stack_chunk = nullptr;
-#endif

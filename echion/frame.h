@@ -29,7 +29,9 @@
 
 #include <echion/cache.h>
 #include <echion/mojo.h>
+#if PY_VERSION_HEX >= 0x030b0000
 #include <echion/stack_chunk.h>
+#endif // PY_VERSION_HEX >= 0x030b0000
 #include <echion/strings.h>
 #include <echion/vm.h>
 
