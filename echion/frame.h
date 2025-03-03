@@ -475,11 +475,12 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr)
         // Get the previous frame
         auto prev_frame_addr = frame_addr->previous;
         if (prev_frame_addr == NULL) {
+            frame_addr = NULL;
             break;
         }
 
         // There is a previous frame, so we need to resolve it.
-        frame_addr = stack_chunk->resolve(prev_frame_addr);
+        frame_addr = (_PyInterpreterFrame*)(stack_chunk ? stack_chunk->resolve(prev_frame_addr) : prev_frame_addr);
         if (frame_addr == prev_frame_addr) {
             // The frame is not within the stack chunk so we need to copy it
             _PyInterpreterFrame iframe;
