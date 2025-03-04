@@ -39,26 +39,29 @@
 // ----------------------------------------------------------------------------
 static void do_where(std::ostream &stream)
 {
-    stream << "\r"
-           << "🐴 Echion reporting for duty" << std::endl
-           << std::endl;
+    WhereRenderer::get().set_output(stream);
+    WhereRenderer::get().render_message("\r🐴 Echion reporting for duty");
+    WhereRenderer::get().render_message("");
 
     for_each_interp(
-        [&stream](PyInterpreterState *interp) -> void
+        [](PyInterpreterState *interp) -> void
         {
             for_each_thread(
                 interp,
-                [&stream](PyThreadState *tstate, ThreadInfo &thread) -> void
+                [](PyThreadState *tstate, ThreadInfo &thread) -> void
                 {
                     thread.unwind(tstate);
+                    WhereRenderer::get().render_thread_begin(
+                        tstate, thread.name, /*cpu_time*/ 0, tstate->thread_id, thread.native_id);
+
                     if (native)
                     {
                         interleave_stacks();
-                        thread.render_where(interleaved_stack, stream);
+                        interleaved_stack.render_where();
                     }
                     else
-                        thread.render_where(python_stack, stream);
-                    stream << std::endl;
+                        python_stack.render_where();
+                    WhereRenderer::get().render_message("");
                 });
         });
 }
@@ -108,9 +111,9 @@ _start()
 
     try
     {
-        mojo.open();
+        Renderer::get().open();
     }
-    catch (MojoWriter::Error &)
+    catch (std::exception &e)
     {
         return;
     }
@@ -139,27 +142,27 @@ _start()
 
     setup_where();
 
-    mojo.header();
+    Renderer::get().header();
 
     if (memory)
     {
-        mojo.metadata("mode", "memory");
+        Renderer::get().metadata("mode", "memory");
     }
     else
     {
-        mojo.metadata("mode", (cpu ? "cpu" : "wall"));
+        Renderer::get().metadata("mode", (cpu ? "cpu" : "wall"));
     }
-    mojo.metadata("interval", std::to_string(interval));
-    mojo.metadata("sampler", "echion");
+    Renderer::get().metadata("interval", std::to_string(interval));
+    Renderer::get().metadata("sampler", "echion");
 
     // DEV: Workaround for the austin-python library: we send an empty sample
     // to set the PID. We also map the key value 0 to the empty string, to
     // support task name frames.
-    mojo.stack(pid, 0, "MainThread");
-    mojo.string(0, "");
-    mojo.string(1, "<invalid>");
-    mojo.string(2, "<unknown>");
-    mojo.metric_time(0);
+    Renderer::get().render_stack_begin(pid, 0, "MainThread");
+    Renderer::get().string(0, "");
+    Renderer::get().string(1, "<invalid>");
+    Renderer::get().string(2, "<unknown>");
+    Renderer::get().render_stack_end(MetricType::Time, 0);
 
     if (memory)
         setup_memory();
@@ -189,7 +192,7 @@ _stop()
 
     restore_signals();
 
-    mojo.close();
+    Renderer::get().close();
 
     reset_frame_cache();
 }
@@ -425,6 +428,7 @@ static PyMethodDef echion_core_methods[] = {
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
+    {"set_max_frames", set_max_frames, METH_VARARGS, "Set the maximum number of frames to unwind"},
     {"set_memory", set_memory, METH_VARARGS, "Set whether to sample memory usage"},
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
