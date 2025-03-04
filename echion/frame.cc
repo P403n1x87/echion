@@ -255,10 +255,6 @@ Frame &Frame::read_local(_PyInterpreterFrame *frame_addr,
 // ----------------------------------------------------------------------------
 Frame &Frame::get(PyCodeObject *code_addr, int lasti)
 {
-  PyCodeObject code;
-  if (copy_type(code_addr, code))
-    return INVALID_FRAME;
-
   uintptr_t frame_key = Frame::key(code_addr, lasti);
 
   try
@@ -269,6 +265,10 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
   {
     try
     {
+      PyCodeObject code;
+      if (copy_type(code_addr, code))
+        return INVALID_FRAME;
+
       auto new_frame = std::make_unique<Frame>(&code, lasti);
       new_frame->cache_key = frame_key;
       auto &f = *new_frame;
