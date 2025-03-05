@@ -28,22 +28,72 @@
 
 
 #if defined PL_LINUX
-class Fd
+#define MAX_FD_COUNT 16
+
+class FileD8r
 {
 public:
-    Fd(int fd) : fd_(fd) {}
+    using Ptr = std::unique_ptr<FileD8r>;
 
-    ~Fd()
+    class Error : public std::exception
     {
-        if (fd_ != -1)
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create file descriptor object";
+        }
+    };
+
+    FileD8r(int fd) {
+        if (fd < 0)
+            throw Error();
+
+        {
+            std::lock_guard<std::mutex> lock(fd_count_lock);
+            
+            if (fd_count >= MAX_FD_COUNT) {
+                close(fd);
+                
+                throw Error();
+            }
+    
+            fd_count++;
+        }
+    
+        fd_ = fd;
+    }
+
+    ~FileD8r()
+    {
+        if (fd_ >= 0)
             close(fd_);
+
+        {
+            std::lock_guard<std::mutex> lock(fd_count_lock);
+         
+            if (fd_count > 0)
+                fd_count--;
+        }
     }
 
     operator int() const { return fd_; }
 
 private:
-    int fd_;
+    int fd_ = -1;
+
+    static int fd_count;
+    static std::mutex fd_count_lock;
 };
+
+int FileD8r::fd_count = 0;
+std::mutex FileD8r::fd_count_lock;
+
+static inline int
+open_proc_stat(unsigned long native_id) {
+    char buffer[64];
+    snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
+    return open(buffer, O_RDONLY);
+}
 #endif
 
 class ThreadInfo
@@ -67,7 +117,7 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
-    std::unique_ptr<Fd> stat_fd;
+    FileD8r::Ptr stat_fd = nullptr;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -94,9 +144,11 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
-        stat_fd = std::make_unique<Fd>(open(buffer, O_RDONLY));
+        try {
+            stat_fd = std::make_unique<FileD8r>(open_proc_stat(native_id));
+        } catch (FileD8r::Error&) {
+            stat_fd = nullptr;
+        }
         
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
@@ -133,9 +185,19 @@ bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
     char buffer[2048];
-
-    if (pread((int)*stat_fd, buffer, sizeof(buffer), 0) <= 0)
+    int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
+    
+    if (fd < 0)
         return -1;
+
+    auto result = pread(fd, buffer, sizeof(buffer), 0);
+
+    if (stat_fd == nullptr)
+        close(fd);
+
+    if (result <= 0) {
+        return -1;
+    }
 
     char *p = strchr(buffer, ')');
     if (p == NULL)
