@@ -49,11 +49,11 @@ Frame::Frame(PyObject *frame)
 #if PY_VERSION_HEX >= 0x030b0000
 
 #if PY_VERSION_HEX >= 0x030d0000
-    _PyInterpreterFrame* iframe = (_PyInterpreterFrame *)frame;
+    _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
 #else
-    const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+    const _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject *code = iframe->f_code;
 #endif // PY_VERSION_HEX >= 0x030d0000
@@ -68,7 +68,7 @@ Frame::Frame(PyObject *frame)
 #endif
 
 #else
-    PyFrameObject *py_frame = (PyFrameObject *)frame;
+    PyFrameObject *py_frame = reinterpret_cast<PyFrameObject *>(frame);
     PyCodeObject *code = py_frame->f_code;
 
     location.line = PyFrame_GetLineNumber(py_frame);
@@ -114,13 +114,13 @@ Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
 #endif // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-void Frame::infer_location(PyCodeObject *code, int lasti)
+void Frame::infer_location(PyCodeObject *code_obj, int lasti)
 {
-    unsigned int lineno = code->co_firstlineno;
+    unsigned int lineno = code_obj->co_firstlineno;
     Py_ssize_t len = 0;
 
 #if PY_VERSION_HEX >= 0x030b0000
-    auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
+    auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
     if (table == nullptr)
         throw LocationError();
 
@@ -187,7 +187,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
     }
 
 #elif PY_VERSION_HEX >= 0x030a0000
-    auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
+    auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
     if (table == nullptr)
         throw LocationError();
 
@@ -212,7 +212,7 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
     }
 
 #else
-    auto table = pybytes_to_bytes_and_size(code->co_lnotab, &len);
+    auto table = pybytes_to_bytes_and_size(code_obj->co_lnotab, &len);
     if (table == nullptr)
         throw LocationError();
 
@@ -239,22 +239,22 @@ void Frame::infer_location(PyCodeObject *code, int lasti)
 // ------------------------------------------------------------------------
 Frame::Key Frame::key(PyCodeObject *code, int lasti)
 {
-    return (((uintptr_t)(((uintptr_t)code) & MOJO_INT32) << 16) | lasti);
+    return ((static_cast<uintptr_t>(((reinterpret_cast<uintptr_t>(code)) & MOJO_INT32)) << 16) | lasti);
 }
 
 // ----------------------------------------------------------------------------
 Frame::Key Frame::key(PyObject *frame)
 {
 #if PY_VERSION_HEX >= 0x030d0000
-  _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+  _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
   const int lasti = _PyInterpreterFrame_LASTI(iframe);
-  PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
+  PyCodeObject *code = reinterpret_cast<PyCodeObject *>(iframe->f_executable);
 #elif PY_VERSION_HEX >= 0x030b0000
-  const _PyInterpreterFrame *iframe = (_PyInterpreterFrame *)frame;
+  const _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
   const int lasti = _PyInterpreterFrame_LASTI(iframe);
   PyCodeObject *code = iframe->f_code;
 #else
-  const PyFrameObject *py_frame = (PyFrameObject *)frame;
+  const PyFrameObject *py_frame = reinterpret_cast<PyFrameObject *>(frame);
   const int lasti = py_frame->f_lasti;
   PyCodeObject *code = py_frame->f_code;
 #endif
@@ -313,10 +313,10 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
-    const int lasti = ((int)(frame_addr->instr_ptr - 1 - (_Py_CODEUNIT *)((PyCodeObject *)frame_addr->f_executable))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject *)frame_addr->f_executable, lasti);
+    const int lasti = (static_cast<int>((frame_addr->instr_ptr - 1 - reinterpret_cast<_Py_CODEUNIT *>((reinterpret_cast<PyCodeObject *>(frame_addr->f_executable)))))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto &frame = Frame::get(reinterpret_cast<PyCodeObject *>(frame_addr->f_executable), lasti);
 #else
-    const int lasti = ((int)(frame_addr->prev_instr - (_Py_CODEUNIT *)(frame_addr->f_code))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    const int lasti = (static_cast<int>((frame_addr->prev_instr - reinterpret_cast<_Py_CODEUNIT *>((frame_addr->f_code))))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(frame_addr->f_code, lasti);
 #endif // PY_VERSION_HEX >= 0x030d0000
     if (&frame != &INVALID_FRAME)
@@ -340,7 +340,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     auto &frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
-    *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
+    *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject *>(py_frame.f_back);
 #endif
 
     return frame;
@@ -448,7 +448,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
 // ----------------------------------------------------------------------------
 Frame &Frame::get(StringTable::Key name)
 {
-    uintptr_t frame_key = (uintptr_t)name;
+    uintptr_t frame_key = static_cast<uintptr_t>(name);
     try
     {
         return frame_cache->lookup(frame_key);
