@@ -37,7 +37,6 @@
 
 #include <echion/cache.h>
 #include <echion/mojo.h>
-#include <echion/render.h>
 #if PY_VERSION_HEX >= 0x030b0000
 #include <echion/stack_chunk.h>
 #endif // PY_VERSION_HEX >= 0x030b0000
@@ -115,8 +114,6 @@ private:
     static inline Key key(PyCodeObject *code, int lasti);
     static inline Key key(PyObject *frame);
 };
-
-// ----------------------------------------------------------------------------
 
 inline auto INVALID_FRAME = Frame(StringTable::INVALID);
 inline auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);

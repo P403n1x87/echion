@@ -4,17 +4,11 @@
 #pragma once
 
 #include <Python.h>
-#if defined __GNUC__ && defined HAVE_STD_ATOMIC
-#undef HAVE_STD_ATOMIC
-#endif
 #if PY_VERSION_HEX >= 0x030c0000
-#define Py_BUILD_CORE
 #include <internal/pycore_long.h>
 #endif
 
 #include <exception>
-
-#include <echion/vm.h>
 
 class LongError : public std::exception {
   const char *what() const noexcept override { return "LongError"; }
