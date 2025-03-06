@@ -5,6 +5,7 @@
 #pragma once
 
 #include <exception>
+#include <fstream>
 #include <ostream>
 
 #define MOJO_VERSION 3

@@ -10,6 +10,8 @@
 #include <exception>
 #include <memory>
 
+#include <echion/vm.h>
+
 // ----------------------------------------------------------------------------
 
 class StackChunkError : public std::exception
@@ -25,16 +27,16 @@ public:
 class StackChunk
 {
 public:
-  StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
+  inline StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
 
-  void *resolve(void *frame_addr);
+  inline void *resolve(void *frame_addr);
 
 private:
   void *origin = NULL;
   std::unique_ptr<char[]> data = nullptr;
   std::unique_ptr<StackChunk> previous = nullptr;
 
-  StackChunk(_PyStackChunk *chunk_addr);
+  inline StackChunk(_PyStackChunk *chunk_addr);
 };
 
 // ----------------------------------------------------------------------------
