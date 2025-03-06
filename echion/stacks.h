@@ -21,80 +21,6 @@
 #include <echion/frame.h>
 #include <echion/mojo.h>
 
-#if PY_VERSION_HEX >= 0x030b0000
-// ----------------------------------------------------------------------------
-
-class StackChunkError : public std::exception
-{
-public:
-    const char *what() const noexcept override
-    {
-        return "Cannot create stack chunk object";
-    }
-};
-
-// ----------------------------------------------------------------------------
-class StackChunk
-{
-public:
-    StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
-
-    void* resolve(void *frame_addr);
-
-private:
-    void* origin = NULL;
-    std::unique_ptr<char[]> data = nullptr;
-    std::unique_ptr<StackChunk> previous = nullptr;
-
-    StackChunk(_PyStackChunk *chunk_addr);
-};
-
-// ----------------------------------------------------------------------------
-StackChunk::StackChunk(_PyStackChunk *chunk_addr)
-{
-    _PyStackChunk chunk;
-
-    // Copy the chunk header first
-    if (copy_type(chunk_addr, chunk))
-        throw StackChunkError();
-
-    origin = chunk_addr;
-    data = std::make_unique<char[]>(chunk.size);
-
-    // Copy the full chunk
-    if (copy_generic(chunk_addr, data.get(), chunk.size))
-        throw StackChunkError();
-
-    if (chunk.previous != NULL) {
-        try {
-            previous = std::unique_ptr<StackChunk>{ new StackChunk((_PyStackChunk*)chunk.previous) };
-        }
-        catch (StackChunkError &e) {
-            previous = nullptr;
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-void* StackChunk::resolve(void *address)
-{
-    _PyStackChunk *chunk = (_PyStackChunk *)data.get();
-
-    // Check if this chunk contains the address
-    if (address >= origin && address < (char *)origin + chunk->size)
-        return (char *)chunk + ((char *)address - (char *)origin);
-
-    if (previous)
-        return previous->resolve(address);
-
-    return address;
-}
-
-// ----------------------------------------------------------------------------
-
-static std::unique_ptr<StackChunk> stack_chunk = nullptr;
-#endif
-
 // ----------------------------------------------------------------------------
 
 class FrameStack : public std::deque<Frame::Ref>
@@ -124,7 +50,21 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            mojo.frame_ref((*it).get().cache_key);
+            Renderer::get().render_frame((*it).get());
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    void render_where()
+    {
+        for (auto it = this->rbegin(); it != this->rend(); ++it)
+        {
+#if PY_VERSION_HEX >= 0x030c0000
+            if ((*it).get().is_entry)
+                // This is a shim frame so we skip it.
+                continue;
+#endif
+            WhereRenderer::get().render_frame((*it).get());
         }
     }
 
@@ -138,9 +78,9 @@ private:
 
 // ----------------------------------------------------------------------------
 
-static FrameStack python_stack;
-static FrameStack native_stack;
-static FrameStack interleaved_stack;
+inline FrameStack python_stack;
+inline FrameStack native_stack;
+inline FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
@@ -188,10 +128,9 @@ unwind_frame(PyObject *frame_addr, FrameStack &stack)
         try
         {
 #if PY_VERSION_HEX >= 0x030b0000
-            auto resolved_address = stack_chunk ? stack_chunk->resolve(current_frame_addr) : current_frame_addr;
-            Frame &frame = resolved_address != current_frame_addr
-                ? Frame::read_local((_PyInterpreterFrame *)resolved_address, &current_frame_addr)
-                : Frame::read((PyObject *)current_frame_addr, &current_frame_addr);
+            Frame &frame = Frame::read(
+                reinterpret_cast<_PyInterpreterFrame *>(current_frame_addr),
+                reinterpret_cast<_PyInterpreterFrame **>(&current_frame_addr));
 #else
             Frame &frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
@@ -424,4 +363,4 @@ private:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static auto &stack_table = *(new StackTable());
+inline auto &stack_table = *(new StackTable());

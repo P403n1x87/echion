@@ -7,6 +7,7 @@
 #include <Python.h>
 #define Py_BUILD_CORE
 
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -21,6 +22,7 @@
 #include <mach/mach.h>
 #endif
 
+#include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/tasks.h>
@@ -131,14 +133,6 @@ public:
     void sample(int64_t, PyThreadState *, microsecond_t);
     void unwind(PyThreadState *);
 
-    void render_where(FrameStack &stack, std::ostream &output)
-    {
-        output << "    🧵 " << name << ":" << std::endl;
-
-        for (auto it = stack.rbegin(); it != stack.rend(); ++it)
-            (*it).get().render_where(output);
-    }
-
     // ------------------------------------------------------------------------
     ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
         : thread_id(thread_id), native_id(native_id), name(name)
@@ -188,7 +182,7 @@ bool ThreadInfo::is_running()
     int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
     
     if (fd < 0)
-        return -1;
+        return false;
 
     auto result = pread(fd, buffer, sizeof(buffer), 0);
 
@@ -196,12 +190,12 @@ bool ThreadInfo::is_running()
         close(fd);
 
     if (result <= 0) {
-        return -1;
+        return false;
     }
 
     char *p = strchr(buffer, ')');
     if (p == NULL)
-        return -1;
+        return false;
 
     p += 2;
     if (*p == ' ')
@@ -219,7 +213,7 @@ bool ThreadInfo::is_running()
         &count);
 
     if (kr != KERN_SUCCESS)
-        return -1;
+        return false;
 
     return info.run_state == TH_STATE_RUNNING;
 
@@ -231,10 +225,10 @@ bool ThreadInfo::is_running()
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static std::unordered_map<uintptr_t, ThreadInfo::Ptr> &thread_info_map =
+inline std::unordered_map<uintptr_t, ThreadInfo::Ptr> &thread_info_map =
     *(new std::unordered_map<uintptr_t, ThreadInfo::Ptr>()); // indexed by thread_id
 
-static std::mutex thread_info_map_lock;
+inline std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind(PyThreadState *tstate)
@@ -391,6 +385,8 @@ void ThreadInfo::unwind_tasks()
 // ----------------------------------------------------------------------------
 void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 {
+    Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
+
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
@@ -403,6 +399,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         }
 
         delta = running ? cpu_time - previous_cpu_time : 0;
+        Renderer::get().render_cpu_time(delta);
     }
 
     unwind(tstate);
@@ -411,8 +408,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     if (current_tasks.empty())
     {
         // Print the PID and thread name
-        mojo.stack(pid, iid, name);
-
+        Renderer::get().render_stack_begin(pid, iid, name);
         // Print the stack
         if (native)
         {
@@ -422,15 +418,14 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         else
             python_stack.render();
 
-        // Print the metric
-        mojo.metric_time(delta);
+        Renderer::get().render_stack_end(MetricType::Time, delta);
     }
     else
     {
         for (auto &task_stack : current_tasks)
         {
-            mojo.stack(pid, iid, name);
-
+            Renderer::get().render_task_begin();
+            Renderer::get().render_stack_begin(pid, iid, name);
             if (native)
             {
                 // NOTE: These stacks might be non-sensical, especially with
@@ -441,7 +436,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             else
                 task_stack->render();
 
-            mojo.metric_time(delta);
+            Renderer::get().render_stack_end(MetricType::Time, delta);
         }
 
         current_tasks.clear();

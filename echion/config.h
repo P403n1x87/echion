@@ -12,29 +12,29 @@
 #include <signal.h>
 
 // Sampling interval
-static unsigned int interval = 1000;
+inline unsigned int interval = 1000;
 
 // CPU Time mode
-static int cpu = 0;
+inline int cpu = 0;
 
 // For cpu time mode, Echion only unwinds threads that're running by default.
 // Set this to false to unwind all threads.
 inline bool ignore_non_running_threads = true;
 
 // Memory events
-static int memory = 0;
+inline int memory = 0;
 
 // Native stack sampling
-static int native = 0;
+inline int native = 0;
 
 // Where mode
-static int where = 0;
+inline int where = 0;
 
 // Maximum number of frames to unwind
-static unsigned int max_frames = 2048;
+inline unsigned int max_frames = 2048;
 
 // Pipe name (where mode IPC)
-static std::string pipe_name;
+inline std::string pipe_name;
 
 // ----------------------------------------------------------------------------
 static PyObject *
@@ -50,13 +50,13 @@ set_interval(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-void _set_cpu(int new_cpu)
+inline void _set_cpu(int new_cpu)
 {
     cpu = new_cpu;
 }
 
 // ----------------------------------------------------------------------------
-void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
+inline void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
 {
     ignore_non_running_threads = new_ignore_non_running_threads;
 }
