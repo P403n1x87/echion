@@ -222,4 +222,4 @@ private:
 
 // ----------------------------------------------------------------------------
 
-static MojoWriter mojo;
+inline MojoWriter mojo;

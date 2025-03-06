@@ -85,4 +85,4 @@ void *StackChunk::resolve(void *address)
 
 // ----------------------------------------------------------------------------
 
-static std::unique_ptr<StackChunk> stack_chunk = nullptr;
+inline std::unique_ptr<StackChunk> stack_chunk = nullptr;

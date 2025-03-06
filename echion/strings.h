@@ -229,4 +229,4 @@ public:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static StringTable &string_table = *(new StringTable());
+inline StringTable &string_table = *(new StringTable());
