@@ -10,8 +10,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <exception>
-#include <iostream>
-#include <fstream>
 #include <functional>
 #include <mutex>
 #include <sstream>
@@ -334,6 +332,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
         delta = running ? cpu_time - previous_cpu_time : 0;
         Renderer::get().render_cpu_time(delta);
     }
+
     unwind(tstate);
 
     // Asyncio tasks
@@ -348,9 +347,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
             interleaved_stack.render();
         }
         else
-        {
             python_stack.render();
-        }
+
         Renderer::get().render_stack_end(MetricType::Time, delta);
     }
     else
@@ -367,9 +365,8 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
                 interleaved_stack.render();
             }
             else
-            {
                 task_stack->render();
-            }
+
             Renderer::get().render_stack_end(MetricType::Time, delta);
         }
 

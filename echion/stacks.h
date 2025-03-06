@@ -162,7 +162,7 @@ unwind_frame_unsafe(PyObject *frame, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
         while (current_frame != NULL) {
-            if (((_PyInterpreterFrame *)current_frame)->f_executable->ob_type == &PyCode_Type) {
+            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type) {
                 break;
             }
             current_frame = (PyObject *)((_PyInterpreterFrame *)current_frame)->previous;
@@ -203,7 +203,7 @@ unwind_python_stack(PyThreadState *tstate, FrameStack &stack)
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject *)tstate->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame *cframe_addr = tstate->cframe;
@@ -226,14 +226,14 @@ unwind_python_stack_unsafe(PyThreadState *tstate, FrameStack &stack)
 #if PY_VERSION_HEX >= 0x030b0000
     try {
         stack_chunk = std::make_unique<StackChunk>(tstate);
-    } catch (StackChunkError &e)
-    {
+    }
+    catch (StackChunkError &e) {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject *)tstate->current_frame;
+    PyObject* frame_addr = (PyObject*)tstate->current_frame;
 #elif PY_VERSION_HEX >= 0x030b0000
     PyObject *frame_addr = (PyObject *)tstate->cframe->current_frame;
 #else // Python < 3.11
