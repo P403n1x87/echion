@@ -162,10 +162,10 @@ bool ThreadInfo::is_running()
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-static std::unordered_map<uintptr_t, ThreadInfo::Ptr> &thread_info_map =
+inline std::unordered_map<uintptr_t, ThreadInfo::Ptr> &thread_info_map =
     *(new std::unordered_map<uintptr_t, ThreadInfo::Ptr>()); // indexed by thread_id
 
-static std::mutex thread_info_map_lock;
+inline std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind(PyThreadState *tstate)

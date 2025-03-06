@@ -5,6 +5,8 @@
 #pragma once
 
 #include <exception>
+#include <fstream>
+#include <mutex>
 #include <ostream>
 
 #define MOJO_VERSION 3
@@ -221,4 +223,4 @@ private:
 
 // ----------------------------------------------------------------------------
 
-static MojoWriter mojo;
+inline MojoWriter mojo;
