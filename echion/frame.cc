@@ -68,7 +68,7 @@ Frame::Frame(PyObject *frame)
 #endif
 
 #else
-    PyFrameObject *py_frame = (PyFrameObject *)frame;
+    PyFrameObject *py_frame = reinterpret_cast<PyFrameObject *>(frame);
     PyCodeObject *code = py_frame->f_code;
 
     location.line = PyFrame_GetLineNumber(py_frame);
@@ -248,13 +248,13 @@ Frame::Key Frame::key(PyObject *frame)
 #if PY_VERSION_HEX >= 0x030d0000
   _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
   const int lasti = _PyInterpreterFrame_LASTI(iframe);
-  PyCodeObject *code = (PyCodeObject *)iframe->f_executable;
+  PyCodeObject *code = reinterpret_cast<PyCodeObject *>(iframe->f_executable);
 #elif PY_VERSION_HEX >= 0x030b0000
   const _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
   const int lasti = _PyInterpreterFrame_LASTI(iframe);
   PyCodeObject *code = iframe->f_code;
 #else
-  const PyFrameObject *py_frame = (PyFrameObject *)frame;
+  const PyFrameObject *py_frame = reinterpret_cast<PyFrameObject *>(frame);
   const int lasti = py_frame->f_lasti;
   PyCodeObject *code = py_frame->f_code;
 #endif
@@ -314,7 +314,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
     // from the code object.
 #if PY_VERSION_HEX >= 0x030d0000
     const int lasti = (static_cast<int>((frame_addr->instr_ptr - 1 - reinterpret_cast<_Py_CODEUNIT *>((reinterpret_cast<PyCodeObject *>(frame_addr->f_executable)))))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto &frame = Frame::get((PyCodeObject *)frame_addr->f_executable, lasti);
+    auto &frame = Frame::get(reinterpret_cast<PyCodeObject *>(frame_addr->f_executable), lasti);
 #else
     const int lasti = (static_cast<int>((frame_addr->prev_instr - reinterpret_cast<_Py_CODEUNIT *>((frame_addr->f_code))))) - offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto &frame = Frame::get(frame_addr->f_code, lasti);
@@ -340,7 +340,7 @@ Frame &Frame::read(PyObject *frame_addr, PyObject **prev_addr)
 
     auto &frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
-    *prev_addr = (&frame == &INVALID_FRAME) ? NULL : (PyObject *)py_frame.f_back;
+    *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject *>(py_frame.f_back);
 #endif
 
     return frame;
