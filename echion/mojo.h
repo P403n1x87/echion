@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <fstream>
+#include <mutex>
 #include <ostream>
 
 #define MOJO_VERSION 3
