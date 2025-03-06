@@ -187,7 +187,7 @@ void Frame::infer_location(PyCodeObject *code_obj, int lasti)
     }
 
 #elif PY_VERSION_HEX >= 0x030a0000
-    auto table = pybytes_to_bytes_and_size(code->co_linetable, &len);
+    auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
     if (table == nullptr)
         throw LocationError();
 
@@ -212,7 +212,7 @@ void Frame::infer_location(PyCodeObject *code_obj, int lasti)
     }
 
 #else
-    auto table = pybytes_to_bytes_and_size(code->co_lnotab, &len);
+    auto table = pybytes_to_bytes_and_size(code_obj->co_lnotab, &len);
     if (table == nullptr)
         throw LocationError();
 
