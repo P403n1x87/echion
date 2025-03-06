@@ -72,11 +72,11 @@ public:
     // ------------------------------------------------------------------------
     void inline render()
     {
-        mojo.stack(pid, iid, thread_name);
+        Renderer::get().render_stack_begin(pid, iid, thread_name);
 
         stack_table.retrieve(stack).render();
 
-        mojo.metric_memory(size);
+        Renderer::get().render_stack_end(MetricType::Memory, size);
     }
 };
 

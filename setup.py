@@ -34,7 +34,7 @@ if DISABLE_NATIVE:
 
 echionmodule = Extension(
     "echion.core",
-    sources=["echion/coremodule.cc", "echion/frame.cc"],
+    sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,

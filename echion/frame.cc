@@ -1,5 +1,7 @@
 #include <echion/frame.h>
 
+#include <echion/render.h>
+
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int
@@ -110,21 +112,6 @@ Frame::Frame(unw_cursor_t &cursor, unw_word_t pc)
     }
 }
 #endif // UNWIND_NATIVE_DISABLE
-
-// ------------------------------------------------------------------------
-void Frame::render_where(std::ostream &stream)
-{
-    if ((string_table.lookup(filename)).rfind("native@", 0) == 0)
-        stream << "          \033[38;5;248;1m" << string_table.lookup(name)
-        << "\033[0m \033[38;5;246m(" << string_table.lookup(filename)
-        << "\033[0m:\033[38;5;246m" << location.line
-        << ")\033[0m" << std::endl;
-    else
-        stream << "          \033[33;1m" << string_table.lookup(name)
-        << "\033[0m (\033[36m" << string_table.lookup(filename)
-        << "\033[0m:\033[32m" << location.line
-        << "\033[0m)" << std::endl;
-}
 
 // ----------------------------------------------------------------------------
 void Frame::infer_location(PyCodeObject *code, int lasti)
@@ -379,7 +366,7 @@ Frame &Frame::get(PyCodeObject *code_addr, int lasti)
             auto new_frame = std::make_unique<Frame>(&code, lasti);
             new_frame->cache_key = frame_key;
             auto &f = *new_frame;
-            mojo.frame(
+            Renderer::get().frame(
                 frame_key,
                 new_frame->filename,
                 new_frame->name,
@@ -409,7 +396,7 @@ Frame &Frame::get(PyObject *frame)
         auto new_frame = std::make_unique<Frame>(frame);
         new_frame->cache_key = frame_key;
         auto &f = *new_frame;
-        mojo.frame(
+        Renderer::get().frame(
             frame_key,
             new_frame->filename,
             new_frame->name,
@@ -441,7 +428,7 @@ Frame &Frame::get(unw_cursor_t &cursor)
             auto frame = std::make_unique<Frame>(cursor, pc);
             frame->cache_key = frame_key;
             auto &f = *frame;
-            mojo.frame(
+            Renderer::get().frame(
                 frame_key,
                 frame->filename,
                 frame->name,
@@ -471,7 +458,7 @@ Frame &Frame::get(StringTable::Key name)
         auto frame = std::make_unique<Frame>(name);
         frame->cache_key = frame_key;
         auto &f = *frame;
-        mojo.frame(
+        Renderer::get().frame(
             frame_key,
             frame->filename,
             frame->name,

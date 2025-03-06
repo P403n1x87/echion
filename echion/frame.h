@@ -28,7 +28,6 @@
 #include <cstring>
 #include <exception>
 #include <functional>
-#include <iostream>
 
 #ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
@@ -109,8 +108,6 @@ public:
     static Frame &get(unw_cursor_t &cursor);
 #endif // UNWIND_NATIVE_DISABLE
     static Frame &get(StringTable::Key name);
-
-    void render_where(std::ostream &stream);
 
 private:
     void inline infer_location(PyCodeObject *code, int lasti);
