@@ -86,6 +86,14 @@ public:
     bool is_entry = false;
 #endif
 
+    // ------------------------------------------------------------------------
+    Frame(StringTable::Key name) : name(name) {};
+    Frame(PyObject *frame);
+    Frame(PyCodeObject *code, int lasti);
+#ifndef UNWIND_NATIVE_DISABLE
+    Frame(unw_cursor_t &cursor, unw_word_t pc);
+#endif // UNWIND_NATIVE_DISABLE
+
 #if PY_VERSION_HEX >= 0x030b0000
     static Frame &read(_PyInterpreterFrame *frame_addr, _PyInterpreterFrame **prev_addr);
 #else
@@ -98,13 +106,6 @@ public:
     static Frame &get(unw_cursor_t &cursor);
 #endif // UNWIND_NATIVE_DISABLE
     static Frame &get(StringTable::Key name);
-
-    Frame(StringTable::Key name) : name(name) {};
-    Frame(PyObject *frame);
-    Frame(PyCodeObject *code, int lasti);
-#ifndef UNWIND_NATIVE_DISABLE
-    Frame(unw_cursor_t &cursor, unw_word_t pc);
-#endif // UNWIND_NATIVE_DISABLE
 
     void render_where(std::ostream &stream);
 
