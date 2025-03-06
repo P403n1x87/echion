@@ -6,6 +6,9 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#if defined __GNUC__ && defined HAVE_STD_ATOMIC
+#undef HAVE_STD_ATOMIC
+#endif
 #if PY_VERSION_HEX >= 0x030c0000
 // https://github.com/python/cpython/issues/108216#issuecomment-1696565797
 #undef _PyGC_FINALIZED
@@ -16,6 +19,7 @@
 #include <internal/pycore_code.h>
 #endif // PY_VERSION_HEX >= 0x030d0000
 #if PY_VERSION_HEX >= 0x030b0000
+#define Py_BUILD_CORE
 #include <internal/pycore_frame.h>
 #endif
 
@@ -34,6 +38,9 @@
 #include <echion/cache.h>
 #include <echion/mojo.h>
 #include <echion/render.h>
+#if PY_VERSION_HEX >= 0x030b0000
+#include <echion/stack_chunk.h>
+#endif // PY_VERSION_HEX >= 0x030b0000
 #include <echion/strings.h>
 #include <echion/vm.h>
 
@@ -82,9 +89,18 @@ public:
     bool is_entry = false;
 #endif
 
-    static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
+    // ------------------------------------------------------------------------
+    Frame(StringTable::Key name) : name(name) {};
+    Frame(PyObject *frame);
+    Frame(PyCodeObject *code, int lasti);
+#ifndef UNWIND_NATIVE_DISABLE
+    Frame(unw_cursor_t &cursor, unw_word_t pc);
+#endif // UNWIND_NATIVE_DISABLE
+
 #if PY_VERSION_HEX >= 0x030b0000
-    static Frame &read_local(_PyInterpreterFrame *frame_addr, PyObject **prev_addr);
+    static Frame &read(_PyInterpreterFrame *frame_addr, _PyInterpreterFrame **prev_addr);
+#else
+    static Frame &read(PyObject *frame_addr, PyObject **prev_addr);
 #endif
 
     static Frame &get(PyCodeObject *code_addr, int lasti);
@@ -93,13 +109,6 @@ public:
     static Frame &get(unw_cursor_t &cursor);
 #endif // UNWIND_NATIVE_DISABLE
     static Frame &get(StringTable::Key name);
-
-    Frame(StringTable::Key name) : name(name) {};
-    Frame(PyObject *frame);
-    Frame(PyCodeObject *code, int lasti);
-#ifndef UNWIND_NATIVE_DISABLE
-    Frame(unw_cursor_t &cursor, unw_word_t pc);
-#endif // UNWIND_NATIVE_DISABLE
 
 private:
     void inline infer_location(PyCodeObject *code, int lasti);
@@ -114,8 +123,6 @@ inline auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);
 
 // We make this a raw pointer to prevent its destruction on exit, since we
 // control the lifetime of the cache.
-inline LRUCache<uintptr_t, Frame> *frame_cache{nullptr};
-
-// ----------------------------------------------------------------------------
+inline LRUCache<uintptr_t, Frame> *frame_cache = nullptr;
 void init_frame_cache(size_t capacity);
 void reset_frame_cache();
