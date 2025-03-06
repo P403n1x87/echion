@@ -13,6 +13,7 @@
 #include <string>
 
 #include <echion/long.h>
+#include <echion/render.h>
 #include <echion/vm.h>
 
 class StringError : public std::exception
@@ -113,7 +114,7 @@ public:
                 auto str = pyunicode_to_utf8(s);
 #endif
                 this->emplace(k, str);
-                mojo.string(k, str);
+                Renderer::get().string(k, str);
             }
             catch (StringError &)
             {
@@ -140,7 +141,7 @@ public:
             auto str = std::string(PyUnicode_AsUTF8(s));
 #endif
             this->emplace(k, str);
-            mojo.string(k, str);
+            Renderer::get().string(k, str);
         }
 
         return k;
@@ -159,7 +160,7 @@ public:
                 char buffer[32] = {0};
                 std::snprintf(buffer, 32, "native@%p", (void *)k);
                 this->emplace(k, buffer);
-                mojo.string(k, buffer);
+                Renderer::get().string(k, buffer);
             }
             catch (StringError &)
             {
@@ -199,7 +200,7 @@ public:
             }
 
             this->emplace(k, name);
-            mojo.string(k, name);
+            Renderer::get().string(k, name);
 
             if (demangled)
                 std::free(demangled);

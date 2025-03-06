@@ -50,7 +50,21 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            mojo.frame_ref((*it).get().cache_key);
+            Renderer::get().render_frame((*it).get());
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    void render_where()
+    {
+        for (auto it = this->rbegin(); it != this->rend(); ++it)
+        {
+#if PY_VERSION_HEX >= 0x030c0000
+            if ((*it).get().is_entry)
+                // This is a shim frame so we skip it.
+                continue;
+#endif
+            WhereRenderer::get().render_frame((*it).get());
         }
     }
 
