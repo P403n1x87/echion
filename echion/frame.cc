@@ -51,7 +51,7 @@ Frame::Frame(PyObject *frame)
 #if PY_VERSION_HEX >= 0x030d0000
     _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
-    PyCodeObject* code = (PyCodeObject*)iframe->f_executable;
+    PyCodeObject* code = reinterpret_cast<PyCodeObject *>(iframe->f_executable);
 #else
     const _PyInterpreterFrame *iframe = reinterpret_cast<_PyInterpreterFrame *>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
