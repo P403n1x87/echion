@@ -9,7 +9,7 @@ from tests.utils import stealth
 @stealth
 def test_cpu_time(stealth):
     result, data = run_target("target_cpu", *stealth, "-c")
-    assert result.returncode == 0, result.stderr.decode()
+    assert result.returncode == 0 and data, result.stderr.decode()
 
     md = data.metadata
     assert md["mode"] == "cpu"
