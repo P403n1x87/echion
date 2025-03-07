@@ -28,6 +28,8 @@
 
 
 #if defined PL_LINUX
+#include <atomic>
+
 #define MAX_FD_COUNT 16
 
 class FileD8r
@@ -48,32 +50,22 @@ public:
         if (fd < 0)
             throw Error();
 
-        {
-            std::lock_guard<std::mutex> lock(fd_count_lock);
+        if (fd_count >= MAX_FD_COUNT) {
+            close(fd);
             
-            if (fd_count >= MAX_FD_COUNT) {
-                close(fd);
-                
-                throw Error();
-            }
-    
-            fd_count++;
+            throw Error();
         }
+    
+        fd_count++;
     
         fd_ = fd;
     }
 
     ~FileD8r()
     {
-        if (fd_ >= 0)
-            close(fd_);
+        close(fd_);
 
-        {
-            std::lock_guard<std::mutex> lock(fd_count_lock);
-         
-            if (fd_count > 0)
-                fd_count--;
-        }
+        fd_count--;
     }
 
     operator int() const { return fd_; }
@@ -81,12 +73,10 @@ public:
 private:
     int fd_ = -1;
 
-    static int fd_count;
-    static std::mutex fd_count_lock;
+    static std::atomic<int> fd_count;
 };
 
-int FileD8r::fd_count = 0;
-std::mutex FileD8r::fd_count_lock;
+std::atomic<int> FileD8r::fd_count = 0;
 
 static inline int
 open_proc_stat(unsigned long native_id) {
