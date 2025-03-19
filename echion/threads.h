@@ -32,8 +32,6 @@
 #if defined PL_LINUX
 #include <atomic>
 
-#define MAX_FD_COUNT 16
-
 class FileD8r
 {
 public:
@@ -52,14 +50,14 @@ public:
         if (fd < 0)
             throw Error();
 
-        if (fd_count >= MAX_FD_COUNT) {
+        if (fd_count >= max_fds) {
             close(fd);
-            
+
             throw Error();
         }
-    
+
         fd_count++;
-    
+
         fd_ = fd;
     }
 
@@ -133,7 +131,7 @@ public:
         } catch (FileD8r::Error&) {
             stat_fd = nullptr;
         }
-        
+
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -170,7 +168,7 @@ bool ThreadInfo::is_running()
 #if defined PL_LINUX
     char buffer[2048];
     int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
-    
+
     if (fd < 0)
         return false;
 
