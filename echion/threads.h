@@ -28,6 +28,64 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
+
+#if defined PL_LINUX
+#include <atomic>
+
+class FileD8r
+{
+public:
+    using Ptr = std::unique_ptr<FileD8r>;
+
+    class Error : public std::exception
+    {
+    public:
+        const char *what() const noexcept override
+        {
+            return "Cannot create file descriptor object";
+        }
+    };
+
+    FileD8r(int fd) {
+        if (fd < 0)
+            throw Error();
+
+        if (fd_count >= max_fds) {
+            close(fd);
+
+            throw Error();
+        }
+
+        fd_count++;
+
+        fd_ = fd;
+    }
+
+    ~FileD8r()
+    {
+        close(fd_);
+
+        fd_count--;
+    }
+
+    operator int() const { return fd_; }
+
+private:
+    int fd_ = -1;
+
+    static std::atomic<int> fd_count;
+};
+
+std::atomic<int> FileD8r::fd_count = 0;
+
+static inline int
+open_proc_stat(unsigned long native_id) {
+    char buffer[64];
+    snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
+    return open(buffer, O_RDONLY);
+}
+#endif
+
 class ThreadInfo
 {
 public:
@@ -49,6 +107,7 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
+    FileD8r::Ptr stat_fd = nullptr;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -67,12 +126,12 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        // Try to check that the thread_id is a valid pointer to a pthread
-        // structure. Calling pthread_getcpuclockid on an invalid memory address
-        // will cause a segmentation fault.
-        char buffer[32] = "";
-        if (copy_generic((void *)thread_id, buffer, sizeof(buffer)))
-            throw Error();
+        try {
+            stat_fd = std::make_unique<FileD8r>(open_proc_stat(native_id));
+        } catch (FileD8r::Error&) {
+            stat_fd = nullptr;
+        }
+
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -107,22 +166,20 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048] = "";
+    char buffer[2048];
+    int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
 
-    std::ostringstream file_name_stream;
-    file_name_stream << "/proc/self/task/" << this->native_id << "/stat";
-
-    int fd = open(file_name_stream.str().c_str(), O_RDONLY);
-    if (fd == -1)
+    if (fd < 0)
         return false;
 
-    if (read(fd, buffer, 2047) == 0)
-    {
+    auto result = pread(fd, buffer, sizeof(buffer), 0);
+
+    if (stat_fd == nullptr)
         close(fd);
+
+    if (result <= 0) {
         return false;
     }
-
-    close(fd);
 
     char *p = strchr(buffer, ')');
     if (p == NULL)
