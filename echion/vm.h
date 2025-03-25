@@ -360,7 +360,7 @@ inline bool init_safe_copy(int mode)
         if (read_process_vm_init()) {
             std::cerr << "VmReader initialized" << std::endl;
             safe_copy = vmreader_safe_copy;
-            return mode >= 1 && mode <= 2; // only "true" if the user had requested this mode
+            return mode != 0; // Return true IFF user had requested writev
         }
         std::cerr << "VmReader failed to initialize" << std::endl;
     }
