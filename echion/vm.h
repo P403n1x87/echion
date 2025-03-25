@@ -333,28 +333,36 @@ static inline bool check_process_vm_readv()
  */
 inline bool init_safe_copy(int mode)
 {
-    // By default, use safe copy
-    safe_copy = vmreader_safe_copy;
-
     if (1 == mode) {
+        std::cerr << "Using process_vm_readv" << std::endl;
         if (check_process_vm_readv()) {
+            std::cerr << "process_vm_readv is available" << std::endl;
             safe_copy = process_vm_readv;
             return true;
+        } else {
+            std::cerr << "process_vm_readv is not available" << std::endl;
         }
     } else if (2 == mode) {
         // Initialize the TrappedVmReader signal handlers
+        std::cerr << "Using TrappedVmReader" << std::endl;
         if (TrappedVmReader::initialize()) {
+            std::cerr << "TrappedVmReader initialized" << std::endl;
             safe_copy = trappedvmreader_safe_copy;
             return true;
+        } else {
+            std::cerr << "TrappedVmReader failed to initialize" << std::endl;
         }
     }
 
     if (safe_copy != vmreader_safe_copy) {
         // If we're not already using the safe copy, try to initialize it
+        std::cerr << "Using VmReader" << std::endl;
         if (read_process_vm_init()) {
+            std::cerr << "VmReader initialized" << std::endl;
             safe_copy = vmreader_safe_copy;
             return mode >= 1 && mode <= 2; // only "true" if the user had requested this mode
         }
+        std::cerr << "VmReader failed to initialize" << std::endl;
     }
 
     // If we're here, we tried to initialize the safe copy but failed, and the failover failed
@@ -456,14 +464,16 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
         // If we failed, but the failover worked, then update the mode as such
         if (safe_copy == vmreader_safe_copy)
         {
+            // Set the mode to reflect the failover
             vm_read_mode = 0;
         } else {
+            // Error
+            PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
             vm_read_mode = -1;
         }
     }
 
-    PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
-    return true;
+    return false;
 }
 
 // ----------------------------------------------------------------------------
@@ -471,7 +481,7 @@ static PyObject *
 set_vm_read_mode(PyObject *Py_UNUSED(m), PyObject *args)
 {
     int new_vm_read_mode;
-    if (!PyArg_ParseTuple(args, "p", &new_vm_read_mode))
+    if (!PyArg_ParseTuple(args, "i", &new_vm_read_mode))
         return NULL;
 
     if (!_set_vm_read_mode(new_vm_read_mode))
