@@ -146,19 +146,21 @@ class VmReader
               template_buf[PATH_MAX - 1] = '\0';
 
               fd = mkstemp(template_buf);
-              if (fd == -1)
+              if (fd == -1) {
+                  std::cerr << "[VmReader] failed to create tempory file: " << template_buf << std::endl;
                   continue;
-                continue;
+              }
 
               // Unlink the file to ensure it's removed when closed
               if (unlink(template_buf) != 0) {
                   // Log warning but continue
-                  std::cerr << "Warning: Failed to unlink temporary file" << std::endl;
+                  std::cerr << "Warning: Failed to unlink temporary file: " << template_buf << std::endl;
               }
 
             // Make sure we have enough size
             if (ftruncate(fd, new_sz) == -1)
             {
+                std::cerr << "[VmReader] failed to ftruncate file to size " << new_sz << std::endl;
                 continue;
             }
 
@@ -166,11 +168,13 @@ class VmReader
             ret = mmap(NULL, new_sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
             if (ret == MAP_FAILED)
             {
+                std::cerr << "[VmReader] failed to mmap file" << std::endl;
                 ret = nullptr;
                 continue;
             }
 
             // Successful.  Break.
+            std::cout << "[VmReader] initialized buffer with size " << new_sz << std::endl;
             sz = new_sz;
             break;
         }
@@ -348,12 +352,14 @@ __attribute__((constructor)) inline void init_safe_copy()
     safe_copy = vmreader_safe_copy;
 
     if (mode == "" || mode == "vm_read") {
+        std::cout << "Trying vm_read mode" << std::endl;
         if (check_process_vm_readv()) {
             safe_copy = process_vm_readv;
             return;
         }
     } else if (mode == "fast" || mode == "trap") {
         // Initialize the TrappedVmReader signal handlers
+        std::cout << "Trying trap mode" << std::endl;
         if (TrappedVmReader::initialize()) {
             safe_copy = trappedvmreader_safe_copy;
             return;
