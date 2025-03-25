@@ -12,6 +12,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <echion/config.h>
+
 #define PL_LINUX 1
 #if defined PL_LINUX
 #include <algorithm>
@@ -51,11 +53,10 @@ typedef mach_port_t proc_ref_t;
 #define copy_generic(addr, dest, size) (copy_memory(mach_task_self(), (void *)(addr), size, (void *)(dest)))
 #endif
 
-// Some checks are done at static initialization, so use this to read them at runtime
-inline bool failed_safe_copy = false;
 
 #if defined PL_LINUX
-inline ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = process_vm_readv;
+#define SAFE_COPY_ERROR ((ssize_t (*)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long)) -1)
+inline ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = SAFE_COPY_ERROR;
 
 class TrappedVmReader {
 private:
@@ -329,53 +330,53 @@ static inline bool check_process_vm_readv()
 
 /**
  * Initialize the safe copy operation on Linux
- *
- * This occurs at static init
  */
-__attribute__((constructor)) inline void init_safe_copy()
+inline bool init_safe_copy(int mode)
 {
-    char src[128];
-    char dst[128];
-    for (size_t i = 0; i < 128; i++)
-    {
-        src[i] = 0x41;
-        dst[i] = ~0x42;
-    }
-
-    // Check to see that process_vm_readv works, unless it's overridden
-    const char vm_read_mode_key[] = "ECHION_VM_READ_MODE";
-    const char *vm_read_mode = std::getenv(vm_read_mode_key);
-    std::string mode = (vm_read_mode != nullptr) ? vm_read_mode : ""; // default to safe copy
-    std::transform(mode.begin(), mode.end(), mode.begin(), [](char c){ return std::tolower(c); });
-
     // By default, use safe copy
     safe_copy = vmreader_safe_copy;
 
-    if (mode == "" || mode == "vm_read") {
-        std::cout << "Trying vm_read mode" << std::endl;
+    if (1 == mode) {
         if (check_process_vm_readv()) {
             safe_copy = process_vm_readv;
-            return;
+            return true;
         }
-    } else if (mode == "fast" || mode == "trap") {
+    } else if (2 == mode) {
         // Initialize the TrappedVmReader signal handlers
-        std::cout << "Trying trap mode" << std::endl;
         if (TrappedVmReader::initialize()) {
             safe_copy = trappedvmreader_safe_copy;
-            return;
-        } else {
-            fprintf(stderr, "Failed to initialize TrappedVmReader, falling back to default\n");
+            return true;
         }
     }
 
-    // Else, we have to setup the writev method
-    if (!read_process_vm_init()) {
-        // std::cerr might not have been fully initialized at this point, so use
-        // fprintf instead.
-        fprintf(stderr, "Failed to initialize safe copy interfaces\n");
-        failed_safe_copy = true;
-        return;
+    if (safe_copy != vmreader_safe_copy) {
+        // If we're not already using the safe copy, try to initialize it
+        if (read_process_vm_init()) {
+            safe_copy = vmreader_safe_copy;
+            return mode >= 1 && mode <= 2; // only "true" if the user had requested this mode
+        }
     }
+
+    // If we're here, we tried to initialize the safe copy but failed, and the failover failed
+    // so we have no safe copy mechanism available
+    safe_copy = SAFE_COPY_ERROR;
+    return false;
+}
+
+/**
+ * Initialize the safe copy operation on Linux at static initialization
+ * This sets the default behavior, but can be overridden
+ */
+__attribute__((constructor))
+inline void init_safe_copy_static()
+{
+    init_safe_copy(1); // Try to initialize with the default
+}
+#else
+inline void init_safe_copy(int mode)
+{
+    // This doesn't do anything, it just provides a symbol so that the caller doesn't have to specialize
+    (void)mode;
 }
 #endif
 
@@ -401,6 +402,11 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
     }
 
 #if defined PL_LINUX
+    if (safe_copy == SAFE_COPY_ERROR)
+    {
+        // No safe copy mechanism available
+        return -1;
+    }
     struct iovec local[1];
     struct iovec remote[1];
 
@@ -431,4 +437,45 @@ inline pid_t pid = 0;
 
 inline void _set_pid(pid_t _pid) {
     pid = _pid;
+}
+
+// ----------------------------------------------------------------------------
+inline bool _set_vm_read_mode(int new_vm_read_mode)
+{
+    if (new_vm_read_mode < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid vm_read_mode");
+        return false;
+    }
+
+    if (init_safe_copy(new_vm_read_mode))
+    {
+        vm_read_mode = new_vm_read_mode;
+        return true;
+    } else {
+        // If we failed, but the failover worked, then update the mode as such
+        if (safe_copy == vmreader_safe_copy)
+        {
+            vm_read_mode = 0;
+        } else {
+            vm_read_mode = -1;
+        }
+    }
+
+    PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject *
+set_vm_read_mode(PyObject *Py_UNUSED(m), PyObject *args)
+{
+    int new_vm_read_mode;
+    if (!PyArg_ParseTuple(args, "p", &new_vm_read_mode))
+        return NULL;
+
+    if (!_set_vm_read_mode(new_vm_read_mode))
+        return NULL;
+
+    Py_RETURN_NONE;
 }
