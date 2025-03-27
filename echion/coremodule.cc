@@ -433,6 +433,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
     {"set_max_fds", set_max_fds, METH_VARARGS, "Set the maximum number of file descriptors to use"},
+    {"set_vm_read_mode", set_vm_read_mode, METH_VARARGS, "Set the virtual memory read mode"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
