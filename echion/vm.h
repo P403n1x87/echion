@@ -60,42 +60,94 @@ inline ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const st
 
 class TrappedVmReader {
 private:
-      static inline std::atomic<bool> unsafe_read_in_progress {false};
-      static inline jmp_buf jump_buffer;
-      static inline struct sigaction old_sigsegv_action;
-      static inline struct sigaction old_sigbus_action;
+    // Whenever we clear tracking, we need to set it to an unreachable address--we don't want to clear it so it resides in the NULL page, as that will erroneously flag "most" segfaults
+    static inline void* unreachable_ptr = reinterpret_cast<void*>(static_cast<uintptr_t>(-1));
+
+    static inline jmp_buf jump_buffer;
+    static inline struct sigaction old_sigsegv_action;
+    static inline struct sigaction old_sigbus_action;
+
+    // Tracks the current read operation
+    static inline std::atomic<const void*> current_src_addr {nullptr};
+    static inline std::atomic<size_t> current_src_size {0};
+    static inline std::atomic<bool> terminated {false};
+    static inline std::mutex handler_mutex;
 
     static void segfault_handler(int sig, siginfo_t *info, void *context) {
-        if (unsafe_read_in_progress.load()) {
-            // If we were in the middle of an unsafe read, jump back
-            unsafe_read_in_progress.store(false);
-            longjmp(jump_buffer, 1);
-        } else {
-              // Chain to the previous handler
-              struct sigaction* old_action = (sig == SIGSEGV) ? &old_sigsegv_action : &old_sigbus_action;
-              if (old_action->sa_flags & SA_SIGINFO) {
-                  old_action->sa_sigaction(sig, info, context);
-              } else if (old_action->sa_handler != SIG_IGN && old_action->sa_handler != SIG_DFL) {
-                  old_action->sa_handler(sig);
+        // Before we do anything else, check the si_code to see if this was a `raise()`/`kill()` situation
+        if (info->si_code == SI_USER || info->si_code == SI_TKILL) {
+            terminated.store(true);
+            std::lock_guard<std::mutex> lock(handler_mutex); // Pop the mutex while we change state
+            struct sigaction* old_action = (sig == SIGSEGV) ? &old_sigsegv_action : &old_sigbus_action;
+
+            // Reinstall the old handlers--the user code may return gracefully from the situation, but we have to assume that the other handler assumes
+            // it is the current handler.  We can't keep this.
+            sigaction(SIGSEGV, &old_sigsegv_action, nullptr);
+            sigaction(SIGBUS, &old_sigbus_action, nullptr);
+
+            // Handle the different cases
+            if (old_action->sa_flags & SA_SIGINFO) {
+                old_action->sa_sigaction(sig, info, context);
+            } else if (old_action->sa_handler != SIG_IGN && old_action->sa_handler != SIG_DFL) {
+                old_action->sa_handler(sig);
+            } else {
+                // If original handler was default, restore it and explicitly re-raise
                 signal(sig, SIG_DFL);
                 raise(sig);
             }
+            return;
         }
+
+        // The fault address should always be available for a kernel-generated signal.  If it isn't, then all we could do is:
+        // * Set a false lookup for the VmReader, assuming this was a read-type operation
+        // * Do the normal thing we do when this is a "real" segfault
+        // Probably have to do the latter?
+        void *fault_addr = info->si_addr;
+
+        auto start = current_src_addr.load();
+        auto end = start + current_src_size.load();
+
+        if (start && fault_addr >= start && fault_addr <= end) {
+            // Lookup failed, so just return
+            longjmp(jump_buffer, 1);
+        }
+
+        // If we're here, then the fault happened outside of our range.
+        // This means we need to restore the original signal handlers and let them handle this condition.
+        // Returning is preferable to chaining because it allows the stack/ucontext to be preserved.
+        terminated.store(true);
+        std::lock_guard<std::mutex> lock(handler_mutex);
+        sigaction(SIGSEGV, &old_sigsegv_action, nullptr);
+        sigaction(SIGBUS, &old_sigbus_action, nullptr);
+        return;
     }
 
 public:
     // Initialize the signal handler
     static bool initialize() {
+        if (terminated.load()) {
+            return false;
+        }
+
         struct sigaction action;
         memset(&action, 0, sizeof(action));
-          action.sa_sigaction = segfault_handler;
-          action.sa_flags = SA_SIGINFO;
+        action.sa_sigaction = segfault_handler;
+        action.sa_flags = SA_SIGINFO;
 
-          if (sigaction(SIGSEGV, &action, &old_sigsegv_action) != 0) {
-              return false;
-          }
+        // Note that we _explicitly_ do not use SA_NODEFER because we do not want nested handlers
+        // This allows us to bounce off at the top level if there are any issues
+        bool segv_status = sigaction(SIGSEGV, &action, nullptr) == 0;
+        bool bus_status = sigaction(SIGBUS, &action, nullptr) == 0;
 
-          return (sigaction(SIGBUS, &action, &old_sigbus_action) == 0);
+        if (!segv_status) {
+            sigaction(SIGSEGV, &old_sigsegv_action, nullptr);
+            terminated.store(true);
+        }
+        if (!bus_status) {
+            sigaction(SIGBUS, &old_sigbus_action, nullptr);
+            terminated.store(true);
+        }
+        return segv_status && bus_status;
     }
 
     // Restore the original signal handler
@@ -106,15 +158,32 @@ public:
 
     // Try to safely copy memory from src to dst of size bytes
     // Returns true if successful, false if a segfault occurred
+    // Try to safely copy memory from src to dst of size bytes
     static bool read(void *dst, const void *src, size_t size) {
+        // Set up tracking for this read operation
+        current_src_addr.store(src);
+        current_src_size.store(size);
+
         if (setjmp(jump_buffer) == 0) {
-            // First time through, try the read
-            unsafe_read_in_progress.store(true);
+            // Before we potentially segfault, check to see whether the instrumentation is terminated--if so, just leave
+            if (terminated.load()) {
+                return false;
+            }
+
+            // Copy the memory--this line will segfault if the address is invalid
+            // Technically there is a small race condition here, but the only interesting race condition is when a
+            // different thread happens to hit a segfault at this exact moment.  Lack of NODEFER means that whoever passes
+            // to the handler first will get the signal, so this should be fine.
             memcpy(dst, src, size);
-            unsafe_read_in_progress.store(false);
+
+            // Clear tracking
+            current_src_addr.store(unreachable_ptr);
+            current_src_size.store(0);
             return true;
         } else {
             // We got here from longjmp after a segfault
+            current_src_addr.store(unreachable_ptr);
+            current_src_size.store(0);
             return false;
         }
     }
