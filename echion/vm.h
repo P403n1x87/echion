@@ -256,22 +256,24 @@ class VmReader
     }
 
 public:
-      static VmReader *get_instance()
-      {
-          if (instance == nullptr)
-          {
-              static std::once_flag init_flag;
-              std::call_once(init_flag, []() {
-                  // Nothing to do on failure here since instance is already null
-                  try
-                  {
-                      auto temp = new VmReader(1024 * 1024); // A megabyte?
-                      instance = temp;
-                  }
-              });
-          }
-          return instance;
-      }
+    static VmReader *get_instance()
+    {
+        if (instance == nullptr)
+        {
+            static std::once_flag init_flag;
+            std::call_once(init_flag, []() {
+                // Nothing to do on failure here since instance is already null
+                try
+                {
+                    auto temp = new VmReader(1024 * 1024); // A megabyte?
+                    instance = temp;
+                } catch(...) {
+                    // pass
+                }
+            });
+        }
+        return instance;
+    }
 
     ssize_t safe_copy(pid_t pid,
                       const struct iovec *local_iov, unsigned long liovcnt,
