@@ -14,7 +14,6 @@
 
 #include <echion/config.h>
 
-#define PL_LINUX 1
 #if defined PL_LINUX
 #include <algorithm>
 #include <atomic>
@@ -105,7 +104,7 @@ private:
         void *fault_addr = info->si_addr;
 
         auto start = current_src_addr.load();
-        auto end = start + current_src_size.load();
+        auto end = static_cast<const std::byte*>(start) + current_src_size.load();
 
         if (start && fault_addr >= start && fault_addr <= end) {
             // Lookup failed, so just return
@@ -445,15 +444,16 @@ inline bool init_safe_copy(int mode)
  * This sets the default behavior, but can be overridden
  */
 __attribute__((constructor))
-inline void init_safe_copy_static()
+inline bool init_safe_copy_static()
 {
-    init_safe_copy(1); // Try to initialize with the default
+    return init_safe_copy(1); // Try to initialize with the default
 }
 #else
-inline void init_safe_copy(int mode)
+inline bool init_safe_copy(int mode)
 {
     // This doesn't do anything, it just provides a symbol so that the caller doesn't have to specialize
     (void)mode;
+    return true;
 }
 #endif
 
@@ -530,6 +530,7 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
         vm_read_mode = new_vm_read_mode;
         return true;
     } else {
+#ifdef PL_LINUX
         // If we failed, but the failover worked, then update the mode as such
         if (safe_copy == vmreader_safe_copy)
         {
@@ -540,6 +541,8 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
             PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
             vm_read_mode = -1;
         }
+#endif
+        // Can't get here in macos, since the init process always returns true
     }
 
     return false;
