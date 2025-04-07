@@ -21,8 +21,7 @@ inline microsecond_t last_time = 0;
 #define TV_TO_MICROSECOND(tv) ((tv).seconds * 1e6 + (tv).microseconds)
 
 // ----------------------------------------------------------------------------
-static microsecond_t
-gettime()
+static microsecond_t gettime()
 {
 #if defined PL_LINUX
     struct timespec ts;
