@@ -6,7 +6,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <iostream>
 #include <mutex>
 #include <limits.h>
 #include <stdexcept>
@@ -216,20 +215,17 @@ class VmReader
 
               fd = mkstemp(template_buf);
               if (fd == -1) {
-                  std::cerr << "[VmReader] failed to create tempory file: " << template_buf << std::endl;
                   continue;
               }
 
               // Unlink the file to ensure it's removed when closed
               if (unlink(template_buf) != 0) {
-                  // Log warning but continue
-                  std::cerr << "Warning: Failed to unlink temporary file: " << template_buf << std::endl;
+                // Not sure what to do here, probably fine
               }
 
             // Make sure we have enough size
             if (ftruncate(fd, new_sz) == -1)
             {
-                std::cerr << "[VmReader] failed to ftruncate file to size " << new_sz << std::endl;
                 continue;
             }
 
@@ -237,13 +233,11 @@ class VmReader
             ret = mmap(NULL, new_sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
             if (ret == MAP_FAILED)
             {
-                std::cerr << "[VmReader] failed to mmap file" << std::endl;
                 ret = nullptr;
                 continue;
             }
 
             // Successful.  Break.
-            std::cout << "[VmReader] initialized buffer with size " << new_sz << std::endl;
             sz = new_sz;
             break;
         }
@@ -268,14 +262,11 @@ public:
           {
               static std::once_flag init_flag;
               std::call_once(init_flag, []() {
+                  // Nothing to do on failure here since instance is already null
                   try
                   {
                       auto temp = new VmReader(1024 * 1024); // A megabyte?
                       instance = temp;
-                  }
-                  catch (std::exception &e)
-                  {
-                      std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
                   }
               });
           }
@@ -318,7 +309,6 @@ public:
           {
               // Store error details for debugging
               int err = errno;
-              std::cerr << "pwritev failed: " << strerror(err) << " (errno=" << err << ")" << std::endl;
               return -1;
           }
 
@@ -402,35 +392,24 @@ static inline bool check_process_vm_readv()
 inline bool init_safe_copy(int mode)
 {
     if (1 == mode) {
-        std::cerr << "Using process_vm_readv" << std::endl;
         if (check_process_vm_readv()) {
-            std::cerr << "process_vm_readv is available" << std::endl;
             safe_copy = process_vm_readv;
             return true;
-        } else {
-            std::cerr << "process_vm_readv is not available" << std::endl;
         }
     } else if (2 == mode) {
         // Initialize the TrappedVmReader signal handlers
-        std::cerr << "Using TrappedVmReader" << std::endl;
         if (TrappedVmReader::initialize()) {
-            std::cerr << "TrappedVmReader initialized" << std::endl;
             safe_copy = trappedvmreader_safe_copy;
             return true;
-        } else {
-            std::cerr << "TrappedVmReader failed to initialize" << std::endl;
         }
     }
 
     if (safe_copy != vmreader_safe_copy) {
         // If we're not already using the safe copy, try to initialize it
-        std::cerr << "Using VmReader" << std::endl;
         if (read_process_vm_init()) {
-            std::cerr << "VmReader initialized" << std::endl;
             safe_copy = vmreader_safe_copy;
             return mode != 0; // Return true IFF user had requested writev
         }
-        std::cerr << "VmReader failed to initialize" << std::endl;
     }
 
     // If we're here, we tried to initialize the safe copy but failed, and the failover failed
