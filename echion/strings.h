@@ -18,15 +18,15 @@
 
 class StringError : public std::exception
 {
-    const char *what() const noexcept override
+    const char* what() const noexcept override
     {
         return "StringError";
     }
 };
 
 // ----------------------------------------------------------------------------
-static std::unique_ptr<unsigned char[]>
-pybytes_to_bytes_and_size(PyObject *bytes_addr, Py_ssize_t *size)
+static std::unique_ptr<unsigned char[]> pybytes_to_bytes_and_size(PyObject* bytes_addr,
+                                                                  Py_ssize_t* size)
 {
     PyBytesObject bytes;
 
@@ -38,26 +38,26 @@ pybytes_to_bytes_and_size(PyObject *bytes_addr, Py_ssize_t *size)
         return nullptr;
 
     auto data = std::make_unique<unsigned char[]>(*size);
-    if (copy_generic(((char *)bytes_addr) + offsetof(PyBytesObject, ob_sval), data.get(), *size))
+    if (copy_generic(((char*)bytes_addr) + offsetof(PyBytesObject, ob_sval), data.get(), *size))
         return nullptr;
 
     return data;
 }
 
 // ----------------------------------------------------------------------------
-static std::string
-pyunicode_to_utf8(PyObject *str_addr)
+static std::string pyunicode_to_utf8(PyObject* str_addr)
 {
     PyUnicodeObject str;
     if (copy_type(str_addr, str))
         throw StringError();
 
-    PyASCIIObject &ascii = str._base._base;
+    PyASCIIObject& ascii = str._base._base;
 
     if (ascii.state.kind != 1)
         throw StringError();
 
-    const char *data = ascii.state.compact ? (const char *)(((uint8_t *)str_addr) + sizeof(ascii)) : (const char *)str._base.utf8;
+    const char* data = ascii.state.compact ? (const char*)(((uint8_t*)str_addr) + sizeof(ascii))
+                                           : (const char*)str._base.utf8;
     if (data == NULL)
         throw StringError();
 
@@ -91,7 +91,7 @@ public:
     static constexpr Key UNKNOWN = 2;
 
     // Python string object
-    inline Key key(PyObject *s)
+    inline Key key(PyObject* s)
     {
         auto k = (Key)s;
 
@@ -104,11 +104,11 @@ public:
                 std::string str = "Task-";
                 try
                 {
-                  str += std::to_string(pylong_to_llong(s));
+                    str += std::to_string(pylong_to_llong(s));
                 }
-                catch (LongError &)
+                catch (LongError&)
                 {
-                  str = pyunicode_to_utf8(s);
+                    str = pyunicode_to_utf8(s);
                 }
 #else
                 auto str = pyunicode_to_utf8(s);
@@ -116,7 +116,7 @@ public:
                 this->emplace(k, str);
                 Renderer::get().string(k, str);
             }
-            catch (StringError &)
+            catch (StringError&)
             {
                 throw Error();
             }
@@ -126,7 +126,7 @@ public:
     };
 
     // Python string object
-    inline Key key_unsafe(PyObject *s)
+    inline Key key_unsafe(PyObject* s)
     {
         auto k = (Key)s;
 
@@ -134,9 +134,8 @@ public:
         {
 #if PY_VERSION_HEX >= 0x030c0000
             // The task name might hold a PyLong for deferred task name formatting.
-            auto str = (PyLong_CheckExact(s))
-                           ? "Task-" + std::to_string(PyLong_AsLong(s))
-                           : std::string(PyUnicode_AsUTF8(s));
+            auto str = (PyLong_CheckExact(s)) ? "Task-" + std::to_string(PyLong_AsLong(s))
+                                              : std::string(PyUnicode_AsUTF8(s));
 #else
             auto str = std::string(PyUnicode_AsUTF8(s));
 #endif
@@ -158,11 +157,11 @@ public:
             try
             {
                 char buffer[32] = {0};
-                std::snprintf(buffer, 32, "native@%p", (void *)k);
+                std::snprintf(buffer, 32, "native@%p", (void*)k);
                 this->emplace(k, buffer);
                 Renderer::get().string(k, buffer);
             }
-            catch (StringError &)
+            catch (StringError&)
             {
                 throw Error();
             }
@@ -172,7 +171,7 @@ public:
     }
 
     // Native scope name by unwinding cursor
-    inline Key key(unw_cursor_t &cursor)
+    inline Key key(unw_cursor_t& cursor)
     {
         unw_proc_info_t pi;
         if ((unw_get_proc_info(&cursor, &pi)))
@@ -182,15 +181,15 @@ public:
 
         if (this->find(k) == this->end())
         {
-            unw_word_t offset; // Ignored. All the information is in the PC anyway.
+            unw_word_t offset;  // Ignored. All the information is in the PC anyway.
             char sym[256];
             if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
                 throw Error();
 
-            char *name = sym;
+            char* name = sym;
 
             // Try to demangle C++ names
-            char *demangled = NULL;
+            char* demangled = NULL;
             if (name[0] == '_' && name[1] == 'Z')
             {
                 int status;
@@ -208,9 +207,9 @@ public:
 
         return k;
     }
-#endif // UNWIND_NATIVE_DISABLE
+#endif  // UNWIND_NATIVE_DISABLE
 
-    inline std::string &lookup(Key key)
+    inline std::string& lookup(Key key)
     {
         auto it = this->find(key);
         if (it == this->end())
@@ -230,4 +229,4 @@ public:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-inline StringTable &string_table = *(new StringTable());
+inline StringTable& string_table = *(new StringTable());

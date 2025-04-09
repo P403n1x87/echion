@@ -14,41 +14,37 @@
 #include <echion/config.h>
 
 #if defined PL_LINUX
-#include <algorithm>
-#include <atomic>
-#include <cstring>
-#include <fcntl.h>
-#include <memory>
-#include <setjmp.h>
-#include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <algorithm>
+#include <memory>
 
 typedef pid_t proc_ref_t;
 
-ssize_t process_vm_readv(
-    pid_t, const struct iovec *, unsigned long liovcnt,
-    const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags);
+ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long liovcnt,
+                         const struct iovec* remote_iov, unsigned long riovcnt,
+                         unsigned long flags);
 
 #define copy_type(addr, dest) (copy_memory(pid, addr, sizeof(dest), &dest))
 #define copy_type_p(addr, dest) (copy_memory(pid, addr, sizeof(*dest), dest))
-#define copy_generic(addr, dest, size) (copy_memory(pid, (void *)(addr), size, (void *)(dest)))
+#define copy_generic(addr, dest, size) (copy_memory(pid, (void*)(addr), size, (void*)(dest)))
 
 #elif defined PL_DARWIN
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <mach/machine/kern_return.h>
-#include <sys/types.h>
 #include <sys/sysctl.h>
+#include <sys/types.h>
 
 typedef mach_port_t proc_ref_t;
 
 #define copy_type(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(dest), &dest))
 #define copy_type_p(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(*dest), dest))
-#define copy_generic(addr, dest, size) (copy_memory(mach_task_self(), (void *)(addr), size, (void *)(dest)))
+#define copy_generic(addr, dest, size) \
+    (copy_memory(mach_task_self(), (void*)(addr), size, (void*)(dest)))
 #endif
 
 
@@ -189,19 +185,19 @@ public:
 
 class VmReader
 {
-    void *buffer{nullptr};
+    void* buffer{nullptr};
     size_t sz{0};
     int fd{-1};
-    inline static VmReader *instance{nullptr}; // Prevents having to set this in implementation
+    inline static VmReader* instance{nullptr};  // Prevents having to set this in implementation
 
-    void *init(size_t new_sz)
+    void* init(size_t new_sz)
     {
         // Makes a temporary file and ftruncates it to the specified size
         std::array<std::string, 3> tmp_dirs = {"/dev/shm", "/tmp", "/var/tmp"};
         std::string tmp_suffix = "/echion-XXXXXX";
-        void *ret = nullptr;
+        void* ret = nullptr;
 
-        for (auto &tmp_dir : tmp_dirs)
+        for (auto& tmp_dir : tmp_dirs)
         {
             // Reset the file descriptor, just in case
             close(fd);
@@ -256,7 +252,7 @@ class VmReader
     }
 
 public:
-    static VmReader *get_instance()
+    static VmReader* get_instance()
     {
         if (instance == nullptr)
         {
@@ -275,9 +271,8 @@ public:
         return instance;
     }
 
-    ssize_t safe_copy(pid_t pid,
-                      const struct iovec *local_iov, unsigned long liovcnt,
-                      const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
+    ssize_t safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
+                      const struct iovec* remote_iov, unsigned long riovcnt, unsigned long flags)
     {
         (void)pid;
         (void)flags;
@@ -296,12 +291,12 @@ public:
             }
             else
             {
-                void *tmp = mremap(buffer, sz, remote_iov[0].iov_len, MREMAP_MAYMOVE);
+                void* tmp = mremap(buffer, sz, remote_iov[0].iov_len, MREMAP_MAYMOVE);
                 if (tmp == MAP_FAILED)
                 {
                     return 0;
                 }
-                buffer = tmp; // no need to munmap
+                buffer = tmp;  // no need to munmap
                 sz = remote_iov[0].iov_len;
             }
         }
@@ -338,13 +333,13 @@ public:
  */
 inline bool read_process_vm_init()
 {
-    VmReader *_ = VmReader::get_instance();
+    VmReader* _ = VmReader::get_instance();
     return !!_;
 }
 
-inline ssize_t vmreader_safe_copy(pid_t pid,
-                             const struct iovec *local_iov, unsigned long liovcnt,
-                             const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
+inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
+                                  const struct iovec* remote_iov, unsigned long riovcnt,
+                                  unsigned long flags)
 {
     auto reader = VmReader::get_instance();
     if (!reader)
@@ -449,7 +444,7 @@ inline bool init_safe_copy(int mode)
  *
  * @return  zero on success, otherwise non-zero.
  */
-static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void *buf)
+static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
 {
     ssize_t result = -1;
 
@@ -476,12 +471,8 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
     result = safe_copy(proc_ref, local, 1, remote, 1, 0);
 
 #elif defined PL_DARWIN
-    kern_return_t kr = mach_vm_read_overwrite(
-        proc_ref,
-        (mach_vm_address_t)addr,
-        len,
-        (mach_vm_address_t)buf,
-        (mach_vm_size_t *)&result);
+    kern_return_t kr = mach_vm_read_overwrite(proc_ref, (mach_vm_address_t)addr, len,
+                                              (mach_vm_address_t)buf, (mach_vm_size_t*)&result);
 
     if (kr != KERN_SUCCESS)
         return -1;
@@ -493,7 +484,8 @@ static inline int copy_memory(proc_ref_t proc_ref, void *addr, ssize_t len, void
 
 inline pid_t pid = 0;
 
-inline void _set_pid(pid_t _pid) {
+inline void _set_pid(pid_t _pid)
+{
     pid = _pid;
 }
 

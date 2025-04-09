@@ -88,11 +88,11 @@ struct MemoryTableEntry
 };
 
 // ----------------------------------------------------------------------------
-class MemoryTable : public std::unordered_map<void *, MemoryTableEntry>
+class MemoryTable : public std::unordered_map<void*, MemoryTableEntry>
 {
 public:
     // ------------------------------------------------------------------------
-    void link(void *address, FrameStack::Key stack, size_t size)
+    void link(void* address, FrameStack::Key stack, size_t size)
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
@@ -100,7 +100,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    std::optional<MemoryTableEntry> unlink(void *address)
+    std::optional<MemoryTableEntry> unlink(void* address)
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
@@ -125,7 +125,7 @@ class StackStats
 {
 public:
     // ------------------------------------------------------------------------
-    void inline update(PyThreadState *tstate, FrameStack::Key stack, size_t size)
+    void inline update(PyThreadState* tstate, FrameStack::Key stack, size_t size)
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
@@ -141,14 +141,9 @@ public:
 
             // Map the memory address with the stack so that we can account for
             // the deallocations.
-            map.emplace(
-                stack,
-                MemoryStats(
-                    tstate->interp->id,
-                    thread_info_map[tstate->thread_id]->name,
-                    stack,
-                    1,
-                    size));
+            map.emplace(stack,
+                        MemoryStats(tstate->interp->id, thread_info_map[tstate->thread_id]->name,
+                                    stack, 1, size));
         }
         else
         {
@@ -158,7 +153,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    void inline update(MemoryTableEntry &entry)
+    void inline update(MemoryTableEntry& entry)
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
@@ -173,7 +168,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
-        for (auto &entry : map)
+        for (auto& entry : map)
         {
             // Emit non-trivial stack stats only
             if (entry.second.size != 0)
@@ -203,15 +198,14 @@ private:
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-inline auto &stack_stats = *(new StackStats());
-inline auto &memory_table = *(new MemoryTable());
+inline auto& stack_stats = *(new StackStats());
+inline auto& memory_table = *(new MemoryTable());
 
 // ----------------------------------------------------------------------------
-static inline void
-general_alloc(void *address, size_t size)
+static inline void general_alloc(void* address, size_t size)
 {
     auto stack = std::make_unique<FrameStack>();
-    auto *tstate = PyThreadState_Get(); // DEV: This should be called with the GIL held
+    auto* tstate = PyThreadState_Get();  // DEV: This should be called with the GIL held
 
     // DEV: We unwind the stack by reading the data out of live Python objects.
     // This works under the assumption that the objects/data structures we are
@@ -233,8 +227,7 @@ general_alloc(void *address, size_t size)
 }
 
 // ----------------------------------------------------------------------------
-static inline void
-general_free(void *address)
+static inline void general_free(void* address)
 {
     // Retrieve the stack that made the allocation
     if (auto entry = memory_table.unlink(address))
@@ -243,10 +236,9 @@ general_free(void *address)
 }
 
 // ----------------------------------------------------------------------------
-static void *
-echion_malloc(void *ctx, size_t n)
+static void* echion_malloc(void* ctx, size_t n)
 {
-    auto *alloc = (PyMemAllocatorEx *)ctx;
+    auto* alloc = (PyMemAllocatorEx*)ctx;
 
     // Make the actual allocation
     auto address = alloc->malloc(alloc->ctx, n);
@@ -259,10 +251,9 @@ echion_malloc(void *ctx, size_t n)
 }
 
 // ----------------------------------------------------------------------------
-static void *
-echion_calloc(void *ctx, size_t nelem, size_t elsize)
+static void* echion_calloc(void* ctx, size_t nelem, size_t elsize)
 {
-    auto *alloc = (PyMemAllocatorEx *)ctx;
+    auto* alloc = (PyMemAllocatorEx*)ctx;
 
     // Make the actual allocation
     auto address = alloc->calloc(alloc->ctx, nelem, elsize);
@@ -275,10 +266,9 @@ echion_calloc(void *ctx, size_t nelem, size_t elsize)
 }
 
 // ----------------------------------------------------------------------------
-static void *
-echion_realloc(void *ctx, void *p, size_t n)
+static void* echion_realloc(void* ctx, void* p, size_t n)
 {
-    auto *alloc = (PyMemAllocatorEx *)ctx;
+    auto* alloc = (PyMemAllocatorEx*)ctx;
 
     // Model this as a deallocation followed by an allocation
     if (p != NULL)
@@ -293,10 +283,9 @@ echion_realloc(void *ctx, void *p, size_t n)
 }
 
 // ----------------------------------------------------------------------------
-static void
-echion_free(void *ctx, void *p)
+static void echion_free(void* ctx, void* p)
 {
-    auto *alloc = (PyMemAllocatorEx *)ctx;
+    auto* alloc = (PyMemAllocatorEx*)ctx;
 
     // Handle the deallocation event
     if (p != NULL)
@@ -312,16 +301,11 @@ echion_free(void *ctx, void *p)
 #define ALLOC_DOMAIN_COUNT 3
 
 inline PyMemAllocatorEx original_allocators[ALLOC_DOMAIN_COUNT];
-inline PyMemAllocatorEx echion_allocator = {
-    NULL,
-    echion_malloc,
-    echion_calloc,
-    echion_realloc,
-    echion_free};
+inline PyMemAllocatorEx echion_allocator = {NULL, echion_malloc, echion_calloc, echion_realloc,
+                                            echion_free};
 
 // ----------------------------------------------------------------------------
-static void
-setup_memory()
+static void setup_memory()
 {
     for (int i = 0; i < ALLOC_DOMAIN_COUNT; i++)
     {
@@ -329,14 +313,13 @@ setup_memory()
         PyMem_GetAllocator(static_cast<PyMemAllocatorDomain>(i), &original_allocators[i]);
 
         // Install the new allocators
-        echion_allocator.ctx = (void *)&original_allocators[i];
+        echion_allocator.ctx = (void*)&original_allocators[i];
         PyMem_SetAllocator(static_cast<PyMemAllocatorDomain>(i), &echion_allocator);
     }
 }
 
 // ----------------------------------------------------------------------------
-static void
-teardown_memory()
+static void teardown_memory()
 {
     // Restore the original allocators
     for (int i = 0; i < ALLOC_DOMAIN_COUNT; i++)
