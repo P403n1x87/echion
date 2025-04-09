@@ -17,9 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
-        echion-alt-vm-force: ["1", "0"]
+        echion-vm-read-mode: ["0", "1", "2"]
 
-    name: Tests with Python ${{ matrix.python-version }}, ECHION_ALT_VM_FORCE=${{ matrix.echion-alt-vm-force }} on ubuntu-latest
+    name: Tests with Python ${{ matrix.python-version }}, ECHION_VM_READ_MODE=${{ matrix.echion-vm-read-mode }} on ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -41,12 +41,12 @@ jobs:
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests -svv
+          sudo -E env PATH="$PATH" ECHION_VM_READ_MODE=${{ matrix.echion-vm-read-mode }} hatch run tests.py${{ matrix.python-version }}:tests -svv
 
       - name: Upload profiles
         uses: actions/upload-artifact@v4
         with:
-          name: profiles-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.echion-alt-vm-force }}
+          name: profiles-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.echion-vm-read-mode }}
           path: profiles/
           overwrite: true
         if: always()
@@ -88,7 +88,7 @@ jobs:
 
       - name: Run tests
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
-  
+
       - name: Upload profiles
         uses: actions/upload-artifact@v4
         with:
