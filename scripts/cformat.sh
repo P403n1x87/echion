@@ -7,11 +7,7 @@ if ! command -v clang-format &> /dev/null; then
 fi
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-    echo "Error: Not in a git repository"
-    exit 1
-}
-
+REPO_ROOT="$(realpath "$SCRIPT_DIR/..")"
 ECHION_DIR="$REPO_ROOT/echion"
 if [ ! -d "$ECHION_DIR" ]; then
     echo "Error: echion directory not found at $ECHION_DIR"
@@ -23,5 +19,8 @@ if [ ! -f "$SCRIPT_DIR/.clang-format" ]; then
     exit 1
 fi
 
+# If no CLANG_FORMAT_COMMAND is set, use clang-format
+CLANG_FORMAT_COMMAND=${CLANG_FORMAT_COMMAND:-clang-format}
+
 find "$ECHION_DIR" \( -name "*.h" -o -name "*.cc" \) -type f -print0 |
-    xargs -0 -n1 clang-format -i -style=file:"$SCRIPT_DIR/.clang-format"
+    xargs -0 -n1 ${CLANG_FORMAT_COMMAND} -i -style=file:"$SCRIPT_DIR/.clang-format"

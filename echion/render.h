@@ -101,16 +101,16 @@ public:
         return true;
     }
 
-    void open() override {};
-    void close() override {};
-    void header() override {};
-    void metadata(const std::string& label, const std::string& value) override {};
+    void open() override{};
+    void close() override{};
+    void header() override{};
+    void metadata(const std::string& label, const std::string& value) override{};
     void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name, mojo_int_t line,
-               mojo_int_t line_end, mojo_int_t column, mojo_int_t column_end) override {};
-    void frame_ref(mojo_ref_t key) override {};
-    void frame_kernel(const std::string& scope) override {};
-    void string(mojo_ref_t key, const std::string& value) override {};
-    void string_ref(mojo_ref_t key) override {};
+               mojo_int_t line_end, mojo_int_t column, mojo_int_t column_end) override{};
+    void frame_ref(mojo_ref_t key) override{};
+    void frame_kernel(const std::string& scope) override{};
+    void string(mojo_ref_t key, const std::string& value) override{};
+    void string_ref(mojo_ref_t key) override{};
 
     void render_thread_begin(PyThreadState*, std::string_view name, microsecond_t, uintptr_t,
                              unsigned long) override
@@ -309,16 +309,16 @@ public:
         ref(key);
     }
 
-    void render_message(std::string_view msg) override {};
+    void render_message(std::string_view msg) override{};
     void render_thread_begin(PyThreadState* tstate, std::string_view name, microsecond_t cpu_time,
-                             uintptr_t thread_id, unsigned long native_id) override {};
-    void render_task_begin() override {};
+                             uintptr_t thread_id, unsigned long native_id) override{};
+    void render_task_begin() override{};
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {
         stack(pid, iid, name);
     };
     void render_frame(Frame& frame) override;
-    void render_cpu_time(uint64_t cpu_time) override {};
+    void render_cpu_time(uint64_t cpu_time) override{};
     void render_stack_end(MetricType metric_type, uint64_t delta) override
     {
         if (metric_type == MetricType::Time)

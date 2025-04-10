@@ -89,7 +89,7 @@ public:
 #endif
 
     // ------------------------------------------------------------------------
-    Frame(StringTable::Key name) : name(name) {};
+    Frame(StringTable::Key name) : name(name){};
     Frame(PyObject* frame);
     Frame(PyCodeObject* code, int lasti);
 #ifndef UNWIND_NATIVE_DISABLE
