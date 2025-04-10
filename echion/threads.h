@@ -28,7 +28,6 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
-
 #if defined PL_LINUX
 #include <atomic>
 
@@ -112,7 +111,6 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
-    FileD8r::Ptr stat_fd = nullptr;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -131,15 +129,6 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        try
-        {
-            stat_fd = std::make_unique<FileD8r>(open_proc_stat(native_id));
-        }
-        catch (FileD8r::Error&)
-        {
-            stat_fd = nullptr;
-        }
-
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -175,31 +164,16 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048];
-    int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
+    struct timespec ts1, ts2;
 
-    if (fd < 0)
+    // Get two back-to-back times
+    if (clock_gettime(cpu_clock_id, &ts1) != 0)
+        return false;
+    if (clock_gettime(cpu_clock_id, &ts2) != 0)
         return false;
 
-    auto result = pread(fd, buffer, sizeof(buffer), 0);
-
-    if (stat_fd == nullptr)
-        close(fd);
-
-    if (result <= 0)
-    {
-        return false;
-    }
-
-    char* p = strchr(buffer, ')');
-    if (p == NULL)
-        return false;
-
-    p += 2;
-    if (*p == ' ')
-        p++;
-
-    return (*p == 'R');
+    // If the CPU time has advanced, the thread is running
+    return (ts1.tv_sec != ts2.tv_sec || ts1.tv_nsec != ts2.tv_nsec);
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
