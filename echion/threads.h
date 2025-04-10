@@ -28,6 +28,68 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
+#if defined PL_LINUX
+#include <atomic>
+
+class FileD8r
+{
+public:
+    using Ptr = std::unique_ptr<FileD8r>;
+
+    class Error : public std::exception
+    {
+    public:
+        const char* what() const noexcept override
+        {
+            return "Cannot create file descriptor object";
+        }
+    };
+
+    FileD8r(int fd)
+    {
+        if (fd < 0)
+            throw Error();
+
+        if (fd_count >= max_fds)
+        {
+            close(fd);
+
+            throw Error();
+        }
+
+        fd_count++;
+
+        fd_ = fd;
+    }
+
+    ~FileD8r()
+    {
+        close(fd_);
+
+        fd_count--;
+    }
+
+    operator int() const
+    {
+        return fd_;
+    }
+
+private:
+    int fd_ = -1;
+
+    static std::atomic<int> fd_count;
+};
+
+std::atomic<int> FileD8r::fd_count = 0;
+
+static inline int open_proc_stat(unsigned long native_id)
+{
+    char buffer[64];
+    snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
+    return open(buffer, O_RDONLY);
+}
+#endif
+
 class ThreadInfo
 {
 public:
@@ -36,7 +98,7 @@ public:
     class Error : public std::exception
     {
     public:
-        const char *what() const noexcept override
+        const char* what() const noexcept override
         {
             return "Cannot create thread info object";
         }
@@ -59,11 +121,11 @@ public:
     void update_cpu_time();
     bool is_running();
 
-    void sample(int64_t, PyThreadState *, microsecond_t);
-    void unwind(PyThreadState *);
+    void sample(int64_t, PyThreadState*, microsecond_t);
+    void unwind(PyThreadState*);
 
     // ------------------------------------------------------------------------
-    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char *name)
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name)
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
@@ -89,7 +151,8 @@ void ThreadInfo::update_cpu_time()
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-    kern_return_t kr = thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
+    kern_return_t kr =
+        thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
     if (kr != KERN_SUCCESS || (info.flags & TH_FLAGS_IDLE))
         return;
@@ -115,11 +178,8 @@ bool ThreadInfo::is_running()
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-    kern_return_t kr = thread_info(
-        (thread_act_t)this->mach_port,
-        THREAD_BASIC_INFO,
-        (thread_info_t)&info,
-        &count);
+    kern_return_t kr =
+        thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
     if (kr != KERN_SUCCESS)
         return false;
@@ -134,13 +194,13 @@ bool ThreadInfo::is_running()
 // We make this a reference to a heap-allocated object so that we can avoid
 // the destruction on exit. We are in charge of cleaning up the object. Note
 // that the object will leak, but this is not a problem.
-inline std::unordered_map<uintptr_t, ThreadInfo::Ptr> &thread_info_map =
-    *(new std::unordered_map<uintptr_t, ThreadInfo::Ptr>()); // indexed by thread_id
+inline std::unordered_map<uintptr_t, ThreadInfo::Ptr>& thread_info_map =
+    *(new std::unordered_map<uintptr_t, ThreadInfo::Ptr>());  // indexed by thread_id
 
 inline std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::unwind(PyThreadState *tstate)
+void ThreadInfo::unwind(PyThreadState* tstate)
 {
     if (native)
     {
@@ -169,7 +229,7 @@ void ThreadInfo::unwind(PyThreadState *tstate)
             {
                 unwind_tasks();
             }
-            catch (TaskInfo::Error &)
+            catch (TaskInfo::Error&)
             {
                 // We failed to unwind tasks
             }
@@ -181,24 +241,23 @@ void ThreadInfo::unwind(PyThreadState *tstate)
 void ThreadInfo::unwind_tasks()
 {
     std::vector<TaskInfo::Ref> leaf_tasks;
-    std::unordered_set<PyObject *> parent_tasks;
-    std::unordered_map<PyObject *, TaskInfo::Ref> waitee_map; // Indexed by task origin
-    std::unordered_map<PyObject *, TaskInfo::Ref> origin_map; // Indexed by task origin
+    std::unordered_set<PyObject*> parent_tasks;
+    std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
+    std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
 
-    auto all_tasks = get_all_tasks((PyObject *)asyncio_loop);
+    auto all_tasks = get_all_tasks((PyObject*)asyncio_loop);
 
     {
         std::lock_guard<std::mutex> lock(task_link_map_lock);
 
         // Clean up the task_link_map. Remove entries associated to tasks that
         // no longer exist.
-        std::unordered_set<PyObject *> all_task_origins;
+        std::unordered_set<PyObject*> all_task_origins;
         std::transform(all_tasks.cbegin(), all_tasks.cend(),
                        std::inserter(all_task_origins, all_task_origins.begin()),
-                       [](const TaskInfo::Ptr &task)
-                       { return task->origin; });
+                       [](const TaskInfo::Ptr& task) { return task->origin; });
 
-        std::vector<PyObject *> to_remove;
+        std::vector<PyObject*> to_remove;
         for (auto kv : task_link_map)
         {
             if (all_task_origins.find(kv.first) == all_task_origins.end())
@@ -210,11 +269,10 @@ void ThreadInfo::unwind_tasks()
         // Determine the parent tasks from the gather links.
         std::transform(task_link_map.cbegin(), task_link_map.cend(),
                        std::inserter(parent_tasks, parent_tasks.begin()),
-                       [](const std::pair<PyObject *, PyObject *> &kv)
-                       { return kv.second; });
+                       [](const std::pair<PyObject*, PyObject*>& kv) { return kv.second; });
     }
 
-    for (auto &task : all_tasks)
+    for (auto& task : all_tasks)
     {
         origin_map.emplace(task->origin, std::ref(*task));
 
@@ -224,12 +282,12 @@ void ThreadInfo::unwind_tasks()
             leaf_tasks.push_back(std::ref(*task));
     }
 
-    for (auto &task : leaf_tasks)
+    for (auto& task : leaf_tasks)
     {
         auto stack = std::make_unique<FrameStack>();
         for (auto current_task = task;;)
         {
-            auto &task = current_task.get();
+            auto& task = current_task.get();
 
             int stack_size = task.unwind(*stack);
 
@@ -260,7 +318,7 @@ void ThreadInfo::unwind_tasks()
             stack->push_back(Frame::get(task.name));
 
             // Get the next task in the chain
-            PyObject *task_origin = task.origin;
+            PyObject* task_origin = task.origin;
             if (waitee_map.find(task_origin) != waitee_map.end())
             {
                 current_task = waitee_map.find(task_origin)->second;
@@ -271,8 +329,7 @@ void ThreadInfo::unwind_tasks()
                 // Check for, e.g., gather links
                 std::lock_guard<std::mutex> lock(task_link_map_lock);
 
-                if (
-                    task_link_map.find(task_origin) != task_link_map.end() &&
+                if (task_link_map.find(task_origin) != task_link_map.end() &&
                     origin_map.find(task_link_map[task_origin]) != origin_map.end())
                 {
                     current_task = origin_map.find(task_link_map[task_origin])->second;
@@ -292,7 +349,7 @@ void ThreadInfo::unwind_tasks()
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
+void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
 
@@ -331,7 +388,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
     }
     else
     {
-        for (auto &task_stack : current_tasks)
+        for (auto& task_stack : current_tasks)
         {
             Renderer::get().render_task_begin();
             Renderer::get().render_stack_begin(pid, iid, name);
@@ -353,10 +410,11 @@ void ThreadInfo::sample(int64_t iid, PyThreadState *tstate, microsecond_t delta)
 }
 
 // ----------------------------------------------------------------------------
-static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThreadState *, ThreadInfo &)> callback)
+static void for_each_thread(PyInterpreterState* interp,
+                            std::function<void(PyThreadState*, ThreadInfo&)> callback)
 {
-    std::unordered_set<PyThreadState *> threads;
-    std::unordered_set<PyThreadState *> seen_threads;
+    std::unordered_set<PyThreadState*> threads;
+    std::unordered_set<PyThreadState*> seen_threads;
 
     threads.clear();
     seen_threads.clear();
@@ -367,7 +425,7 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
     while (!threads.empty())
     {
         // Pop the next thread
-        PyThreadState *tstate_addr = *threads.begin();
+        PyThreadState* tstate_addr = *threads.begin();
         threads.erase(threads.begin());
 
         // Mark the thread as seen
@@ -405,7 +463,7 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                 try
                 {
                     bool main_thread_tracked = false;
-                    for (auto &kv : thread_info_map)
+                    for (auto& kv : thread_info_map)
                     {
                         if (kv.second->name == "MainThread")
                         {
@@ -420,7 +478,7 @@ static void for_each_thread(PyInterpreterState *interp, std::function<void(PyThr
                         tstate.thread_id,
                         std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
                 }
-                catch (ThreadInfo::Error &)
+                catch (ThreadInfo::Error&)
                 {
                     // We failed to create the thread info object so we skip it.
                     // We'll likely try again later with the valid thread
