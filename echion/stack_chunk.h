@@ -77,7 +77,8 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
     {
         try
         {
-            previous = std::unique_ptr<StackChunk>();
+            if (previous == nullptr)
+                previous = std::unique_ptr<StackChunk>();
             previous->update((_PyStackChunk*)chunk.previous);
         }
         catch (StackChunkError& e)
