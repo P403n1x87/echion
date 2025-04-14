@@ -44,8 +44,6 @@ private:
     std::unique_ptr<char[], FreeDeleter> data = nullptr;
     size_t data_capacity = 0;
     std::unique_ptr<StackChunk> previous = nullptr;
-
-    inline StackChunk(_PyStackChunk* chunk_addr);
 };
 
 // ----------------------------------------------------------------------------
