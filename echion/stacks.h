@@ -120,8 +120,6 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
 
-        count++;
-
         seen_frames.insert(current_frame_addr);
 
         try
@@ -139,6 +137,8 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         {
             break;
         }
+
+        count++;
     }
 
     return count;
