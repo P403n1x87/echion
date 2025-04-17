@@ -308,7 +308,8 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     {
         throw Frame::Error();
     }
-#else   // PY_VERSION_HEX < 0x030d0000 and PY_VERSION_HEX >= 0x030b0000
+#else   // PY_VERSION_HEX < 0x030d0000
+    // Code Specific to Python < 3.13 and >= 3.11
     auto resolved_addr =
         stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
                     : frame_addr;
@@ -324,7 +325,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
         }
         frame_addr = &iframe;
     }
-#endif  // PY_VERSION_HEX >= 0x030b0000
+#endif  // PY_VERSION_HEX >= 0x030d0000
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
@@ -345,14 +346,14 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     {
 #if PY_VERSION_HEX >= 0x030c0000
         frame.is_entry = (frame_addr->owner == FRAME_OWNED_BY_CSTACK);  // Shim frame
-#else
+#else   // PY_VERSION_HEX < 0x030c0000
         frame.is_entry = frame_addr->is_entry;
-#endif
+#endif  // PY_VERSION_HEX >= 0x030c0000
     }
 
     *prev_addr = &frame == &INVALID_FRAME ? NULL : frame_addr->previous;
 
-#else  // Python < 3.11
+#else   // PY_VERSION_HEX < 0x030b0000
     // Unwind the stack from leaf to root and store it in a stack. This way we
     // can print it from root to leaf.
     PyFrameObject py_frame;
@@ -363,7 +364,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     auto& frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
-#endif
+#endif  // PY_VERSION_HEX < 0x030b0000
 
     return frame;
 }
