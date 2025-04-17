@@ -308,11 +308,23 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     {
         throw Frame::Error();
     }
-#else
-    if (copy_type(frame_addr, iframe))
-        throw Error();
-    frame_addr = &iframe;
-#endif  // PY_VERSION_HEX >= 0x030d0000
+#else   // PY_VERSION_HEX < 0x030d0000 and PY_VERSION_HEX >= 0x030b0000
+    auto resolved_addr =
+        stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
+                    : frame_addr;
+    if (resolved_addr != frame_addr)
+    {
+        frame_addr = resolved_addr;
+    }
+    else
+    {
+        if (copy_type(frame_addr, iframe))
+        {
+            throw Frame::Error();
+        }
+        frame_addr = &iframe;
+    }
+#endif  // PY_VERSION_HEX >= 0x030b0000
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
@@ -324,17 +336,18 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
         offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
     auto& frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable), lasti);
 #else
-    const int lasti = (static_cast<int>((frame_addr->prev_instr -
-                                         reinterpret_cast<_Py_CODEUNIT*>((frame_addr->f_code))))) -
-                      offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto& frame = Frame::get(frame_addr->f_code, lasti);
+        const int lasti =
+            (static_cast<int>(
+                (frame_addr->prev_instr - reinterpret_cast<_Py_CODEUNIT*>((frame_addr->f_code))))) -
+            offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+        auto& frame = Frame::get(frame_addr->f_code, lasti);
 #endif  // PY_VERSION_HEX >= 0x030d0000
     if (&frame != &INVALID_FRAME)
     {
 #if PY_VERSION_HEX >= 0x030c0000
         frame.is_entry = (frame_addr->owner == FRAME_OWNED_BY_CSTACK);  // Shim frame
 #else
-        frame.is_entry = frame_addr->is_entry;
+            frame.is_entry = frame_addr->is_entry;
 #endif
     }
 
