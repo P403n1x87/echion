@@ -54,6 +54,7 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
     if (copy_type(chunk_addr, chunk))
         throw StackChunkError();
 
+    origin = chunk_addr;
     // if data_size is not enough, reallocate
     if (chunk.size > data_capacity)
     {
