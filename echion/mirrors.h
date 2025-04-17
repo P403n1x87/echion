@@ -102,7 +102,7 @@ MirrorDict::MirrorDict(PyObject* dict_addr)
     if (copy_type(dict.ma_keys, keys))
         throw MirrorError();
 
-        // Compute the full dictionary data size
+    // Compute the full dictionary data size
 #if PY_VERSION_HEX >= 0x030b0000
     size_t entry_size =
         keys.dk_kind == DICT_KEYS_UNICODE ? sizeof(PyDictUnicodeEntry) : sizeof(PyDictKeyEntry);
