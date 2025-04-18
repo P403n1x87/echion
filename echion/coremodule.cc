@@ -411,7 +411,6 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
-    {"set_max_fds", set_max_fds, METH_VARARGS, "Set the maximum number of file descriptors to use"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 

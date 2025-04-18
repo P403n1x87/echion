@@ -33,9 +33,6 @@ inline int where = 0;
 // Maximum number of frames to unwind
 inline unsigned int max_frames = 2048;
 
-// Maximum number of file descriptors to use, only valid for Linux
-inline unsigned int max_fds = 16;
-
 // Pipe name (where mode IPC)
 inline std::string pipe_name;
 
@@ -137,24 +134,6 @@ static PyObject* set_max_frames(PyObject* Py_UNUSED(m), PyObject* args)
         return NULL;
 
     max_frames = new_max_frames;
-
-    Py_RETURN_NONE;
-}
-
-// ----------------------------------------------------------------------------
-inline void _set_max_fds(unsigned int new_max_fds)
-{
-    max_fds = new_max_fds;
-}
-
-// ----------------------------------------------------------------------------
-static PyObject* set_max_fds(PyObject* Py_UNUSED(m), PyObject* args)
-{
-    unsigned int new_max_fds;
-    if (!PyArg_ParseTuple(args, "I", &new_max_fds))
-        return NULL;
-
-    _set_max_fds(new_max_fds);
 
     Py_RETURN_NONE;
 }

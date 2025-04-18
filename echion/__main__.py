@@ -199,7 +199,6 @@ def main() -> None:
     env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
     env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
     env["ECHION_WHERE"] = str(args.where or "")
-    env["ECHION_MAX_FDS"] = str(int(args.max_file_descriptors or 16))
 
     if args.pid or args.where:
         try:
