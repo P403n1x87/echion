@@ -28,69 +28,6 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
-
-#if defined PL_LINUX
-#include <atomic>
-
-class FileD8r
-{
-public:
-    using Ptr = std::unique_ptr<FileD8r>;
-
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create file descriptor object";
-        }
-    };
-
-    FileD8r(int fd)
-    {
-        if (fd < 0)
-            throw Error();
-
-        if (fd_count >= max_fds)
-        {
-            close(fd);
-
-            throw Error();
-        }
-
-        fd_count++;
-
-        fd_ = fd;
-    }
-
-    ~FileD8r()
-    {
-        close(fd_);
-
-        fd_count--;
-    }
-
-    operator int() const
-    {
-        return fd_;
-    }
-
-private:
-    int fd_ = -1;
-
-    static std::atomic<int> fd_count;
-};
-
-std::atomic<int> FileD8r::fd_count = 0;
-
-static inline int open_proc_stat(unsigned long native_id)
-{
-    char buffer[64];
-    snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
-    return open(buffer, O_RDONLY);
-}
-#endif
-
 class ThreadInfo
 {
 public:
@@ -112,7 +49,6 @@ public:
 
 #if defined PL_LINUX
     clockid_t cpu_clock_id;
-    FileD8r::Ptr stat_fd = nullptr;
 #elif defined PL_DARWIN
     mach_port_t mach_port;
 #endif
@@ -131,15 +67,6 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        try
-        {
-            stat_fd = std::make_unique<FileD8r>(open_proc_stat(native_id));
-        }
-        catch (FileD8r::Error&)
-        {
-            stat_fd = nullptr;
-        }
-
         pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
 #elif defined PL_DARWIN
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
@@ -175,31 +102,16 @@ void ThreadInfo::update_cpu_time()
 bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
-    char buffer[2048];
-    int fd = (stat_fd != nullptr) ? ((int)*stat_fd) : open_proc_stat(native_id);
+    struct timespec ts1, ts2;
 
-    if (fd < 0)
+    // Get two back-to-back times
+    if (clock_gettime(cpu_clock_id, &ts1) != 0)
+        return false;
+    if (clock_gettime(cpu_clock_id, &ts2) != 0)
         return false;
 
-    auto result = pread(fd, buffer, sizeof(buffer), 0);
-
-    if (stat_fd == nullptr)
-        close(fd);
-
-    if (result <= 0)
-    {
-        return false;
-    }
-
-    char* p = strchr(buffer, ')');
-    if (p == NULL)
-        return false;
-
-    p += 2;
-    if (*p == ' ')
-        p++;
-
-    return (*p == 'R');
+    // If the CPU time has advanced, the thread is running
+    return (ts1.tv_sec != ts2.tv_sec || ts1.tv_nsec != ts2.tv_nsec);
 
 #elif defined PL_DARWIN
     thread_basic_info_data_t info;
