@@ -28,68 +28,6 @@
 #include <echion/tasks.h>
 #include <echion/timing.h>
 
-#if defined PL_LINUX
-#include <atomic>
-
-class FileD8r
-{
-public:
-    using Ptr = std::unique_ptr<FileD8r>;
-
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create file descriptor object";
-        }
-    };
-
-    FileD8r(int fd)
-    {
-        if (fd < 0)
-            throw Error();
-
-        if (fd_count >= max_fds)
-        {
-            close(fd);
-
-            throw Error();
-        }
-
-        fd_count++;
-
-        fd_ = fd;
-    }
-
-    ~FileD8r()
-    {
-        close(fd_);
-
-        fd_count--;
-    }
-
-    operator int() const
-    {
-        return fd_;
-    }
-
-private:
-    int fd_ = -1;
-
-    static std::atomic<int> fd_count;
-};
-
-std::atomic<int> FileD8r::fd_count = 0;
-
-static inline int open_proc_stat(unsigned long native_id)
-{
-    char buffer[64];
-    snprintf(buffer, sizeof(buffer), "/proc/self/task/%lu/stat", native_id);
-    return open(buffer, O_RDONLY);
-}
-#endif
-
 class ThreadInfo
 {
 public:
