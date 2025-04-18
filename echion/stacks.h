@@ -120,8 +120,6 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         if (seen_frames.find(current_frame_addr) != seen_frames.end())
             break;
 
-        count++;
-
         seen_frames.insert(current_frame_addr);
 
         try
@@ -139,6 +137,8 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         {
             break;
         }
+
+        count++;
     }
 
     return count;
@@ -195,7 +195,11 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 #if PY_VERSION_HEX >= 0x030b0000
     try
     {
-        stack_chunk = std::make_unique<StackChunk>(tstate);
+        if (stack_chunk == nullptr)
+        {
+            stack_chunk = std::make_unique<StackChunk>();
+        }
+        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
     }
     catch (StackChunkError& e)
     {
@@ -226,7 +230,11 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 #if PY_VERSION_HEX >= 0x030b0000
     try
     {
-        stack_chunk = std::make_unique<StackChunk>(tstate);
+        if (stack_chunk == nullptr)
+        {
+            stack_chunk = std::make_unique<StackChunk>();
+        }
+        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
     }
     catch (StackChunkError& e)
     {

@@ -27,33 +27,48 @@ public:
 class StackChunk
 {
 public:
-    inline StackChunk(PyThreadState* tstate) : StackChunk((_PyStackChunk*)tstate->datastack_chunk)
-    {
-    }
+    StackChunk() {}
 
+    inline void update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
 
 private:
     void* origin = NULL;
-    std::unique_ptr<char[]> data = nullptr;
+    struct FreeDeleter
+    {
+        void operator()(void* ptr) const
+        {
+            free(ptr);
+        }
+    };
+    std::unique_ptr<char[], FreeDeleter> data = nullptr;
+    size_t data_capacity = 0;
     std::unique_ptr<StackChunk> previous = nullptr;
-
-    inline StackChunk(_PyStackChunk* chunk_addr);
 };
 
 // ----------------------------------------------------------------------------
-StackChunk::StackChunk(_PyStackChunk* chunk_addr)
+void StackChunk::update(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 
-    // Copy the chunk header first
     if (copy_type(chunk_addr, chunk))
         throw StackChunkError();
 
     origin = chunk_addr;
-    data = std::make_unique<char[]>(chunk.size);
+    // if data_size is not enough, reallocate
+    if (chunk.size > data_capacity)
+    {
+        data_capacity = chunk.size;
+        char* new_data = (char*)realloc(data.get(), data_capacity);
+        if (!new_data)
+        {
+            throw StackChunkError();
+        }
+        data.release();  // Release the old pointer before resetting
+        data.reset(new_data);
+    }
 
-    // Copy the full chunk
+    // Copy the data up until the size of the chunk
     if (copy_generic(chunk_addr, data.get(), chunk.size))
         throw StackChunkError();
 
@@ -61,7 +76,9 @@ StackChunk::StackChunk(_PyStackChunk* chunk_addr)
     {
         try
         {
-            previous = std::unique_ptr<StackChunk>{new StackChunk((_PyStackChunk*)chunk.previous)};
+            if (previous == nullptr)
+                previous = std::make_unique<StackChunk>();
+            previous->update((_PyStackChunk*)chunk.previous);
         }
         catch (StackChunkError& e)
         {
