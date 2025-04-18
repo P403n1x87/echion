@@ -148,3 +148,6 @@ _version.py
 
 # profiles
 profiles/
+
+# Cursor
+.cursor/
