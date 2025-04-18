@@ -36,7 +36,6 @@ def start():
     ec.set_native(bool(int(os.getenv("ECHION_NATIVE", 0))))
     ec.set_where(bool(int(os.getenv("ECHION_WHERE", 0) or 0)))
     ec.set_max_fds(int(os.getenv("ECHION_MAX_FDS", 16)))
-    ec.set_vm_read_mode(int(os.getenv("ECHION_VM_READ_MODE", 0)))
 
     # Monkey-patch the standard library on import
     try:
