@@ -364,7 +364,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     auto& frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
-#endif  // PY_VERSION_HEX < 0x030b0000
+#endif  // PY_VERSION_HEX >= 0x030b0000
 
     return frame;
 }
