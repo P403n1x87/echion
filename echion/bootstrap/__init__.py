@@ -45,7 +45,7 @@ def start():
         # hooks.
         pass
     else:
-        for module in ("asyncio", "threading"):
+        for module in ("asyncio", "threading", "gevent"):
 
             @ModuleWatchdog.after_module_imported(module)
             def _(module: ModuleType) -> None:

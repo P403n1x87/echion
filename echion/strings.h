@@ -12,6 +12,13 @@
 #include <exception>
 #include <string>
 
+#ifndef UNWIND_NATIVE_DISABLE
+#include <cxxabi.h>
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+#endif  // UNWIND_NATIVE_DISABLE
+
+
 #include <echion/long.h>
 #include <echion/render.h>
 #include <echion/vm.h>

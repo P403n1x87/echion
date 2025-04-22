@@ -3,6 +3,7 @@
 # Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
 import typing as t
+from types import FrameType
 
 if t.TYPE_CHECKING:
     from asyncio import BaseEventLoop
@@ -17,6 +18,11 @@ def init() -> None: ...
 def init_asyncio(
     threads: list, scheduled_tasks: set, eager_tasks: set | None
 ) -> None: ...
+def track_greenlet(
+    greenlet_id: int, name: str | None, frame_cell: list[FrameType | None | bool]
+) -> None: ...
+def untrack_greenlet(greenlet_id: int) -> None: ...
+def link_greenlets(greenlet_id: int, parent_id: int) -> None: ...
 
 # Configuration interface
 def set_interval(interval: int) -> None: ...
