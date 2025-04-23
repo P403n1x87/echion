@@ -4,23 +4,18 @@
 
 #pragma once
 
+#include <limits.h>
 #include <array>
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
-#include <limits.h>
 #include <stdexcept>
 #include <string>
 
 #include <echion/config.h>
 
-#define PL_LINUX 1
 #if defined PL_LINUX
-#include <algorithm>
-#include <atomic>
-#include <cstring>
 #include <fcntl.h>
-#include <memory>
 #include <setjmp.h>
 #include <signal.h>
 #include <sys/mman.h>
@@ -29,6 +24,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <algorithm>
+#include <atomic>
+#include <cstring>
 #include <memory>
 
 typedef pid_t proc_ref_t;
@@ -58,28 +55,41 @@ typedef mach_port_t proc_ref_t;
 
 
 #if defined PL_LINUX
-#define SAFE_COPY_ERROR ((ssize_t (*)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long)) -1)
-inline ssize_t (*safe_copy)(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long) = SAFE_COPY_ERROR;
+#define SAFE_COPY_ERROR                                                                         \
+    ((ssize_t(*)(pid_t, const struct iovec*, unsigned long, const struct iovec*, unsigned long, \
+                 unsigned long)) -                                                              \
+     1)
+inline ssize_t (*safe_copy)(pid_t, const struct iovec*, unsigned long, const struct iovec*,
+                            unsigned long, unsigned long) = SAFE_COPY_ERROR;
 
-class TrappedVmReader {
+class TrappedVmReader
+{
 private:
-      static inline std::atomic<bool> unsafe_read_in_progress {false};
-      static inline jmp_buf jump_buffer;
-      static inline struct sigaction old_sigsegv_action;
-      static inline struct sigaction old_sigbus_action;
+    static inline std::atomic<bool> unsafe_read_in_progress{false};
+    static inline jmp_buf jump_buffer;
+    static inline struct sigaction old_sigsegv_action;
+    static inline struct sigaction old_sigbus_action;
 
-    static void segfault_handler(int sig, siginfo_t *info, void *context) {
-        if (unsafe_read_in_progress.load()) {
+    static void segfault_handler(int sig, siginfo_t* info, void* context)
+    {
+        if (unsafe_read_in_progress.load())
+        {
             // If we were in the middle of an unsafe read, jump back
             unsafe_read_in_progress.store(false);
             longjmp(jump_buffer, 1);
-        } else {
-              // Chain to the previous handler
-              struct sigaction* old_action = (sig == SIGSEGV) ? &old_sigsegv_action : &old_sigbus_action;
-              if (old_action->sa_flags & SA_SIGINFO) {
-                  old_action->sa_sigaction(sig, info, context);
-              } else if (old_action->sa_handler != SIG_IGN && old_action->sa_handler != SIG_DFL) {
-                  old_action->sa_handler(sig);
+        }
+        else
+        {
+            // Chain to the previous handler
+            struct sigaction* old_action =
+                (sig == SIGSEGV) ? &old_sigsegv_action : &old_sigbus_action;
+            if (old_action->sa_flags & SA_SIGINFO)
+            {
+                old_action->sa_sigaction(sig, info, context);
+            }
+            else if (old_action->sa_handler != SIG_IGN && old_action->sa_handler != SIG_DFL)
+            {
+                old_action->sa_handler(sig);
                 signal(sig, SIG_DFL);
                 raise(sig);
             }
@@ -88,35 +98,42 @@ private:
 
 public:
     // Initialize the signal handler
-    static bool initialize() {
+    static bool initialize()
+    {
         struct sigaction action;
         memset(&action, 0, sizeof(action));
-          action.sa_sigaction = segfault_handler;
-          action.sa_flags = SA_SIGINFO;
+        action.sa_sigaction = segfault_handler;
+        action.sa_flags = SA_SIGINFO;
 
-          if (sigaction(SIGSEGV, &action, &old_sigsegv_action) != 0) {
-              return false;
-          }
+        if (sigaction(SIGSEGV, &action, &old_sigsegv_action) != 0)
+        {
+            return false;
+        }
 
-          return (sigaction(SIGBUS, &action, &old_sigbus_action) == 0);
+        return (sigaction(SIGBUS, &action, &old_sigbus_action) == 0);
     }
 
     // Restore the original signal handler
-    static void cleanup() {
+    static void cleanup()
+    {
         sigaction(SIGSEGV, &old_sigsegv_action, nullptr);
         sigaction(SIGBUS, &old_sigbus_action, nullptr);
     }
 
     // Try to safely copy memory from src to dst of size bytes
     // Returns true if successful, false if a segfault occurred
-    static bool read(void *dst, const void *src, size_t size) {
-        if (setjmp(jump_buffer) == 0) {
+    static bool read(void* dst, const void* src, size_t size)
+    {
+        if (setjmp(jump_buffer) == 0)
+        {
             // First time through, try the read
             unsafe_read_in_progress.store(true);
             memcpy(dst, src, size);
             unsafe_read_in_progress.store(false);
             return true;
-        } else {
+        }
+        else
+        {
             // We got here from longjmp after a segfault
             return false;
         }
@@ -143,23 +160,27 @@ class VmReader
             close(fd);
             fd = -1;
 
-              // Create the temporary file
-              std::string template_path = tmp_dir + tmp_suffix;
-              char template_buf[PATH_MAX];
-              strncpy(template_buf, template_path.c_str(), PATH_MAX - 1);
-              template_buf[PATH_MAX - 1] = '\0';
+            // Create the temporary file
+            std::string template_path = tmp_dir + tmp_suffix;
+            char template_buf[PATH_MAX];
+            strncpy(template_buf, template_path.c_str(), PATH_MAX - 1);
+            template_buf[PATH_MAX - 1] = '\0';
 
-              fd = mkstemp(template_buf);
-              if (fd == -1) {
-                  std::cerr << "[VmReader] failed to create tempory file: " << template_buf << std::endl;
-                  continue;
-              }
+            fd = mkstemp(template_buf);
+            if (fd == -1)
+            {
+                std::cerr << "[VmReader] failed to create tempory file: " << template_buf
+                          << std::endl;
+                continue;
+            }
 
-              // Unlink the file to ensure it's removed when closed
-              if (unlink(template_buf) != 0) {
-                  // Log warning but continue
-                  std::cerr << "Warning: Failed to unlink temporary file: " << template_buf << std::endl;
-              }
+            // Unlink the file to ensure it's removed when closed
+            if (unlink(template_buf) != 0)
+            {
+                // Log warning but continue
+                std::cerr << "Warning: Failed to unlink temporary file: " << template_buf
+                          << std::endl;
+            }
 
             // Make sure we have enough size
             if (ftruncate(fd, new_sz) == -1)
@@ -197,25 +218,25 @@ class VmReader
     }
 
 public:
-      static VmReader *get_instance()
-      {
-          if (instance == nullptr)
-          {
-              static std::once_flag init_flag;
-              std::call_once(init_flag, []() {
-                  try
-                  {
-                      auto temp = new VmReader(1024 * 1024); // A megabyte?
-                      instance = temp;
-                  }
-                  catch (std::exception &e)
-                  {
-                      std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
-                  }
-              });
-          }
-          return instance;
-      }
+    static VmReader* get_instance()
+    {
+        if (instance == nullptr)
+        {
+            static std::once_flag init_flag;
+            std::call_once(init_flag, []() {
+                try
+                {
+                    auto temp = new VmReader(1024 * 1024);  // A megabyte?
+                    instance = temp;
+                }
+                catch (std::exception& e)
+                {
+                    std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
+                }
+            });
+        }
+        return instance;
+    }
 
     ssize_t safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
                       const struct iovec* remote_iov, unsigned long riovcnt, unsigned long flags)
@@ -247,14 +268,15 @@ public:
             }
         }
 
-          ssize_t ret = pwritev(fd, remote_iov, riovcnt, 0);
-          if (ret == -1)
-          {
-              // Store error details for debugging
-              int err = errno;
-              std::cerr << "pwritev failed: " << strerror(err) << " (errno=" << err << ")" << std::endl;
-              return -1;
-          }
+        ssize_t ret = pwritev(fd, remote_iov, riovcnt, 0);
+        if (ret == -1)
+        {
+            // Store error details for debugging
+            int err = errno;
+            std::cerr << "pwritev failed: " << strerror(err) << " (errno=" << err << ")"
+                      << std::endl;
+            return -1;
+        }
 
         // Copy the data from the buffer to the remote process
         memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
@@ -284,9 +306,9 @@ inline bool read_process_vm_init()
     return !!_;
 }
 
-inline ssize_t vmreader_safe_copy(pid_t pid,
-                             const struct iovec *local_iov, unsigned long liovcnt,
-                             const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
+inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
+                                  const struct iovec* remote_iov, unsigned long riovcnt,
+                                  unsigned long flags)
 {
     auto reader = VmReader::get_instance();
     if (!reader)
@@ -294,28 +316,29 @@ inline ssize_t vmreader_safe_copy(pid_t pid,
     return reader->safe_copy(pid, local_iov, liovcnt, remote_iov, riovcnt, flags);
 }
 
-inline ssize_t trappedvmreader_safe_copy(pid_t pid,
-                             const struct iovec *local_iov, unsigned long liovcnt,
-                             const struct iovec *remote_iov, unsigned long riovcnt, unsigned long flags)
+inline ssize_t trappedvmreader_safe_copy(pid_t pid, const struct iovec* local_iov,
+                                         unsigned long liovcnt, const struct iovec* remote_iov,
+                                         unsigned long riovcnt, unsigned long flags)
 {
     // We only support one iovec for now
-    if (liovcnt != 1 || riovcnt != 1) {
+    if (liovcnt != 1 || riovcnt != 1)
+    {
         return 0;
     }
 
-    (void)pid;  // Unused parameter
+    (void)pid;    // Unused parameter
     (void)flags;  // Unused parameter
 
     // Try to use TrappedVmReader to copy the memory
-    bool success = TrappedVmReader::read(
-        local_iov[0].iov_base,
-        remote_iov[0].iov_base,
-        std::min(local_iov[0].iov_len, remote_iov[0].iov_len)
-    );
+    bool success = TrappedVmReader::read(local_iov[0].iov_base, remote_iov[0].iov_base,
+                                         std::min(local_iov[0].iov_len, remote_iov[0].iov_len));
 
-    if (success) {
+    if (success)
+    {
         return std::min(local_iov[0].iov_len, remote_iov[0].iov_len);
-    } else {
+    }
+    else
+    {
         return 0;
     }
 }
@@ -334,34 +357,45 @@ static inline bool check_process_vm_readv()
  */
 inline bool init_safe_copy(int mode)
 {
-    if (1 == mode) {
+    if (1 == mode)
+    {
         std::cerr << "Using process_vm_readv" << std::endl;
-        if (check_process_vm_readv()) {
+        if (check_process_vm_readv())
+        {
             std::cerr << "process_vm_readv is available" << std::endl;
             safe_copy = process_vm_readv;
             return true;
-        } else {
+        }
+        else
+        {
             std::cerr << "process_vm_readv is not available" << std::endl;
         }
-    } else if (2 == mode) {
+    }
+    else if (2 == mode)
+    {
         // Initialize the TrappedVmReader signal handlers
         std::cerr << "Using TrappedVmReader" << std::endl;
-        if (TrappedVmReader::initialize()) {
+        if (TrappedVmReader::initialize())
+        {
             std::cerr << "TrappedVmReader initialized" << std::endl;
             safe_copy = trappedvmreader_safe_copy;
             return true;
-        } else {
+        }
+        else
+        {
             std::cerr << "TrappedVmReader failed to initialize" << std::endl;
         }
     }
 
-    if (safe_copy != vmreader_safe_copy) {
+    if (safe_copy != vmreader_safe_copy)
+    {
         // If we're not already using the safe copy, try to initialize it
         std::cerr << "Using VmReader" << std::endl;
-        if (read_process_vm_init()) {
+        if (read_process_vm_init())
+        {
             std::cerr << "VmReader initialized" << std::endl;
             safe_copy = vmreader_safe_copy;
-            return mode != 0; // Return true IFF user had requested writev
+            return mode != 0;  // Return true IFF user had requested writev
         }
         std::cerr << "VmReader failed to initialize" << std::endl;
     }
@@ -376,16 +410,16 @@ inline bool init_safe_copy(int mode)
  * Initialize the safe copy operation on Linux at static initialization
  * This sets the default behavior, but can be overridden
  */
-__attribute__((constructor))
-inline void init_safe_copy_static()
+__attribute__((constructor)) inline bool init_safe_copy_static()
 {
-    init_safe_copy(1); // Try to initialize with the default
+    return init_safe_copy(1);  // Try to initialize with the default
 }
 #else
-inline void init_safe_copy(int mode)
+inline bool init_safe_copy(int)
 {
-    // This doesn't do anything, it just provides a symbol so that the caller doesn't have to specialize
-    (void)mode;
+    // This doesn't do anything, it just provides a symbol so that the caller doesn't have to
+    // specialize
+    return true;
 }
 #endif
 
@@ -448,6 +482,7 @@ inline void _set_pid(pid_t _pid)
 // ----------------------------------------------------------------------------
 inline bool _set_vm_read_mode(int new_vm_read_mode)
 {
+#if defined PL_LINUX
     if (new_vm_read_mode < 0)
     {
         PyErr_SetString(PyExc_RuntimeError, "Invalid vm_read_mode");
@@ -458,13 +493,17 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
     {
         vm_read_mode = new_vm_read_mode;
         return true;
-    } else {
+    }
+    else
+    {
         // If we failed, but the failover worked, then update the mode as such
         if (safe_copy == vmreader_safe_copy)
         {
             // Set the mode to reflect the failover
             vm_read_mode = 0;
-        } else {
+        }
+        else
+        {
             // Error
             PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
             vm_read_mode = -1;
@@ -472,11 +511,13 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
     }
 
     return false;
+#else
+    return true;
+#endif
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_vm_read_mode(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_vm_read_mode(PyObject* Py_UNUSED(m), PyObject* args)
 {
     int new_vm_read_mode;
     if (!PyArg_ParseTuple(args, "i", &new_vm_read_mode))
