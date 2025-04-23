@@ -17,70 +17,89 @@
 class StackChunkError : public std::exception
 {
 public:
-  const char *what() const noexcept override
-  {
-    return "Cannot create stack chunk object";
-  }
+    const char* what() const noexcept override
+    {
+        return "Cannot create stack chunk object";
+    }
 };
 
 // ----------------------------------------------------------------------------
 class StackChunk
 {
 public:
-  inline StackChunk(PyThreadState *tstate) : StackChunk((_PyStackChunk *)tstate->datastack_chunk) {}
+    StackChunk() {}
 
-  inline void *resolve(void *frame_addr);
+    inline void update(_PyStackChunk* chunk_addr);
+    inline void* resolve(void* frame_addr);
 
 private:
-  void *origin = NULL;
-  std::unique_ptr<char[]> data = nullptr;
-  std::unique_ptr<StackChunk> previous = nullptr;
-
-  inline StackChunk(_PyStackChunk *chunk_addr);
+    void* origin = NULL;
+    struct FreeDeleter
+    {
+        void operator()(void* ptr) const
+        {
+            free(ptr);
+        }
+    };
+    std::unique_ptr<char[], FreeDeleter> data = nullptr;
+    size_t data_capacity = 0;
+    std::unique_ptr<StackChunk> previous = nullptr;
 };
 
 // ----------------------------------------------------------------------------
-StackChunk::StackChunk(_PyStackChunk *chunk_addr)
+void StackChunk::update(_PyStackChunk* chunk_addr)
 {
-  _PyStackChunk chunk;
+    _PyStackChunk chunk;
 
-  // Copy the chunk header first
-  if (copy_type(chunk_addr, chunk))
-    throw StackChunkError();
+    if (copy_type(chunk_addr, chunk))
+        throw StackChunkError();
 
-  origin = chunk_addr;
-  data = std::make_unique<char[]>(chunk.size);
-
-  // Copy the full chunk
-  if (copy_generic(chunk_addr, data.get(), chunk.size))
-    throw StackChunkError();
-
-  if (chunk.previous != NULL)
-  {
-    try
+    origin = chunk_addr;
+    // if data_size is not enough, reallocate
+    if (chunk.size > data_capacity)
     {
-      previous = std::unique_ptr<StackChunk>{new StackChunk((_PyStackChunk *)chunk.previous)};
+        data_capacity = chunk.size;
+        char* new_data = (char*)realloc(data.get(), data_capacity);
+        if (!new_data)
+        {
+            throw StackChunkError();
+        }
+        data.release();  // Release the old pointer before resetting
+        data.reset(new_data);
     }
-    catch (StackChunkError &e)
+
+    // Copy the data up until the size of the chunk
+    if (copy_generic(chunk_addr, data.get(), chunk.size))
+        throw StackChunkError();
+
+    if (chunk.previous != NULL)
     {
-      previous = nullptr;
+        try
+        {
+            if (previous == nullptr)
+                previous = std::make_unique<StackChunk>();
+            previous->update((_PyStackChunk*)chunk.previous);
+        }
+        catch (StackChunkError& e)
+        {
+            previous = nullptr;
+        }
     }
-  }
 }
 
 // ----------------------------------------------------------------------------
-void *StackChunk::resolve(void *address)
+void* StackChunk::resolve(void* address)
 {
-  _PyStackChunk *chunk = (_PyStackChunk *)data.get();
+    _PyStackChunk* chunk = (_PyStackChunk*)data.get();
 
-  // Check if this chunk contains the address
-  if (address >= origin && address < (char *)origin + chunk->size)
-    return (char *)chunk + ((char *)address - (char *)origin);
+    // Check if this chunk contains the address
+    if (address >= origin && address < (char*)origin + chunk->size)
+        return (char*)chunk + ((char*)address - (char*)origin);
 
-  if (previous)
-    return previous->resolve(address);
+    if (previous)
+        return previous->resolve(address);
 
-  return address;
+    return address;
 }
 
 // ----------------------------------------------------------------------------

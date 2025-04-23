@@ -19,8 +19,8 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <signal.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
@@ -37,33 +37,28 @@
 #include <echion/timing.h>
 
 // ----------------------------------------------------------------------------
-static void do_where(std::ostream &stream)
+static void do_where(std::ostream& stream)
 {
     WhereRenderer::get().set_output(stream);
     WhereRenderer::get().render_message("\r🐴 Echion reporting for duty");
     WhereRenderer::get().render_message("");
 
-    for_each_interp(
-        [](PyInterpreterState *interp) -> void
-        {
-            for_each_thread(
-                interp,
-                [](PyThreadState *tstate, ThreadInfo &thread) -> void
-                {
-                    thread.unwind(tstate);
-                    WhereRenderer::get().render_thread_begin(
-                        tstate, thread.name, /*cpu_time*/ 0, tstate->thread_id, thread.native_id);
+    for_each_interp([](PyInterpreterState* interp) -> void {
+        for_each_thread(interp, [](PyThreadState* tstate, ThreadInfo& thread) -> void {
+            thread.unwind(tstate);
+            WhereRenderer::get().render_thread_begin(tstate, thread.name, /*cpu_time*/ 0,
+                                                     tstate->thread_id, thread.native_id);
 
-                    if (native)
-                    {
-                        interleave_stacks();
-                        interleaved_stack.render_where();
-                    }
-                    else
-                        python_stack.render_where();
-                    WhereRenderer::get().render_message("");
-                });
+            if (native)
+            {
+                interleave_stacks();
+                interleaved_stack.render_where();
+            }
+            else
+                python_stack.render_where();
+            WhereRenderer::get().render_message("");
         });
+    });
 }
 
 // ----------------------------------------------------------------------------
@@ -104,8 +99,7 @@ static void teardown_where()
 }
 
 // ----------------------------------------------------------------------------
-static inline void
-_start()
+static inline void _start()
 {
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
@@ -113,7 +107,7 @@ _start()
     {
         Renderer::get().open();
     }
-    catch (std::exception &e)
+    catch (std::exception& e)
     {
         return;
     }
@@ -169,8 +163,7 @@ _start()
 }
 
 // ----------------------------------------------------------------------------
-static inline void
-_stop()
+static inline void _stop()
 {
     if (memory)
         teardown_memory();
@@ -198,8 +191,7 @@ _stop()
 }
 
 // ----------------------------------------------------------------------------
-static inline void
-_sampler()
+static inline void _sampler()
 {
     // This function can run without the GIL on the basis that these assumptions
     // hold:
@@ -221,14 +213,11 @@ _sampler()
         {
             microsecond_t wall_time = now - last_time;
 
-            for_each_interp(
-                [=](PyInterpreterState *interp) -> void
-                {
-                    for_each_thread(
-                        interp,
-                        [=](PyThreadState *tstate, ThreadInfo &thread)
-                        { thread.sample(interp->id, tstate, wall_time); });
+            for_each_interp([=](PyInterpreterState* interp) -> void {
+                for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
+                    thread.sample(interp->id, tstate, wall_time);
                 });
+            });
         }
 
         while (gettime() < end_time && running)
@@ -238,8 +227,7 @@ _sampler()
     }
 }
 
-static void
-sampler()
+static void sampler()
 {
     _start();
     _sampler();
@@ -253,8 +241,7 @@ static void _init()
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject* start_async(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     if (!running)
     {
@@ -271,8 +258,7 @@ start_async(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject* start(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     if (!running)
     {
@@ -290,8 +276,7 @@ start(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject* stop(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     running = 0;
 
@@ -306,11 +291,10 @@ stop(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-track_thread(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
 {
-    uintptr_t thread_id; // map key
-    const char *thread_name;
+    uintptr_t thread_id;  // map key
+    const char* thread_name;
     pid_t native_id;
 
     if (!PyArg_ParseTuple(args, "lsi", &thread_id, &thread_name, &native_id))
@@ -325,16 +309,14 @@ track_thread(PyObject *Py_UNUSED(m), PyObject *args)
         else
             // Thread is already tracked so we update its info
             thread_info_map.emplace(
-                thread_id,
-                std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
+                thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
     }
 
     Py_RETURN_NONE;
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* untrack_thread(PyObject* Py_UNUSED(m), PyObject* args)
 {
     unsigned long thread_id;
     if (!PyArg_ParseTuple(args, "l", &thread_id))
@@ -350,8 +332,7 @@ untrack_thread(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
+static PyObject* init(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
 {
     _init();
 
@@ -359,11 +340,10 @@ init(PyObject *Py_UNUSED(m), PyObject *Py_UNUSED(args))
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* track_asyncio_loop(PyObject* Py_UNUSED(m), PyObject* args)
 {
-    uintptr_t thread_id; // map key
-    PyObject *loop;
+    uintptr_t thread_id;  // map key
+    PyObject* loop;
 
     if (!PyArg_ParseTuple(args, "lO", &thread_id, &loop))
         return NULL;
@@ -373,9 +353,8 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
 
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
-            thread_info_map.find(thread_id)->second->asyncio_loop = (loop != Py_None)
-                                                                        ? (uintptr_t)loop
-                                                                        : 0;
+            thread_info_map.find(thread_id)->second->asyncio_loop =
+                (loop != Py_None) ? (uintptr_t)loop : 0;
         }
     }
 
@@ -383,10 +362,10 @@ track_asyncio_loop(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* init_asyncio(PyObject* Py_UNUSED(m), PyObject* args)
 {
-    if (!PyArg_ParseTuple(args, "OOO", &asyncio_current_tasks, &asyncio_scheduled_tasks, &asyncio_eager_tasks))
+    if (!PyArg_ParseTuple(args, "OOO", &asyncio_current_tasks, &asyncio_scheduled_tasks,
+                          &asyncio_eager_tasks))
         return NULL;
 
     if (asyncio_eager_tasks == Py_None)
@@ -396,8 +375,7 @@ init_asyncio(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-link_tasks(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 {
     PyObject *parent, *child;
 
@@ -422,7 +400,8 @@ static PyMethodDef echion_core_methods[] = {
     {"untrack_thread", untrack_thread, METH_VARARGS, "Untrack a terminated thread"},
     {"init", init, METH_NOARGS, "Initialize the stack sampler (usually after a fork)"},
     // Task support
-    {"track_asyncio_loop", track_asyncio_loop, METH_VARARGS, "Map the name of a task with its identifier"},
+    {"track_asyncio_loop", track_asyncio_loop, METH_VARARGS,
+     "Map the name of a task with its identifier"},
     {"init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking"},
     {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
     // Configuration interface
@@ -432,7 +411,6 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
-    {"set_max_fds", set_max_fds, METH_VARARGS, "Set the maximum number of file descriptors to use"},
     {"set_vm_read_mode", set_vm_read_mode, METH_VARARGS, "Set the virtual memory read mode"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
@@ -448,10 +426,9 @@ static struct PyModuleDef coremodule = {
 };
 
 // ----------------------------------------------------------------------------
-PyMODINIT_FUNC
-PyInit_core(void)
+PyMODINIT_FUNC PyInit_core(void)
 {
-    PyObject *m;
+    PyObject* m;
 
     m = PyModule_Create(&coremodule);
     if (m == NULL)

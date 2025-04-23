@@ -33,9 +33,6 @@ inline int where = 0;
 // Maximum number of frames to unwind
 inline unsigned int max_frames = 2048;
 
-// Maximum number of file descriptors to use, only valid for Linux
-inline unsigned int max_fds = 16;
-
 // Pipe name (where mode IPC)
 inline std::string pipe_name;
 
@@ -47,8 +44,7 @@ inline std::string pipe_name;
 inline int vm_read_mode = 1;
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_interval(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_interval(PyObject* Py_UNUSED(m), PyObject* args)
 {
     unsigned int new_interval;
     if (!PyArg_ParseTuple(args, "I", &new_interval))
@@ -72,8 +68,7 @@ inline void _set_ignore_non_running_threads(bool new_ignore_non_running_threads)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_cpu(PyObject* Py_UNUSED(m), PyObject* args)
 {
     int new_cpu;
     if (!PyArg_ParseTuple(args, "p", &new_cpu))
@@ -85,8 +80,7 @@ set_cpu(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_memory(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_memory(PyObject* Py_UNUSED(m), PyObject* args)
 {
     int new_memory;
     if (!PyArg_ParseTuple(args, "p", &new_memory))
@@ -98,8 +92,7 @@ set_memory(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_native(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_native(PyObject* Py_UNUSED(m), PyObject* args)
 {
 #ifndef UNWIND_NATIVE_DISABLE
     int new_native;
@@ -112,13 +105,12 @@ set_native(PyObject *Py_UNUSED(m), PyObject *args)
                     "Native profiling is disabled, please re-build/install echion without "
                     "UNWIND_NATIVE_DISABLE env var/preprocessor flag");
     return NULL;
-#endif // UNWIND_NATIVE_DISABLE
+#endif  // UNWIND_NATIVE_DISABLE
     Py_RETURN_NONE;
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_where(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_where(PyObject* Py_UNUSED(m), PyObject* args)
 {
     int value;
     if (!PyArg_ParseTuple(args, "p", &value))
@@ -130,10 +122,9 @@ set_where(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_pipe_name(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_pipe_name(PyObject* Py_UNUSED(m), PyObject* args)
 {
-    const char *name;
+    const char* name;
     if (!PyArg_ParseTuple(args, "s", &name))
         return NULL;
 
@@ -143,34 +134,13 @@ set_pipe_name(PyObject *Py_UNUSED(m), PyObject *args)
 }
 
 // ----------------------------------------------------------------------------
-static PyObject *
-set_max_frames(PyObject *Py_UNUSED(m), PyObject *args)
+static PyObject* set_max_frames(PyObject* Py_UNUSED(m), PyObject* args)
 {
     unsigned int new_max_frames;
     if (!PyArg_ParseTuple(args, "I", &new_max_frames))
         return NULL;
 
     max_frames = new_max_frames;
-
-    Py_RETURN_NONE;
-
-}
-
-// ----------------------------------------------------------------------------
-inline void _set_max_fds(unsigned int new_max_fds)
-{
-    max_fds = new_max_fds;
-}
-
-// ----------------------------------------------------------------------------
-static PyObject *
-set_max_fds(PyObject *Py_UNUSED(m), PyObject *args)
-{
-    unsigned int new_max_fds;
-    if (!PyArg_ParseTuple(args, "I", &new_max_fds))
-        return NULL;
-
-    _set_max_fds(new_max_fds);
 
     Py_RETURN_NONE;
 }
