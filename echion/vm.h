@@ -306,17 +306,19 @@ inline bool read_process_vm_init()
     return !!_;
 }
 
-inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
+inline ssize_t vm_reader_safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
                                   const struct iovec* remote_iov, unsigned long riovcnt,
                                   unsigned long flags)
 {
     auto reader = VmReader::get_instance();
     if (!reader)
+    {
         return 0;
+    }
     return reader->safe_copy(pid, local_iov, liovcnt, remote_iov, riovcnt, flags);
 }
 
-inline ssize_t trappedvmreader_safe_copy(pid_t pid, const struct iovec* local_iov,
+inline ssize_t trapped_vm_reader_safe_copy(pid_t pid, const struct iovec* local_iov,
                                          unsigned long liovcnt, const struct iovec* remote_iov,
                                          unsigned long riovcnt, unsigned long flags)
 {
@@ -369,17 +371,17 @@ inline bool init_safe_copy(int mode)
     {
         if (TrappedVmReader::initialize())
         {
-            safe_copy = trappedvmreader_safe_copy;
+            safe_copy = trapped_vm_reader_safe_copy;
             return true;
         }
     }
 
-    if (safe_copy != vmreader_safe_copy)
+    if (safe_copy != vm_reader_safe_copy)
     {
         // If we're not already using the safe copy, try to initialize it
         if (read_process_vm_init())
         {
-            safe_copy = vmreader_safe_copy;
+            safe_copy = vm_reader_safe_copy;
             return mode != 0;  // Return true IFF user had requested writev
         }
     }
@@ -481,7 +483,7 @@ inline bool _set_vm_read_mode(int new_vm_read_mode)
     else
     {
         // If we failed, but the failover worked, then update the mode as such
-        if (safe_copy == vmreader_safe_copy)
+        if (safe_copy == vm_reader_safe_copy)
         {
             // Set the mode to reflect the failover
             vm_read_mode = 0;
