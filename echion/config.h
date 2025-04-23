@@ -36,11 +36,11 @@ inline unsigned int max_frames = 2048;
 // Pipe name (where mode IPC)
 inline std::string pipe_name;
 
-// Which VM reading mode to use
+// Which VM reading mode to use, only used on Linux
+// 0 - writev (failover)
 // 1 - process_vm_readv (default)
 // 2 - sigtrap
 // -1 - error (cannot be set by user)
-// else - writev (failover)
 inline int vm_read_mode = 1;
 
 // ----------------------------------------------------------------------------
@@ -141,6 +141,56 @@ static PyObject* set_max_frames(PyObject* Py_UNUSED(m), PyObject* args)
         return NULL;
 
     max_frames = new_max_frames;
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+inline bool _set_vm_read_mode(int new_vm_read_mode)
+{
+#if defined PL_LINUX
+    if (new_vm_read_mode < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid vm_read_mode");
+        return false;
+    }
+
+    if (init_safe_copy(new_vm_read_mode))
+    {
+        vm_read_mode = new_vm_read_mode;
+        return true;
+    }
+    else
+    {
+        // If we failed, but the failover worked, then update the mode as such
+        if (safe_copy == vm_reader_safe_copy)
+        {
+            // Set the mode to reflect the failover
+            vm_read_mode = 0;
+        }
+        else
+        {
+            // Error
+            PyErr_SetString(PyExc_RuntimeError, "Failed to initialize safe copy interfaces");
+            vm_read_mode = -1;
+        }
+    }
+
+    return false;
+#else
+    return true;
+#endif
+}
+
+// ----------------------------------------------------------------------------
+static PyObject* set_vm_read_mode(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    int new_vm_read_mode;
+    if (!PyArg_ParseTuple(args, "i", &new_vm_read_mode))
+        return NULL;
+
+    if (!_set_vm_read_mode(new_vm_read_mode))
+        return NULL;
 
     Py_RETURN_NONE;
 }
