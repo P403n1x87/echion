@@ -300,7 +300,7 @@ public:
 /**
  * Initialize the safe copy operation on Linux
  */
-inline bool read_process_vm_init()
+inline bool init_vm_reader()
 {
     VmReader* _ = VmReader::get_instance();
     return !!_;
@@ -379,7 +379,7 @@ inline bool init_safe_copy(int mode)
     if (safe_copy != vm_reader_safe_copy)
     {
         // If we're not already using the safe copy, try to initialize it
-        if (read_process_vm_init())
+        if (init_vm_reader())
         {
             safe_copy = vm_reader_safe_copy;
             return mode != 0;  // Return true IFF user had requested writev
