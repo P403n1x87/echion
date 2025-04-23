@@ -359,45 +359,29 @@ inline bool init_safe_copy(int mode)
 {
     if (1 == mode)
     {
-        std::cerr << "Using process_vm_readv" << std::endl;
         if (check_process_vm_readv())
         {
-            std::cerr << "process_vm_readv is available" << std::endl;
             safe_copy = process_vm_readv;
             return true;
-        }
-        else
-        {
-            std::cerr << "process_vm_readv is not available" << std::endl;
         }
     }
     else if (2 == mode)
     {
-        // Initialize the TrappedVmReader signal handlers
-        std::cerr << "Using TrappedVmReader" << std::endl;
         if (TrappedVmReader::initialize())
         {
-            std::cerr << "TrappedVmReader initialized" << std::endl;
             safe_copy = trappedvmreader_safe_copy;
             return true;
-        }
-        else
-        {
-            std::cerr << "TrappedVmReader failed to initialize" << std::endl;
         }
     }
 
     if (safe_copy != vmreader_safe_copy)
     {
         // If we're not already using the safe copy, try to initialize it
-        std::cerr << "Using VmReader" << std::endl;
         if (read_process_vm_init())
         {
-            std::cerr << "VmReader initialized" << std::endl;
             safe_copy = vmreader_safe_copy;
             return mode != 0;  // Return true IFF user had requested writev
         }
-        std::cerr << "VmReader failed to initialize" << std::endl;
     }
 
     // If we're here, we tried to initialize the safe copy but failed, and the failover failed

@@ -12,6 +12,7 @@ def attach(config: t.Dict[str, str], pipe_name: t.Optional[str] = None) -> None:
     os.environ["ECHION_OUTPUT"] = config["output"]
     os.environ["ECHION_STEALTH"] = str(int(config["stealth"]))
     os.environ["ECHION_WHERE"] = str(int(bool(config["where"])))
+    os.environ["ECHION_VM_READ_MODE"] = str(int(config["vm_read_mode"]))
 
     from echion.bootstrap import start
 
