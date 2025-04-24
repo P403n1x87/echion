@@ -217,7 +217,15 @@ void ThreadInfo::unwind_tasks()
         if (task->waiter != NULL)
             waitee_map.emplace(task->waiter->origin, std::ref(*task));
         else if (parent_tasks.find(task->origin) == parent_tasks.end())
+        {
+            if (cpu && !task->coro->is_running)
+            {
+                // This task is not running, so we skip it if we are
+                // interested in just CPU time.
+                continue;
+            }
             leaf_tasks.push_back(std::ref(*task));
+        }
     }
 
     for (auto& task : leaf_tasks)
