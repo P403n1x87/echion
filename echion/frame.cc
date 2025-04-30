@@ -31,7 +31,7 @@ static inline int _read_signed_varint(unsigned char* table, ssize_t size, ssize_
 // ----------------------------------------------------------------------------
 void init_frame_cache(size_t capacity)
 {
-    frame_cache = new LRUCache<uintptr_t, Frame>(capacity);
+    frame_cache = new LRUCache<Frame::Key, Frame>(capacity);
 }
 
 // ----------------------------------------------------------------------------

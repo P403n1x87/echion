@@ -120,6 +120,6 @@ inline auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);
 
 // We make this a raw pointer to prevent its destruction on exit, since we
 // control the lifetime of the cache.
-inline LRUCache<uintptr_t, Frame>* frame_cache = nullptr;
+inline LRUCache<Frame::Key, Frame>* frame_cache = nullptr;
 void init_frame_cache(size_t capacity);
 void reset_frame_cache();

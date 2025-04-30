@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #define CACHE_MAX_ENTRIES 2048
+#define CACHE_UNLIMITED 0
 
 template <typename K, typename V>
 class LRUCache
@@ -40,7 +41,7 @@ template <typename K, typename V>
 void LRUCache<K, V>::store(const K& k, std::unique_ptr<V> v)
 {
     // Check if cache is full
-    if (items.size() >= capacity)
+    if (capacity != CACHE_UNLIMITED && items.size() >= capacity)
     {
         index.erase(items.back().first);
         items.pop_back();
@@ -63,5 +64,6 @@ V& LRUCache<K, V>::lookup(const K& k)
     // Move to the front of the list
     items.splice(items.begin(), items, itr->second);
 
+    throw LookupError();  // exp: force cache miss
     return *(itr->second->second.get());
 }

@@ -224,7 +224,6 @@ public:
     void inline stack(mojo_int_t pid, mojo_int_t iid, const std::string& thread_name)
     {
         std::lock_guard<std::mutex> guard(lock);
-
         event(MOJO_STACK);
         integer(pid);
         integer(iid);
@@ -236,7 +235,6 @@ public:
                       mojo_int_t line_end, mojo_int_t column, mojo_int_t column_end) override
     {
         std::lock_guard<std::mutex> guard(lock);
-
         event(MOJO_FRAME);
         ref(key);
         ref(filename);

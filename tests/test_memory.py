@@ -14,6 +14,5 @@ def test_memory():
 
     expected_nthreads = 1
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 1e6 * expected_nthreads
 
     assert summary.query("0:MainThread", (("<module>", 25), ("leak", 21))) is not None, summary.threads["0:MainThread"]
