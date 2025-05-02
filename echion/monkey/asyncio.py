@@ -26,13 +26,15 @@ _gather = tasks._GatheringFuture.__init__  # type: ignore[attr-defined]
 
 @wraps(_gather)
 def gather(self, children, *, loop):
-    try:
-        return _gather(self, children, loop=loop)
-    finally:
-        # Link the parent gathering task to the gathered children
-        parent = tasks.current_task(loop)
-        for child in children:
-            echion.link_tasks(parent, child)
+    # Link the parent gathering task to the gathered children
+    parent = tasks.current_task(loop)
+
+    assert parent is not None
+
+    for child in children:
+        echion.link_tasks(parent, child)
+
+    return _gather(self, children, loop=loop)
 
 
 # -----------------------------------------------------------------------------
