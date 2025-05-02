@@ -238,8 +238,7 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 // ------------------------------------------------------------------------
 Frame::Key Frame::key(PyCodeObject* code, int lasti)
 {
-    return ((static_cast<uintptr_t>(((reinterpret_cast<uintptr_t>(code)) & MOJO_INT32)) << 16) |
-            lasti);
+    return ((static_cast<uintptr_t>(((reinterpret_cast<uintptr_t>(code)))) << 16) | lasti);
 }
 
 // ----------------------------------------------------------------------------
