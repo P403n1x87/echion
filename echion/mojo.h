@@ -36,6 +36,3 @@ using mojo_int_t = long long;
 using mojo_uint_t = unsigned long long;
 using mojo_ref_t = unsigned long long;
 #endif
-
-// Bitmask to ensure that we encode at most 4 bytes for an integer.
-#define MOJO_INT32 ((mojo_ref_t)(1 << (6 + 7 * 3)) - 1)
