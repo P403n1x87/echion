@@ -1,5 +1,4 @@
 import linecache
-import typing as t
 from itertools import count
 from types import FunctionType
 
