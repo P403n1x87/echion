@@ -67,7 +67,8 @@ int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameStack& sta
 
     stack.push_back(Frame::get(name));
 
-    return count + 1;
+    return count + 1;  // We add an extra count for the frame with the greenlet
+                       // name.
 }
 
 // ----------------------------------------------------------------------------
