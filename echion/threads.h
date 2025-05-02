@@ -174,6 +174,9 @@ void ThreadInfo::unwind(PyThreadState* tstate)
                 // We failed to unwind tasks
             }
         }
+        // We make the assumption that gevent and asyncio are not mixed
+        // together to keep the logic here simple. We can always revisit this
+        // should there be a substantial demand for it.
         if (greenlet_thread_map.find(native_id) != greenlet_thread_map.end())
         {
             unwind_greenlets(tstate);
