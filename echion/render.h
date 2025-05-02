@@ -152,7 +152,7 @@ class MojoRenderer : public RendererInterface
     }
     void inline ref(mojo_ref_t value)
     {
-        integer(MOJO_INT32 & value);
+        integer(value);
     }
     void inline integer(mojo_int_t n)
     {
