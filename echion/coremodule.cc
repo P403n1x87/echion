@@ -105,7 +105,7 @@ static inline void _start()
     // The number of frames that we need to keep alive could be very large.
     // We make the frame cache unlimited in this case, to avoid referencing
     // frame objects that might have been evicted from the cache.
-    init_frame_cache(memory ? CACHE_UNLIMITED : CACHE_MAX_ENTRIES * (1 + native));
+    init_frame_cache(CACHE_UNLIMITED);
 
     try
     {
