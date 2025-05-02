@@ -17,7 +17,7 @@ class Foo:
 def leak():
     global a
 
-    for i in range(100_000):
+    for i in range(1_000):
         a.append(Foo(i))
 
 
