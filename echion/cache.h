@@ -64,6 +64,5 @@ V& LRUCache<K, V>::lookup(const K& k)
     // Move to the front of the list
     items.splice(items.begin(), items, itr->second);
 
-    throw LookupError();  // exp: force cache miss
     return *(itr->second->second.get());
 }
