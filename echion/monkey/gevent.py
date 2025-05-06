@@ -18,7 +18,7 @@ _gevent_wait = gevent.wait
 _gevent_iwait = gevent.iwait
 
 # Global package state
-_greenlet_frame_cells: t.Dict[int, list] = {}
+_greenlet_frames: t.Dict[int, t.Union[FrameType, bool, None]] = {}
 _original_greenlet_tracer: t.Optional[t.Callable[[str, t.Any], None]] = None
 _greenlet_parent_map: t.Dict[int, int] = {}
 _parent_greenlet_count: t.Dict[int, int] = {}
@@ -28,12 +28,10 @@ FRAME_NOT_SET = False  # Sentinel for when the frame is not set
 
 def track_gevent_greenlet(greenlet: _Greenlet) -> _Greenlet:
     greenlet_id = thread.get_ident(greenlet)
-    frame_cell: t.List[t.Union[FrameType, bool, None]] = [FRAME_NOT_SET]
+    frame: t.Union[FrameType, bool, None] = FRAME_NOT_SET
 
     echion.track_greenlet(
-        greenlet_id,
-        greenlet.name or type(greenlet).__qualname__,
-        frame_cell,
+        greenlet_id, greenlet.name or type(greenlet).__qualname__, frame
     )
 
     # Untrack on completion
@@ -43,24 +41,31 @@ def track_gevent_greenlet(greenlet: _Greenlet) -> _Greenlet:
         # This greenlet cannot be linked (e.g. the Hub)
         pass
 
-    _greenlet_frame_cells[greenlet_id] = frame_cell
+    _greenlet_frames[greenlet_id] = frame
 
     return greenlet
+
+
+def update_greenlet_frame(
+    greenlet_id: int, frame: t.Union[FrameType, bool, None]
+) -> None:
+    _greenlet_frames[greenlet_id] = frame
+    echion.update_greenlet_frame(greenlet_id, frame)
 
 
 def greenlet_tracer(event: str, args: t.Any) -> None:
     if event in {"switch", "throw"}:
         # This tracer function runs in the context of the target
-        origin, target = t.cast(tuple, args)
+        origin, target = t.cast(t.Tuple[Greenlet, Greenlet], args)
 
-        if (origin_id := thread.get_ident(origin)) not in _greenlet_frame_cells:
+        if (origin_id := thread.get_ident(origin)) not in _greenlet_frames:
             try:
                 track_gevent_greenlet(origin)
             except Exception:
                 # Not something that we can track
                 pass
 
-        if (target_id := thread.get_ident(target)) not in _greenlet_frame_cells:
+        if (target_id := thread.get_ident(target)) not in _greenlet_frames:
             # This is likely the hub. We take this chance to track it.
             try:
                 track_gevent_greenlet(target)
@@ -71,13 +76,16 @@ def greenlet_tracer(event: str, args: t.Any) -> None:
         try:
             # If this is being set to None, it means the greenlet is likely
             # finished. We use the sentinel again to signal this.
-            _greenlet_frame_cells[origin_id][0] = origin.gr_frame or FRAME_NOT_SET
+            update_greenlet_frame(
+                origin_id,
+                t.cast(t.Optional[FrameType], origin.gr_frame) or FRAME_NOT_SET,
+            )
             if target_id not in _parent_greenlet_count:
                 # We don't want to wipe the frame of a parent greenlet because
                 # we need to unwind it. We definitely know it is still running
                 # so if we allow the tracer to set its tracked frame to None,
                 # we won't be able to unwind the full stack.
-                _greenlet_frame_cells[target_id][0] = target.gr_frame  # this *is* None
+                update_greenlet_frame(target_id, target.gr_frame)  # this *is* None
         except KeyError:
             # TODO: Log missing greenlet
             pass
@@ -89,7 +97,7 @@ def greenlet_tracer(event: str, args: t.Any) -> None:
 def untrack_greenlet(greenlet: _Greenlet) -> None:
     greenlet_id = thread.get_ident(greenlet)
     echion.untrack_greenlet(greenlet_id)
-    _greenlet_frame_cells.pop(greenlet_id, None)
+    _greenlet_frames.pop(greenlet_id, None)
     _parent_greenlet_count.pop(greenlet_id, None)
     if (parent_id := _greenlet_parent_map.pop(greenlet_id, None)) is not None:
         _parent_greenlet_count[parent_id] -= 1

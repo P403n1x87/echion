@@ -323,7 +323,7 @@ void ThreadInfo::unwind_greenlets(PyThreadState* tstate)
         if (parent_greenlets.find(greenlet_id) != parent_greenlets.end())
             continue;
 
-        auto frame = PyList_GetItem(greenlet->frame_cell, 0);  // TODO: UNSAFE!
+        auto frame = greenlet->frame;
         if (frame == FRAME_NOT_SET)
         {
             // The greenlet has not been started yet or has finished
@@ -355,7 +355,7 @@ void ThreadInfo::unwind_greenlets(PyThreadState* tstate)
             if (parent_greenlet == greenlet_info_map.end())
                 break;
 
-            auto parent_frame = PyList_GetItem(parent_greenlet->second->frame_cell, 0);
+            auto parent_frame = parent_greenlet->second->frame;
             if (parent_frame == FRAME_NOT_SET || parent_frame == Py_None)
                 break;
 

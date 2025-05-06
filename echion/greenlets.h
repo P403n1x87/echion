@@ -24,10 +24,10 @@ public:
 
     ID greenlet_id = 0;
     StringTable::Key name;
-    PyObject* frame_cell = NULL;
+    PyObject* frame = NULL;
 
-    GreenletInfo(ID id, PyObject* frame_cell, StringTable::Key name)
-        : greenlet_id(id), frame_cell(frame_cell), name(name)
+    GreenletInfo(ID id, PyObject* frame, StringTable::Key name)
+        : greenlet_id(id), frame(frame), name(name)
     {
     }
 

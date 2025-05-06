@@ -380,9 +380,9 @@ static PyObject* track_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
 {
     uintptr_t greenlet_id;  // map key
     PyObject* name;
-    PyObject* frame_cell;
+    PyObject* frame;
 
-    if (!PyArg_ParseTuple(args, "lOO", &greenlet_id, &name, &frame_cell))
+    if (!PyArg_ParseTuple(args, "lOO", &greenlet_id, &name, &frame))
         return NULL;
 
     StringTable::Key greenlet_name;
@@ -405,10 +405,10 @@ static PyObject* track_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
             // Greenlet is already tracked so we update its info. This should
             // never happen, as a greenlet should be tracked only once, so we
             // use this as a safety net.
-            entry->second = std::make_unique<GreenletInfo>(greenlet_id, frame_cell, greenlet_name);
+            entry->second = std::make_unique<GreenletInfo>(greenlet_id, frame, greenlet_name);
         else
-            greenlet_info_map.emplace(greenlet_id, std::make_unique<GreenletInfo>(
-                                                       greenlet_id, frame_cell, greenlet_name));
+            greenlet_info_map.emplace(
+                greenlet_id, std::make_unique<GreenletInfo>(greenlet_id, frame, greenlet_name));
 
         // Update the thread map
         auto native_id = PyThread_get_thread_native_id();
@@ -453,6 +453,29 @@ static PyObject* link_greenlets(PyObject* Py_UNUSED(m), PyObject* args)
 }
 
 // ----------------------------------------------------------------------------
+static PyObject* update_greenlet_frame(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    uintptr_t greenlet_id;
+    PyObject* frame;
+
+    if (!PyArg_ParseTuple(args, "lO", &greenlet_id, &frame))
+        return NULL;
+
+    {
+        std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+        auto entry = greenlet_info_map.find(greenlet_id);
+        if (entry != greenlet_info_map.end())
+        {
+            // Update the frame of the greenlet
+            entry->second->frame = frame;
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
 static PyObject* link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 {
     PyObject *parent, *child;
@@ -486,6 +509,8 @@ static PyMethodDef echion_core_methods[] = {
     {"track_greenlet", track_greenlet, METH_VARARGS, "Map a greenlet with its identifier"},
     {"untrack_greenlet", untrack_greenlet, METH_VARARGS, "Untrack a terminated greenlet"},
     {"link_greenlets", link_greenlets, METH_VARARGS, "Link two greenlets"},
+    {"update_greenlet_frame", update_greenlet_frame, METH_VARARGS,
+     "Update the frame of a greenlet"},
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},
