@@ -77,7 +77,7 @@ public:
 
 private:
     void unwind_tasks();
-    void unwind_greenlets(PyThreadState*);
+    void unwind_greenlets(PyThreadState*, unsigned long);
 };
 
 void ThreadInfo::update_cpu_time()
@@ -174,13 +174,11 @@ void ThreadInfo::unwind(PyThreadState* tstate)
                 // We failed to unwind tasks
             }
         }
+
         // We make the assumption that gevent and asyncio are not mixed
         // together to keep the logic here simple. We can always revisit this
         // should there be a substantial demand for it.
-        if (greenlet_thread_map.find(native_id) != greenlet_thread_map.end())
-        {
-            unwind_greenlets(tstate);
-        }
+        unwind_greenlets(tstate, native_id);
     }
 }
 
@@ -304,8 +302,13 @@ void ThreadInfo::unwind_tasks()
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::unwind_greenlets(PyThreadState* tstate)
+void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id)
 {
+    const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+    if (greenlet_thread_map.find(native_id) == greenlet_thread_map.end())
+        return;
+
     std::unordered_set<GreenletInfo::ID> parent_greenlets;
 
     // Collect all parent greenlets
