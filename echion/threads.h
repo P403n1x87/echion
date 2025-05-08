@@ -22,6 +22,7 @@
 #include <mach/mach.h>
 #endif
 
+#include <echion/greenlets.h>
 #include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
@@ -76,6 +77,7 @@ public:
 
 private:
     void unwind_tasks();
+    void unwind_greenlets(PyThreadState*, unsigned long);
 };
 
 void ThreadInfo::update_cpu_time()
@@ -172,6 +174,11 @@ void ThreadInfo::unwind(PyThreadState* tstate)
                 // We failed to unwind tasks
             }
         }
+
+        // We make the assumption that gevent and asyncio are not mixed
+        // together to keep the logic here simple. We can always revisit this
+        // should there be a substantial demand for it.
+        unwind_greenlets(tstate, native_id);
     }
 }
 
@@ -295,6 +302,77 @@ void ThreadInfo::unwind_tasks()
 }
 
 // ----------------------------------------------------------------------------
+void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id)
+{
+    const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+    if (greenlet_thread_map.find(native_id) == greenlet_thread_map.end())
+        return;
+
+    std::unordered_set<GreenletInfo::ID> parent_greenlets;
+
+    // Collect all parent greenlets
+    std::transform(
+        greenlet_parent_map.cbegin(), greenlet_parent_map.cend(),
+        std::inserter(parent_greenlets, parent_greenlets.begin()),
+        [](const std::pair<GreenletInfo::ID, GreenletInfo::ID>& kv) { return kv.second; });
+
+    // Unwind the leaf greenlets
+    for (auto& greenlet_info : greenlet_info_map)
+    {
+        auto greenlet_id = greenlet_info.first;
+        auto& greenlet = greenlet_info.second;
+
+        if (parent_greenlets.find(greenlet_id) != parent_greenlets.end())
+            continue;
+
+        auto frame = greenlet->frame;
+        if (frame == FRAME_NOT_SET)
+        {
+            // The greenlet has not been started yet or has finished
+            continue;
+        }
+
+        if (cpu && (frame != Py_None))
+        {
+            // Only the currently-running greenlet has a None in its frame
+            // cell. If we are interested in CPU time, we skip all greenlets
+            // that have an actual frame, as they are not running.
+            continue;
+        }
+
+        auto stack = std::make_unique<FrameStack>();
+
+        greenlet->unwind(frame, tstate, *stack);
+
+        // Unwind the parent greenlets
+        for (;;)
+        {
+            auto parent_greenlet_info = greenlet_parent_map.find(greenlet_id);
+            if (parent_greenlet_info == greenlet_parent_map.end())
+                break;
+
+            auto parent_greenlet_id = parent_greenlet_info->second;
+
+            auto parent_greenlet = greenlet_info_map.find(parent_greenlet_id);
+            if (parent_greenlet == greenlet_info_map.end())
+                break;
+
+            auto parent_frame = parent_greenlet->second->frame;
+            if (parent_frame == FRAME_NOT_SET || parent_frame == Py_None)
+                break;
+
+            auto count = parent_greenlet->second->unwind(parent_frame, tstate, *stack);
+
+            // Move up the greenlet chain
+            greenlet_id = parent_greenlet_id;
+        }
+
+        current_greenlets.push_back(std::move(stack));
+    }
+}
+
+// ----------------------------------------------------------------------------
 void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
@@ -319,18 +397,25 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
     // Asyncio tasks
     if (current_tasks.empty())
     {
-        // Print the PID and thread name
-        Renderer::get().render_stack_begin(pid, iid, name);
-        // Print the stack
-        if (native)
+        // If we don't have any asyncio tasks, we check that we don't have any
+        // greenlets either. In this case, we print the ordinary thread stack.
+        // With greenlets, we recover the thread stack from the active greenlet,
+        // so if we don't skip here we would have a double print.
+        if (current_greenlets.empty())
         {
-            interleave_stacks();
-            interleaved_stack.render();
-        }
-        else
-            python_stack.render();
+            // Print the PID and thread name
+            Renderer::get().render_stack_begin(pid, iid, name);
+            // Print the stack
+            if (native)
+            {
+                interleave_stacks();
+                interleaved_stack.render();
+            }
+            else
+                python_stack.render();
 
-        Renderer::get().render_stack_end(MetricType::Time, delta);
+            Renderer::get().render_stack_end(MetricType::Time, delta);
+        }
     }
     else
     {
@@ -352,6 +437,29 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
         }
 
         current_tasks.clear();
+    }
+
+    // Greenlet stacks
+    if (!current_greenlets.empty())
+    {
+        for (auto& greenlet_stack : current_greenlets)
+        {
+            Renderer::get().render_task_begin();
+            Renderer::get().render_stack_begin(pid, iid, name);
+            if (native)
+            {
+                // NOTE: These stacks might be non-sensical, especially with
+                // Python < 3.11.
+                interleave_stacks(*greenlet_stack);
+                interleaved_stack.render();
+            }
+            else
+                greenlet_stack->render();
+
+            Renderer::get().render_stack_end(MetricType::Time, delta);
+        }
+
+        current_greenlets.clear();
     }
 }
 

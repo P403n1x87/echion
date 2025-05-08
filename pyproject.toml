@@ -45,6 +45,7 @@ dependencies = [
   "pytest-cov>=2.8.1",
   "austin-python~=1.7",
   "bytecode",
+  "gevent",
 ]
 
 [tool.hatch.envs.tests.scripts]
