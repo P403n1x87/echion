@@ -26,13 +26,24 @@ _parent_greenlet_count: t.Dict[int, int] = {}
 FRAME_NOT_SET = False  # Sentinel for when the frame is not set
 
 
+class GreenletTrackingError(Exception):
+    """Exception raised when a greenlet cannot be tracked."""
+
+    pass
+
+
 def track_gevent_greenlet(greenlet: _Greenlet) -> _Greenlet:
     greenlet_id = thread.get_ident(greenlet)
     frame: t.Union[FrameType, bool, None] = FRAME_NOT_SET
 
-    echion.track_greenlet(
-        greenlet_id, greenlet.name or type(greenlet).__qualname__, frame
-    )
+    try:
+        echion.track_greenlet(
+            greenlet_id, greenlet.name or type(greenlet).__qualname__, frame
+        )
+    except AttributeError as e:
+        raise GreenletTrackingError(
+            "Cannot track greenlet with no name attribute"
+        ) from e
 
     # Untrack on completion
     try:
@@ -61,7 +72,7 @@ def greenlet_tracer(event: str, args: t.Any) -> None:
         if (origin_id := thread.get_ident(origin)) not in _greenlet_frames:
             try:
                 track_gevent_greenlet(origin)
-            except Exception:
+            except GreenletTrackingError:
                 # Not something that we can track
                 pass
 
@@ -69,7 +80,7 @@ def greenlet_tracer(event: str, args: t.Any) -> None:
             # This is likely the hub. We take this chance to track it.
             try:
                 track_gevent_greenlet(target)
-            except Exception:
+            except GreenletTrackingError:
                 # Not something that we can track
                 pass
 
