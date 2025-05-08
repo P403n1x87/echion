@@ -100,6 +100,8 @@ public:
     // Python string object
     inline Key key(PyObject* s)
     {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
         auto k = (Key)s;
 
         if (this->find(k) == this->end())
@@ -135,6 +137,8 @@ public:
     // Python string object
     inline Key key_unsafe(PyObject* s)
     {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
         auto k = (Key)s;
 
         if (this->find(k) == this->end())
@@ -157,6 +161,8 @@ public:
     // Native filename by program counter
     inline Key key(unw_word_t pc)
     {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
         auto k = (Key)pc;
 
         if (this->find(k) == this->end())
@@ -180,6 +186,8 @@ public:
     // Native scope name by unwinding cursor
     inline Key key(unw_cursor_t& cursor)
     {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
         unw_proc_info_t pi;
         if ((unw_get_proc_info(&cursor, &pi)))
             throw Error();
@@ -218,6 +226,8 @@ public:
 
     inline std::string& lookup(Key key)
     {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
         auto it = this->find(key);
         if (it == this->end())
             throw LookupError();
@@ -231,6 +241,9 @@ public:
         this->emplace(INVALID, "<invalid>");
         this->emplace(UNKNOWN, "<unknown>");
     };
+
+private:
+    std::mutex table_lock;
 };
 
 // We make this a reference to a heap-allocated object so that we can avoid
