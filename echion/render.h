@@ -12,6 +12,7 @@
 #include <ostream>
 #include <string_view>
 
+#include <echion/config.h>
 #include <echion/mojo.h>
 #include <echion/timing.h>
 
@@ -137,6 +138,7 @@ class MojoRenderer : public RendererInterface
 {
     std::ofstream output;
     std::mutex lock;
+    uint64_t metric = 0;
 
     void inline event(MojoEvent event)
     {
@@ -318,12 +320,15 @@ public:
         stack(pid, iid, name);
     };
     void render_frame(Frame& frame) override;
-    void render_cpu_time(uint64_t cpu_time) override {};
+    void render_cpu_time(uint64_t cpu_time) override
+    {
+        metric = cpu_time;
+    };
     void render_stack_end(MetricType metric_type, uint64_t delta) override
     {
         if (metric_type == MetricType::Time)
         {
-            metric_time(delta);
+            metric_time(cpu ? metric : delta);
         }
         else if (metric_type == MetricType::Memory)
         {
