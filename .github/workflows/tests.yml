@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.13t"]
         echion-alt-vm-force: ["1", "0"]
 
     name: Tests with Python ${{ matrix.python-version }}, ECHION_ALT_VM_FORCE=${{ matrix.echion-alt-vm-force }} on ubuntu-latest
@@ -88,7 +88,7 @@ jobs:
 
       - name: Run tests
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
-  
+
       - name: Upload profiles
         uses: actions/upload-artifact@v4
         with:
