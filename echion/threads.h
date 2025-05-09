@@ -225,7 +225,7 @@ void ThreadInfo::unwind_tasks()
             waitee_map.emplace(task->waiter->origin, std::ref(*task));
         else if (parent_tasks.find(task->origin) == parent_tasks.end())
         {
-            if (cpu && !task->coro->is_running)
+            if (cpu && ignore_non_running_threads && !task->coro->is_running)
             {
                 // This task is not running, so we skip it if we are
                 // interested in just CPU time.
@@ -336,7 +336,7 @@ void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id
         }
 
         bool on_cpu = frame == Py_None;
-        if (cpu && !on_cpu)
+        if (cpu && ignore_non_running_threads && !on_cpu)
         {
             // Only the currently-running greenlet has a None in its frame
             // cell. If we are interested in CPU time, we skip all greenlets
@@ -392,8 +392,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
             return;
         }
 
-        delta = running ? cpu_time - previous_cpu_time : 0;
-        Renderer::get().render_cpu_time(delta);
+        Renderer::get().render_cpu_time(running ? cpu_time - previous_cpu_time : 0);
     }
 
     unwind(tstate);
