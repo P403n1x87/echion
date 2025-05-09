@@ -276,7 +276,7 @@ std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
 
 // ----------------------------------------------------------------------------
 
-inline std::vector<std::unique_ptr<FrameStack>> current_tasks;
+inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 // ----------------------------------------------------------------------------
 

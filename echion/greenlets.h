@@ -91,6 +91,6 @@ inline std::mutex greenlet_info_map_lock;
 
 // ----------------------------------------------------------------------------
 
-inline std::vector<std::unique_ptr<FrameStack>> current_greenlets;
+inline std::vector<std::unique_ptr<StackInfo>> current_greenlets;
 
 // ----------------------------------------------------------------------------
