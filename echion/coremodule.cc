@@ -27,6 +27,7 @@
 #endif
 
 #include <echion/config.h>
+#include <echion/greenlets.h>
 #include <echion/interp.h>
 #include <echion/memory.h>
 #include <echion/mojo.h>
@@ -305,9 +306,9 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
 
         auto entry = thread_info_map.find(thread_id);
         if (entry != thread_info_map.end())
+            // Thread is already tracked so we update its info
             entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
         else
-            // Thread is already tracked so we update its info
             thread_info_map.emplace(
                 thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
     }
@@ -375,6 +376,106 @@ static PyObject* init_asyncio(PyObject* Py_UNUSED(m), PyObject* args)
 }
 
 // ----------------------------------------------------------------------------
+static PyObject* track_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    uintptr_t greenlet_id;  // map key
+    PyObject* name;
+    PyObject* frame;
+
+    if (!PyArg_ParseTuple(args, "lOO", &greenlet_id, &name, &frame))
+        return NULL;
+
+    StringTable::Key greenlet_name;
+
+    try
+    {
+        greenlet_name = string_table.key(name);
+    }
+    catch (StringTable::Error&)
+    {
+        // We failed to get this task but we keep going
+        PyErr_SetString(PyExc_RuntimeError, "Failed to get greenlet name from the string table");
+        return NULL;
+    }
+    {
+        const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+        auto entry = greenlet_info_map.find(greenlet_id);
+        if (entry != greenlet_info_map.end())
+            // Greenlet is already tracked so we update its info. This should
+            // never happen, as a greenlet should be tracked only once, so we
+            // use this as a safety net.
+            entry->second = std::make_unique<GreenletInfo>(greenlet_id, frame, greenlet_name);
+        else
+            greenlet_info_map.emplace(
+                greenlet_id, std::make_unique<GreenletInfo>(greenlet_id, frame, greenlet_name));
+
+        // Update the thread map
+        auto native_id = PyThread_get_thread_native_id();
+        greenlet_thread_map[native_id] = greenlet_id;
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject* untrack_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    uintptr_t greenlet_id;
+    if (!PyArg_ParseTuple(args, "l", &greenlet_id))
+        return NULL;
+
+    {
+        const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+        greenlet_info_map.erase(greenlet_id);
+        greenlet_parent_map.erase(greenlet_id);
+        greenlet_thread_map.erase(greenlet_id);
+    }
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject* link_greenlets(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    uintptr_t parent, child;
+
+    if (!PyArg_ParseTuple(args, "ll", &child, &parent))
+        return NULL;
+
+    {
+        std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+        greenlet_parent_map[child] = parent;
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject* update_greenlet_frame(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    uintptr_t greenlet_id;
+    PyObject* frame;
+
+    if (!PyArg_ParseTuple(args, "lO", &greenlet_id, &frame))
+        return NULL;
+
+    {
+        std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
+
+        auto entry = greenlet_info_map.find(greenlet_id);
+        if (entry != greenlet_info_map.end())
+        {
+            // Update the frame of the greenlet
+            entry->second->frame = frame;
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
 static PyObject* link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 {
     PyObject *parent, *child;
@@ -404,6 +505,12 @@ static PyMethodDef echion_core_methods[] = {
      "Map the name of a task with its identifier"},
     {"init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking"},
     {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
+    // Greenlet support
+    {"track_greenlet", track_greenlet, METH_VARARGS, "Map a greenlet with its identifier"},
+    {"untrack_greenlet", untrack_greenlet, METH_VARARGS, "Untrack a terminated greenlet"},
+    {"link_greenlets", link_greenlets, METH_VARARGS, "Link two greenlets"},
+    {"update_greenlet_frame", update_greenlet_frame, METH_VARARGS,
+     "Update the frame of a greenlet"},
     // Configuration interface
     {"set_interval", set_interval, METH_VARARGS, "Set the sampling interval"},
     {"set_cpu", set_cpu, METH_VARARGS, "Set whether to use CPU time instead of wall time"},

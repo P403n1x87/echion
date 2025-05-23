@@ -320,6 +320,17 @@ static void interleave_stacks()
 }
 
 // ----------------------------------------------------------------------------
+class StackInfo
+{
+public:
+    StringTable::Key task_name;
+    bool on_cpu;
+    FrameStack stack;
+
+    StackInfo(StringTable::Key task_name, bool on_cpu) : task_name(task_name), on_cpu(on_cpu) {}
+};
+
+// ----------------------------------------------------------------------------
 // This table is used to store entire stacks and index them by key. This is
 // used when profiling memory events to account for deallocations.
 class StackTable
