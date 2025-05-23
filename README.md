@@ -79,7 +79,7 @@ like the [Austin VS Code][austin-vscode] extension.
 
 Supported platforms: Linux (amd64, i686), Darwin (amd64, aarch64)
 
-Supported interpreters: CPython 3.8-3.11
+Supported interpreters: CPython 3.8-3.13
 
 ### Notes
 
