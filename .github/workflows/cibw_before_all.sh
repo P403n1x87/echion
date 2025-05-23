@@ -4,7 +4,7 @@ set -e
 
 # on musllinux we need to install libtool
 if ldd --version 2>&1 | grep -q musl; then
-    apk add libtool
+    apk add libtool po4a
 fi
 
 . scripts/build_libunwind.sh
