@@ -28,8 +28,8 @@ jobs:
         env:
           CIBW_BEFORE_ALL: './.github/workflows/cibw_before_all.sh'
           # TODO: libunwind fails to compile on aarch64
-          CIBW_ARCHS_LINUX: x86_64 i686 # aarch64 ppc64le s390x
-          CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*
+          CIBW_ARCHS_LINUX: x86_64 # i686 # aarch64 ppc64le s390x
+          CIBW_BUILD: cp38-* # cp39-* cp310-* cp311-* cp312-* cp313-*
           CIBW_SKIP: "*-musllinux_i686"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

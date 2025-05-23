@@ -1,5 +1,12 @@
 #!/bin/bash
 
+set -e
+
+# on musllinux we need to install libtool
+if ldd --version 2>&1 | grep -q musl; then
+    apk add libtool
+fi
+
 . scripts/build_libunwind.sh
 
 sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
