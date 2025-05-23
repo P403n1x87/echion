@@ -280,7 +280,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     for (; frame_addr; frame_addr = frame_addr->previous)
     {
         auto resolved_addr =
-            stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
+            stack_chunk.is_valid() ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk.resolve(frame_addr))
                         : frame_addr;
         if (resolved_addr != frame_addr)
         {
@@ -311,7 +311,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
 #else   // PY_VERSION_HEX < 0x030d0000
     // Code Specific to Python < 3.13 and >= 3.11
     auto resolved_addr =
-        stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
+        stack_chunk.is_valid() ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk.resolve(frame_addr))
                     : frame_addr;
     if (resolved_addr != frame_addr)
     {

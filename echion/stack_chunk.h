@@ -29,6 +29,7 @@ class StackChunk
 public:
     StackChunk() {}
 
+    inline bool is_valid() { return origin != NULL; }
     inline void update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
 
@@ -54,7 +55,6 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
     if (copy_type(chunk_addr, chunk))
         throw StackChunkError();
 
-    origin = chunk_addr;
     // if data_size is not enough, reallocate
     if (chunk.size > data_capacity)
     {
@@ -69,15 +69,20 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
     }
 
     // Copy the data up until the size of the chunk
-    if (copy_generic(chunk_addr, data.get(), chunk.size))
+    if (copy_generic(chunk_addr, data.get(), chunk.size)) {
         throw StackChunkError();
+    }
+
+    // Mark that we copied the data
+    origin = chunk_addr;
 
     if (chunk.previous != NULL)
     {
         try
         {
-            if (previous == nullptr)
+            if (previous == nullptr) {
                 previous = std::make_unique<StackChunk>();
+            }
             previous->update((_PyStackChunk*)chunk.previous);
         }
         catch (StackChunkError& e)
@@ -90,11 +95,16 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 // ----------------------------------------------------------------------------
 void* StackChunk::resolve(void* address)
 {
+    if (!is_valid()) {
+        return address;
+    }
+
     _PyStackChunk* chunk = (_PyStackChunk*)data.get();
 
     // Check if this chunk contains the address
-    if (address >= origin && address < (char*)origin + chunk->size)
+    if (address >= origin && address < (char*)origin + chunk->size) {
         return (char*)chunk + ((char*)address - (char*)origin);
+    }
 
     if (previous)
         return previous->resolve(address);
@@ -104,4 +114,7 @@ void* StackChunk::resolve(void* address)
 
 // ----------------------------------------------------------------------------
 
-inline std::unique_ptr<StackChunk> stack_chunk = nullptr;
+// We make this a reference to a heap-allocated object so that we can avoid
+// the destruction on exit. We are in charge of cleaning up the object. Note
+// that the object will leak, but this is not a problem.
+inline StackChunk& stack_chunk = *(new StackChunk());
