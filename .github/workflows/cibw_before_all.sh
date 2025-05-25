@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 # on musllinux we need to install libtool
 if ldd --version 2>&1 | grep -q musl; then
