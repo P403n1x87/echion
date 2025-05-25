@@ -2,7 +2,7 @@
 
 set -ex
 
-yum install libtool po4a
+yum install -y libtool po4a
 
 . scripts/build_libunwind.sh
 
