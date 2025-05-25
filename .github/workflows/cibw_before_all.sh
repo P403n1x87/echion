@@ -2,10 +2,7 @@
 
 set -ex
 
-# on musllinux we need to install libtool
-if ldd --version 2>&1 | grep -q musl; then
-    apk add libtool po4a
-fi
+yum install libtool po4a
 
 . scripts/build_libunwind.sh
 
