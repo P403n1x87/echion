@@ -2,7 +2,7 @@
 
 set -ex
 
-yum install -y libtool po4a
+yum install -y libtool
 
 . scripts/build_libunwind.sh
 
@@ -15,7 +15,7 @@ yum install -y gettext-devel
 
 git clone https://git.tukaani.org/xz.git
 cd xz
-./autogen.sh
+./autogen.sh --no-po4a
 ./configure CFLAGS='-fPIC' CXXFLAGS='-fPIC'
 make
 make install
