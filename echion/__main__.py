@@ -180,6 +180,17 @@ def main() -> None:
         action="version",
         version="%(prog)s " + __version__,
     )
+    parser.add_argument(
+        "--vm-read-mode",
+        help="On Linux, we support three different modes of reading memory from the target process "
+        "0: use writev()"
+        "1: use process_vm_readv() (default), "
+        "2: use sigtrap, "
+        "when 1 or 2 is set but not available, we fall back to use writev()",
+        type=int,
+        default=1,
+        choices=[0, 1, 2],
+    )
 
     try:
         args = parser.parse_args()
@@ -199,6 +210,7 @@ def main() -> None:
     env["ECHION_OUTPUT"] = args.output.replace("%%(pid)", str(os.getpid()))
     env["ECHION_STEALTH"] = str(int(bool(args.stealth)))
     env["ECHION_WHERE"] = str(args.where or "")
+    env["ECHION_VM_READ_MODE"] = str(args.vm_read_mode)
 
     if args.pid or args.where:
         try:
