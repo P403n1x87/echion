@@ -2,8 +2,6 @@
 
 set -ex
 
-yum install -y libtool
-
 . scripts/build_libunwind.sh
 
 sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
