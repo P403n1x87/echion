@@ -2,6 +2,11 @@
 
 set -ex
 
+# musllinux doesn't have libtool by default
+if command -v apk &> /dev/null; then
+  apk add libtool
+fi
+
 . scripts/build_libunwind.sh
 
 sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
