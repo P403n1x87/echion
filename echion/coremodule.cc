@@ -44,7 +44,7 @@ static void do_where(std::ostream& stream)
     WhereRenderer::get().render_message("\r🐴 Echion reporting for duty");
     WhereRenderer::get().render_message("");
 
-    for_each_interp([](PyInterpreterState* interp) -> void {
+    for_each_interp([](InterpreterInfo& interp) -> void {
         for_each_thread(interp, [](PyThreadState* tstate, ThreadInfo& thread) -> void {
             thread.unwind(tstate);
             WhereRenderer::get().render_thread_begin(tstate, thread.name, /*cpu_time*/ 0,
@@ -214,9 +214,9 @@ static inline void _sampler()
         {
             microsecond_t wall_time = now - last_time;
 
-            for_each_interp([=](PyInterpreterState* interp) -> void {
+            for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
-                    thread.sample(interp->id, tstate, wall_time);
+                    thread.sample(interp.id, tstate, wall_time);
                 });
             });
         }

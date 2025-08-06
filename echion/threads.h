@@ -472,7 +472,7 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
 }
 
 // ----------------------------------------------------------------------------
-static void for_each_thread(PyInterpreterState* interp,
+static void for_each_thread(InterpreterInfo& interp,
                             std::function<void(PyThreadState*, ThreadInfo&)> callback)
 {
     std::unordered_set<PyThreadState*> threads;
@@ -482,7 +482,7 @@ static void for_each_thread(PyInterpreterState* interp,
     seen_threads.clear();
 
     // Start from the thread list head
-    threads.insert(PyInterpreterState_ThreadHead(interp));
+    threads.insert((PyThreadState*)interp.tstate_head);
 
     while (!threads.empty())
     {
