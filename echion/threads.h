@@ -244,19 +244,20 @@ void ThreadInfo::unwind_tasks()
         {
             auto& task = current_task.get();
 
-            int stack_size = task.unwind(stack);
+            size_t stack_size = task.unwind(stack);
 
             if (on_cpu)
             {
                 // Undo the stack unwinding
                 // TODO[perf]: not super-efficient :(
-                for (int i = 0; i < stack_size; i++)
+                for (size_t i = 0; i < stack_size; i++)
                     stack.pop_back();
 
                 // Instead we get part of the thread stack
                 FrameStack temp_stack;
-                ssize_t nframes = python_stack.size() - stack_size + 1;
-                for (ssize_t i = 0; i < nframes; i++)
+                size_t nframes =
+                    (python_stack.size() > stack_size) ? python_stack.size() - stack_size : 0;
+                for (size_t i = 0; i < nframes; i++)
                 {
                     auto python_frame = python_stack.front();
                     temp_stack.push_front(python_frame);
