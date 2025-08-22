@@ -50,6 +50,7 @@ typedef PyObject* PyDictValues;
 #endif
 
 #include <exception>
+#include <memory>
 #include <unordered_set>
 
 #include <echion/vm.h>
@@ -72,6 +73,8 @@ public:
             throw MirrorError();
         return reflected;
     }
+
+    virtual ~MirrorObject() = default;
 
 protected:
     std::unique_ptr<char[]> data = nullptr;
