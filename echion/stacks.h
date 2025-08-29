@@ -195,15 +195,11 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 #if PY_VERSION_HEX >= 0x030b0000
     try
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk.update((_PyStackChunk*)tstate->datastack_chunk);
     }
     catch (StackChunkError& e)
     {
-        stack_chunk = nullptr;
+        // TODO: handle this
     }
 #endif
 
@@ -230,15 +226,11 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 #if PY_VERSION_HEX >= 0x030b0000
     try
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk.update((_PyStackChunk*)tstate->datastack_chunk);
     }
     catch (StackChunkError& e)
     {
-        stack_chunk = nullptr;
+        // TODO: handle this
     }
 #endif
 
