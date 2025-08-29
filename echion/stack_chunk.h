@@ -92,6 +92,11 @@ void* StackChunk::resolve(void* address)
 {
     _PyStackChunk* chunk = (_PyStackChunk*)data.get();
 
+    if (chunk == nullptr)
+    {
+        return address;
+    }
+
     // Check if this chunk contains the address
     if (address >= origin && address < (char*)origin + chunk->size)
         return (char*)chunk + ((char*)address - (char*)origin);
