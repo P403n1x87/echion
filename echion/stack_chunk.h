@@ -7,8 +7,14 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+// Python 3.13+ stack chunk minimum size (16KB)
+// This is the minimum size of a stack chunk from Python's implementation
+// https://github.com/python/cpython/blob/f6536d48cd294f3dea6a4ecfd8148aa505dbb581/Python/pystate.c#L1417
+#define _PY_DATA_STACK_CHUNK_SIZE (16 * 1024)
+
 #include <exception>
 #include <memory>
+#include <vector>
 
 #include <echion/vm.h>
 
@@ -27,21 +33,19 @@ public:
 class StackChunk
 {
 public:
-    StackChunk() {}
+    StackChunk()
+    {
+        // Initialize with Python's minimum stack chunk size
+        data_capacity = _PY_DATA_STACK_CHUNK_SIZE;
+        data.resize(data_capacity);
+    }
 
     inline void update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
 
 private:
     void* origin = NULL;
-    struct FreeDeleter
-    {
-        void operator()(void* ptr) const
-        {
-            free(ptr);
-        }
-    };
-    std::unique_ptr<char[], FreeDeleter> data = nullptr;
+    std::vector<char> data;
     size_t data_capacity = 0;
     std::unique_ptr<StackChunk> previous = nullptr;
 };
@@ -58,18 +62,13 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
     // if data_size is not enough, reallocate
     if (chunk.size > data_capacity)
     {
-        data_capacity = chunk.size;
-        char* new_data = (char*)realloc(data.get(), data_capacity);
-        if (!new_data)
-        {
-            throw StackChunkError();
-        }
-        data.release();  // Release the old pointer before resetting
-        data.reset(new_data);
+        data_capacity =
+            std::max(chunk.size, data_capacity);  // Use max to maintain minimum capacity
+        data.resize(data_capacity);
     }
 
     // Copy the data up until the size of the chunk
-    if (copy_generic(chunk_addr, data.get(), chunk.size))
+    if (copy_generic(chunk_addr, data.data(), chunk.size))
         throw StackChunkError();
 
     if (chunk.previous != NULL)
@@ -90,7 +89,7 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 // ----------------------------------------------------------------------------
 void* StackChunk::resolve(void* address)
 {
-    _PyStackChunk* chunk = (_PyStackChunk*)data.get();
+    _PyStackChunk* chunk = (_PyStackChunk*)data.data();
 
     // Check if this chunk contains the address
     if (address >= origin && address < (char*)origin + chunk->size)
