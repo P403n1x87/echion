@@ -56,7 +56,7 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 
     origin = chunk_addr;
     // if data_size is not enough, reallocate
-    if (chunk.size > data_capacity)
+    if (chunk.size > data_capacity || data.get() == nullptr)
     {
         data_capacity = chunk.size;
         char* new_data = (char*)realloc(data.get(), data_capacity);
