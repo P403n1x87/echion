@@ -60,7 +60,7 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 
     origin = chunk_addr;
     // if data_size is not enough, reallocate
-    if (chunk.size > data_capacity || data.get() == nullptr)
+    if (chunk.size > data_capacity || data.data() == nullptr)
     {
         data_capacity =
             std::max(chunk.size, data_capacity);  // Use max to maintain minimum capacity
