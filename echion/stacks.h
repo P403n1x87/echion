@@ -111,17 +111,11 @@ void unwind_native_stack()
 // ----------------------------------------------------------------------------
 static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
-    std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
 
     PyObject* current_frame_addr = frame_addr;
     while (current_frame_addr != NULL && stack.size() < max_frames)
     {
-        if (seen_frames.find(current_frame_addr) != seen_frames.end())
-            break;
-
-        seen_frames.insert(current_frame_addr);
-
         try
         {
 #if PY_VERSION_HEX >= 0x030b0000
@@ -147,15 +141,11 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 // ----------------------------------------------------------------------------
 static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
 {
-    std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
 
     PyObject* current_frame = frame;
     while (current_frame != NULL && stack.size() < max_frames)
     {
-        if (seen_frames.find(current_frame) != seen_frames.end())
-            break;
-
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
         while (current_frame != NULL)
@@ -173,8 +163,6 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         }
 #endif  // PY_VERSION_HEX >= 0x030d0000
         count++;
-
-        seen_frames.insert(current_frame);
 
         stack.push_back(Frame::get(current_frame));
 
