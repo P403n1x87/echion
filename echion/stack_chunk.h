@@ -9,6 +9,7 @@
 
 #include <exception>
 #include <memory>
+#include <vector>
 
 #include <echion/vm.h>
 
@@ -31,17 +32,11 @@ public:
 
     inline void update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
+    inline bool is_valid() const;
 
 private:
     void* origin = NULL;
-    struct FreeDeleter
-    {
-        void operator()(void* ptr) const
-        {
-            free(ptr);
-        }
-    };
-    std::unique_ptr<char[], FreeDeleter> data = nullptr;
+    std::vector<char> data;
     size_t data_capacity = 0;
     std::unique_ptr<StackChunk> previous = nullptr;
 };
@@ -55,21 +50,15 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
         throw StackChunkError();
 
     origin = chunk_addr;
-    // if data_size is not enough, reallocate
-    if (chunk.size > data_capacity || data.get() == nullptr)
+    // if data_capacity is not enough, reallocate.
+    if (chunk.size > data_capacity)
     {
-        data_capacity = chunk.size;
-        char* new_data = (char*)realloc(data.get(), data_capacity);
-        if (!new_data)
-        {
-            throw StackChunkError();
-        }
-        data.release();  // Release the old pointer before resetting
-        data.reset(new_data);
+        data_capacity = std::max(chunk.size, data_capacity);
+        data.resize(data_capacity);
     }
 
     // Copy the data up until the size of the chunk
-    if (copy_generic(chunk_addr, data.get(), chunk.size))
+    if (copy_generic(chunk_addr, data.data(), chunk.size))
         throw StackChunkError();
 
     if (chunk.previous != NULL)
@@ -90,12 +79,13 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 // ----------------------------------------------------------------------------
 void* StackChunk::resolve(void* address)
 {
-    _PyStackChunk* chunk = (_PyStackChunk*)data.get();
-
-    if (chunk == nullptr)
+    // If data is not properly initialized, simply return the address
+    if (!is_valid())
     {
         return address;
     }
+
+    _PyStackChunk* chunk = (_PyStackChunk*)data.data();
 
     // Check if this chunk contains the address
     if (address >= origin && address < (char*)origin + chunk->size)
@@ -105,6 +95,16 @@ void* StackChunk::resolve(void* address)
         return previous->resolve(address);
 
     return address;
+}
+
+// ----------------------------------------------------------------------------
+bool StackChunk::is_valid() const
+{
+    return data_capacity > 0 &&
+           data.size() > 0 &&
+           data.size() >= sizeof(_PyStackChunk) &&
+           data.data() != nullptr &&
+           origin != nullptr;
 }
 
 // ----------------------------------------------------------------------------
