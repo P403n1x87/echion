@@ -102,6 +102,7 @@ bool StackChunk::is_valid() const
 {
     return data_capacity > 0 &&
            data.size() > 0 &&
+           data.size() >= sizeof(_PyStackChunk) &&
            data.data() != nullptr &&
            origin != nullptr;
 }
