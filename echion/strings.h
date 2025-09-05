@@ -73,7 +73,7 @@ static std::string pyunicode_to_utf8(PyObject* str_addr)
         throw StringError();
 
     auto dest = std::string(size, '\0');
-    if (copy_generic(data, dest.c_str(), size))
+    if (copy_generic(data, dest.data(), size))
         throw StringError();
 
     return dest;
