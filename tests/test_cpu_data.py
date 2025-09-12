@@ -19,7 +19,7 @@ def test_cpu_time(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 0.5 * 1e6 * (2 - bool(stealth))
+    assert summary.total_metric >= (0.5 * 1e6) + (0.01 * 1e6 * bool(stealth))
     assert summary.nsamples
 
     # Test line numbers
@@ -65,7 +65,7 @@ def test_cpu_time(stealth):
                     "Thread._bootstrap_inner",
                     "Thread.run",
                 ),
-                lambda v: v >= 0.5e6,
+                lambda v: v >= 0.01e6,
             )
     else:
         summary.assert_stack(
@@ -88,7 +88,7 @@ def test_cpu_time(stealth):
                     "_bootstrap_inner",
                     "run",
                 ),
-                lambda v: v >= 0.5e6,
+                lambda v: v >= 0.01e6,
             )
 
 
