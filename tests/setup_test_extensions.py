@@ -9,7 +9,6 @@ import sys
 import sysconfig
 
 # Get Python include and library paths
-python_version = f"{sys.version_info.major}"
 include_dir = f"{sysconfig.get_path('include')}"
 library_dir = f"{sys.prefix}/lib"
 
@@ -19,7 +18,7 @@ task_modifier = Extension(
     sources=['task_modifier.c'],
     include_dirs=[include_dir],
     library_dirs=[library_dir],
-    libraries=[f'python{python_version}'],
+    libraries=[f'python'],
     extra_compile_args=['-std=c99', '-Wall', '-Wextra'],
 )
 
