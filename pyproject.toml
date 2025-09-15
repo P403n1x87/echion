@@ -46,6 +46,7 @@ dependencies = [
   "austin-python~=1.7",
   "bytecode",
   "gevent",
+  "setuptools",
 ]
 
 [tool.hatch.envs.tests.scripts]
