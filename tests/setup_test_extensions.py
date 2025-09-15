@@ -22,7 +22,6 @@ task_modifier = Extension(
     sources=["task_modifier.c"],
     include_dirs=[include_dir],
     library_dirs=[library_dir],
-    libraries=["python"],
     extra_compile_args=["-std=c99", "-Wall", "-Wextra"],
 )
 
