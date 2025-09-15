@@ -101,6 +101,7 @@ packages = ["echion"]
 [tool.coverage.run]
 branch = true
 source = ["echion"]
+omit = ["tests/task_modifier.*.so"]
 
 [tool.coverage.report]
 show_missing = true
