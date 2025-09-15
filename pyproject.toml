@@ -51,6 +51,7 @@ dependencies = [
 
 [tool.hatch.envs.tests.scripts]
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
+tests-no-cov = "pytest --no-cov {args}"
 
 [[tool.hatch.envs.tests.matrix]]
 python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
@@ -101,7 +102,6 @@ packages = ["echion"]
 [tool.coverage.run]
 branch = true
 source = ["echion"]
-omit = ["tests/task_modifier.*.so"]
 
 [tool.coverage.report]
 show_missing = true
