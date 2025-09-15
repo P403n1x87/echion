@@ -43,6 +43,8 @@ jobs:
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
           sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests -svv
+
+      - name: Run tests without coverage
         if: matrix.python-version == '3.8'
         run: |
           ulimit -c unlimited
@@ -95,6 +97,8 @@ jobs:
       - name: Run tests
         if: matrix.python-version != '3.8'
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
+
+      - name: Run tests without coverage
         if: matrix.python-version == '3.8'
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests-no-cov -svv
 
