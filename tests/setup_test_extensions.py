@@ -9,7 +9,7 @@ import sys
 import sysconfig
 
 # Get Python include and library paths
-python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+python_version = f"{sys.version_info.major}"
 include_dir = f"{sysconfig.get_path('include')}"
 library_dir = f"{sys.prefix}/lib"
 
