@@ -222,19 +222,7 @@ static inline void _sampler()
             });
         }
 
-#if defined PL_LINUX
-        timespec end_time_spec{
-            static_cast<time_t>(end_time / 1000000),
-            static_cast<long>((end_time % 1000000)*1000)
-        };
-        clock_nanosleep(CLOCK_BOOTTIME, TIMER_ABSTIME, &end_time_spec, nullptr);
-#elif defined PL_DARWIN
-        timespec time_left_spec{
-            static_cast<time_t>((end_time - now) / 1000000),
-            static_cast<long>(((end_time - now) % 1000000)*1000)
-        };
-        nanosleep(&time_left_spec, nullptr);
-#endif
+        std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
         last_time = now;
     }
 }
