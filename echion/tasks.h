@@ -23,6 +23,7 @@
 #endif  // PY_VERSION_HEX >= 0x30b0000
 
 #include <exception>
+#include <iostream>
 #include <mutex>
 #include <stack>
 #include <unordered_map>
@@ -66,8 +67,10 @@ GenInfo::GenInfo(PyObject* gen_addr)
 {
     PyGenObject gen;
 
-    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
+    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen)) {
+        std::cerr << "Throwing GenInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     origin = gen_addr;
 
@@ -81,8 +84,10 @@ GenInfo::GenInfo(PyObject* gen_addr)
 #endif
 
     PyFrameObject f;
-    if (copy_type(frame, f))
+    if (copy_type(frame, f)) {
+        std::cerr << "Throwing GenInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
     if (yf != NULL && yf != gen_addr)
@@ -155,8 +160,10 @@ inline std::mutex task_link_map_lock;
 TaskInfo::TaskInfo(TaskObj* task_addr)
 {
     TaskObj task;
-    if (copy_type(task_addr, task))
+    if (copy_type(task_addr, task)) {
+        std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     try
     {
@@ -164,6 +171,7 @@ TaskInfo::TaskInfo(TaskObj* task_addr)
     }
     catch (GenInfo::Error&)
     {
+        std::cerr << "Throwing TaskInfo::GeneratorError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw GeneratorError();
     }
 
@@ -175,6 +183,7 @@ TaskInfo::TaskInfo(TaskObj* task_addr)
     }
     catch (StringTable::Error&)
     {
+        std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
     }
 
@@ -197,20 +206,25 @@ TaskInfo::TaskInfo(TaskObj* task_addr)
 // ----------------------------------------------------------------------------
 TaskInfo TaskInfo::current(PyObject* loop)
 {
-    if (loop == NULL)
+    if (loop == NULL) {
+        std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     try
     {
         MirrorDict current_tasks_dict(asyncio_current_tasks);
         PyObject* task = current_tasks_dict.get_item(loop);
-        if (task == NULL)
+        if (task == NULL) {
+            std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw Error();
+        }
 
         return TaskInfo((TaskObj*)task);
     }
     catch (MirrorError& e)
     {
+        std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
     }
 }
@@ -270,6 +284,7 @@ std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
     }
     catch (MirrorError& e)
     {
+        std::cerr << "Throwing TaskInfo::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw TaskInfo::Error();
     }
 }

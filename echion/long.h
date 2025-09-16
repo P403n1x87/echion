@@ -9,6 +9,7 @@
 #endif
 
 #include <exception>
+#include <iostream>
 
 #include <echion/vm.h>
 
@@ -28,11 +29,15 @@ static long long pylong_to_llong(PyObject* long_addr)
     PyLongObject long_obj;
     long long ret = 0;
 
-    if (copy_type(long_addr, long_obj))
+    if (copy_type(long_addr, long_obj)) {
+        std::cerr << "Throwing LongError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw LongError();
+    }
 
-    if (!PyLong_CheckExact(&long_obj))
+    if (!PyLong_CheckExact(&long_obj)) {
+        std::cerr << "Throwing LongError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw LongError();
+    }
 
     if (_PyLong_IsCompact(&long_obj))
     {

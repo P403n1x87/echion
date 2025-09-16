@@ -1,5 +1,6 @@
 #include <echion/frame.h>
 
+#include <iostream>
 #include <echion/render.h>
 
 // ----------------------------------------------------------------------------
@@ -90,6 +91,7 @@ Frame::Frame(PyCodeObject* code, int lasti)
     }
     catch (StringTable::Error&)
     {
+        std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
     }
 
@@ -107,6 +109,7 @@ Frame::Frame(unw_cursor_t& cursor, unw_word_t pc)
     }
     catch (StringTable::Error&)
     {
+        std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
     }
 }
@@ -120,8 +123,10 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
 #if PY_VERSION_HEX >= 0x030b0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
-    if (table == nullptr)
+    if (table == nullptr) {
+        std::cerr << "Throwing Frame::LocationError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw LocationError();
+    }
 
     auto table_data = table.get();
 
@@ -157,8 +162,10 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
             case 12:  // New lineno
             case 11:
             case 10:
-                if (i >= len - 2)
+                if (i >= len - 2) {
+                    std::cerr << "Throwing Frame::LocationError at " << __FILE__ << ":" << __LINE__ << std::endl;
                     throw LocationError();
+                }
 
                 lineno += code - 10;
 
@@ -170,8 +177,10 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
                 break;
 
             default:
-                if (i >= len - 1)
+                if (i >= len - 1) {
+                    std::cerr << "Throwing Frame::LocationError at " << __FILE__ << ":" << __LINE__ << std::endl;
                     throw LocationError();
+                }
 
                 next_byte = table[++i];
 
@@ -187,8 +196,10 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
 #elif PY_VERSION_HEX >= 0x030a0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
-    if (table == nullptr)
+    if (table == nullptr) {
+        std::cerr << "Throwing Frame::LocationError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw LocationError();
+    }
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -212,8 +223,10 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
 #else
     auto table = pybytes_to_bytes_and_size(code_obj->co_lnotab, &len);
-    if (table == nullptr)
+    if (table == nullptr) {
+        std::cerr << "Throwing Frame::LocationError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw LocationError();
+    }
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -289,12 +302,14 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
         {
             if (copy_type(frame_addr, iframe))
             {
+                std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
                 throw Frame::Error();
             }
             frame_addr = &iframe;
         }
         if (copy_type(frame_addr->f_executable, f_executable))
         {
+            std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw Frame::Error();
         }
         if (f_executable.ob_type == &PyCode_Type)
@@ -305,6 +320,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
 
     if (frame_addr == NULL)
     {
+        std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Frame::Error();
     }
 #else   // PY_VERSION_HEX < 0x030d0000
@@ -320,6 +336,7 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     {
         if (copy_type(frame_addr, iframe))
         {
+            std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw Frame::Error();
         }
         frame_addr = &iframe;
@@ -357,8 +374,10 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     // can print it from root to leaf.
     PyFrameObject py_frame;
 
-    if (copy_type(frame_addr, py_frame))
+    if (copy_type(frame_addr, py_frame)) {
+        std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     auto& frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
 
@@ -373,11 +392,11 @@ Frame& Frame::get(PyCodeObject* code_addr, int lasti)
 {
     auto frame_key = Frame::key(code_addr, lasti);
 
-    try
+    if (auto frame_ptr = frame_cache->lookup(frame_key))
     {
-        return frame_cache->lookup(frame_key);
+        return *frame_ptr;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+    else
     {
         try
         {
@@ -406,11 +425,11 @@ Frame& Frame::get(PyObject* frame)
 {
     auto frame_key = Frame::key(frame);
 
-    try
+    if (auto frame_ptr = frame_cache->lookup(frame_key))
     {
-        return frame_cache->lookup(frame_key);
+        return *frame_ptr;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+    else
     {
         auto new_frame = std::make_unique<Frame>(frame);
         new_frame->cache_key = frame_key;
@@ -429,15 +448,17 @@ Frame& Frame::get(unw_cursor_t& cursor)
 {
     unw_word_t pc;
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
-    if (pc == 0)
+    if (pc == 0) {
+        std::cerr << "Throwing Frame::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw Error();
+    }
 
     uintptr_t frame_key = (uintptr_t)pc;
-    try
+    if (auto frame_ptr = frame_cache->lookup(frame_key))
     {
-        return frame_cache->lookup(frame_key);
+        return *frame_ptr;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+    else
     {
         try
         {
@@ -462,11 +483,11 @@ Frame& Frame::get(unw_cursor_t& cursor)
 Frame& Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = static_cast<uintptr_t>(name);
-    try
+    if (auto frame_ptr = frame_cache->lookup(frame_key))
     {
-        return frame_cache->lookup(frame_key);
+        return *frame_ptr;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+    else
     {
         auto frame = std::make_unique<Frame>(name);
         frame->cache_key = frame_key;

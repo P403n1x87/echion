@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <iostream>
 #include <string>
 
 #ifndef UNWIND_NATIVE_DISABLE
@@ -55,26 +56,36 @@ static std::unique_ptr<unsigned char[]> pybytes_to_bytes_and_size(PyObject* byte
 static std::string pyunicode_to_utf8(PyObject* str_addr)
 {
     PyUnicodeObject str;
-    if (copy_type(str_addr, str))
+    if (copy_type(str_addr, str)) {
+        std::cerr << "Throwing StringError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw StringError();
+    }
 
     PyASCIIObject& ascii = str._base._base;
 
-    if (ascii.state.kind != 1)
+    if (ascii.state.kind != 1) {
+        std::cerr << "Throwing StringError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw StringError();
+    }
 
     const char* data = ascii.state.compact ? (const char*)(((uint8_t*)str_addr) + sizeof(ascii))
                                            : (const char*)str._base.utf8;
-    if (data == NULL)
+    if (data == NULL) {
+        std::cerr << "Throwing StringError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw StringError();
+    }
 
     Py_ssize_t size = ascii.state.compact ? ascii.length : str._base.utf8_length;
-    if (size < 0 || size > 1024)
+    if (size < 0 || size > 1024) {
+        std::cerr << "Throwing StringError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw StringError();
+    }
 
     auto dest = std::string(size, '\0');
-    if (copy_generic(data, dest.c_str(), size))
+    if (copy_generic(data, dest.c_str(), size)) {
+        std::cerr << "Throwing StringError at " << __FILE__ << ":" << __LINE__ << std::endl;
         throw StringError();
+    }
 
     return dest;
 }
@@ -127,6 +138,7 @@ public:
             }
             catch (StringError&)
             {
+                std::cerr << "Throwing StringTable::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
                 throw Error();
             }
         }
@@ -176,6 +188,7 @@ public:
             }
             catch (StringError&)
             {
+                std::cerr << "Throwing StringTable::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
                 throw Error();
             }
         }
@@ -189,8 +202,10 @@ public:
         const std::lock_guard<std::mutex> lock(table_lock);
 
         unw_proc_info_t pi;
-        if ((unw_get_proc_info(&cursor, &pi)))
+        if ((unw_get_proc_info(&cursor, &pi))) {
+            std::cerr << "Throwing StringTable::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw Error();
+        }
 
         auto k = (Key)pi.start_ip;
 
@@ -198,8 +213,10 @@ public:
         {
             unw_word_t offset;  // Ignored. All the information is in the PC anyway.
             char sym[256];
-            if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
+            if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset)) {
+                std::cerr << "Throwing StringTable::Error at " << __FILE__ << ":" << __LINE__ << std::endl;
                 throw Error();
+            }
 
             char* name = sym;
 
@@ -229,8 +246,10 @@ public:
         const std::lock_guard<std::mutex> lock(table_lock);
 
         auto it = this->find(key);
-        if (it == this->end())
+        if (it == this->end()) {
+            std::cerr << "Throwing StringTable::LookupError at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw LookupError();
+        }
 
         return it->second;
     };

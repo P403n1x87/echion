@@ -108,6 +108,7 @@ class VmReader
         buffer = init(sz);
         if (!buffer)
         {
+            std::cerr << "Throwing std::runtime_error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw std::runtime_error("Failed to initialize buffer with size " + std::to_string(sz));
         }
         instance = this;

@@ -189,7 +189,7 @@ public:
         output.open(std::getenv("ECHION_OUTPUT"));
         if (!output.is_open())
         {
-            std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
+            std::cerr << "Throwing std::runtime_error at " << __FILE__ << ":" << __LINE__ << std::endl;
             throw std::runtime_error("Failed to open output file");
         }
     }
