@@ -6,7 +6,17 @@
 #include <Python.h>
 #if PY_VERSION_HEX >= 0x030c0000
 #include <internal/pycore_long.h>
-#endif
+// Note: Even if use the right PYLONG_BITS_IN_DIGIT that is specified in the
+// Python we use to build echion, it can be different from the Python that is
+// used to run the program.
+#if PYLONG_BITS_IN_DIGIT == 30
+typedef uint32_t digit;
+#elif PYLONG_BITS_IN_DIGIT == 15
+typedef unsigned short digit;
+#else
+#error "Unsupported PYLONG_BITS_IN_DIGIT"
+#endif  // PYLONG_BITS_IN_DIGIT
+#endif  // PY_VERSION_HEX >= 0x030c0000
 
 #include <exception>
 
@@ -44,10 +54,17 @@ static long long pylong_to_llong(PyObject* long_addr)
         // We might overflow, but we don't care for now
         int sign = _PyLong_NonCompactSign(&long_obj);
         Py_ssize_t i = _PyLong_DigitCount(&long_obj);
+        // Copy over the digits as ob_digit is allocated dynamically with
+        // PyObject_Malloc.
+        std::vector<digit> digits(i);
+        if (copy_generic(long_obj.long_value.ob_digit, digits.data(), i * sizeof(digit)))
+        {
+            throw LongError();
+        }
         while (--i >= 0)
         {
             ret <<= PyLong_SHIFT;
-            ret |= long_obj.long_value.ob_digit[i];
+            ret |= digits[i];
         }
         ret *= sign;
     }
