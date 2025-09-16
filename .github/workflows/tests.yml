@@ -38,18 +38,10 @@ jobs:
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install branch
 
       - name: Run tests
-        if: matrix.python-version != '3.8'
         run: |
           ulimit -c unlimited
           echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
           sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests -svv
-
-      - name: Run tests without coverage
-        if: matrix.python-version == '3.8'
-        run: |
-          ulimit -c unlimited
-          echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests-no-cov -svv
 
       - name: Upload profiles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -95,12 +87,7 @@ jobs:
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install branch
 
       - name: Run tests
-        if: matrix.python-version != '3.8'
         run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
-
-      - name: Run tests without coverage
-        if: matrix.python-version == '3.8'
-        run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests-no-cov -svv
 
       - name: Upload profiles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

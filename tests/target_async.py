@@ -1,8 +1,5 @@
 import asyncio
 import time
-import sys
-
-from . import task_modifier
 
 
 async def foobar():
@@ -20,10 +17,7 @@ async def bar():
 
 
 async def foo():
-    task = asyncio.create_task(bar(), name="Task-bar")
-    if sys.version_info >= (3, 13):
-        task_modifier.set_task_name_to_big_int(task)
-    await task
+    await asyncio.create_task(bar(), name="Task-bar")
 
 
 async def main():

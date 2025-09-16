@@ -46,12 +46,10 @@ dependencies = [
   "austin-python~=1.7",
   "bytecode",
   "gevent",
-  "setuptools",
 ]
 
 [tool.hatch.envs.tests.scripts]
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
-tests-no-cov = "pytest --no-cov {args}"
 
 [[tool.hatch.envs.tests.matrix]]
 python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
