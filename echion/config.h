@@ -36,6 +36,13 @@ inline unsigned int max_frames = 2048;
 // Pipe name (where mode IPC)
 inline std::string pipe_name;
 
+// Which VM reading mode to use, only used on Linux
+// 0 - writev (failover)
+// 1 - process_vm_readv (default)
+// 2 - sigtrap
+// -1 - error (cannot be set by user)
+inline int vm_read_mode = 1;
+
 // ----------------------------------------------------------------------------
 static PyObject* set_interval(PyObject* Py_UNUSED(m), PyObject* args)
 {

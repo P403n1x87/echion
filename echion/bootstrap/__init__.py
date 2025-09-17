@@ -35,6 +35,7 @@ def start():
     ec.set_memory(bool(int(os.getenv("ECHION_MEMORY", 0))))
     ec.set_native(bool(int(os.getenv("ECHION_NATIVE", 0))))
     ec.set_where(bool(int(os.getenv("ECHION_WHERE", 0) or 0)))
+    ec.set_vm_read_mode(int(os.getenv("ECHION_VM_READ_MODE", 1)))
 
     # Monkey-patch the standard library on import
     try:

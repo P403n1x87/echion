@@ -517,6 +517,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
+    {"set_vm_read_mode", set_vm_read_mode, METH_VARARGS, "Set the virtual memory read mode"},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
