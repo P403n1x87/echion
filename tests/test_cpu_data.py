@@ -19,7 +19,7 @@ def test_cpu_time(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 0.5 * 1e6 * (2 - bool(stealth))
+    assert summary.total_metric >= 0.5 * 1e6
     assert summary.nsamples
 
     # Test line numbers
@@ -56,17 +56,6 @@ def test_cpu_time(stealth):
             ),
             lambda v: v >= 3e5,
         )
-        if not bool(stealth):
-            summary.assert_stack(
-                "0:echion.core.sampler",
-                (
-                    "Thread._bootstrap",
-                    "thread_bootstrap_inner",
-                    "Thread._bootstrap_inner",
-                    "Thread.run",
-                ),
-                lambda v: v >= 0.5e6,
-            )
     else:
         summary.assert_stack(
             "0:SecondaryThread",
@@ -79,17 +68,6 @@ def test_cpu_time(stealth):
             ),
             lambda v: v >= 3e5,
         )
-        if not bool(stealth):
-            summary.assert_stack(
-                "0:echion.core.sampler",
-                (
-                    "_bootstrap",
-                    "thread_bootstrap_inner",
-                    "_bootstrap_inner",
-                    "run",
-                ),
-                lambda v: v >= 0.5e6,
-            )
 
 
 @stealth

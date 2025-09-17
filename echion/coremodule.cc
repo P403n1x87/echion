@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <signal.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -221,9 +222,7 @@ static inline void _sampler()
             });
         }
 
-        while (gettime() < end_time && running)
-            sched_yield();
-
+        std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
         last_time = now;
     }
 }
