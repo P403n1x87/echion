@@ -5,6 +5,7 @@
 #pragma once
 
 #include <Python.h>
+#include "echion/errors.h"
 #define Py_BUILD_CORE
 
 
@@ -31,12 +32,12 @@ public:
     {
     }
 
-    int unwind(PyObject*, PyThreadState*, FrameStack&);
+    Result<int> unwind(PyObject*, PyThreadState*, FrameStack&);
 };
 
 // ----------------------------------------------------------------------------
 
-inline int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameStack& stack)
+inline Result<int> GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameStack& stack)
 {
     PyObject* frame_addr = NULL;
 #if PY_VERSION_HEX >= 0x030d0000
@@ -65,10 +66,13 @@ inline int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameSta
 #endif
     auto count = unwind_frame(frame_addr, stack);
 
-    stack.push_back(Frame::get(name));
+    auto maybe_frame = Frame::get(name);
+    if (!maybe_frame) {
+        return Result<int>::error(ErrorKind::FrameError);
+    }
 
-    return count + 1;  // We add an extra count for the frame with the greenlet
-                       // name.
+    stack.push_back(*maybe_frame);
+    return count + 1;  // We add an extra count for the frame with the greenlet name.
 }
 
 // ----------------------------------------------------------------------------

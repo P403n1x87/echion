@@ -12,6 +12,7 @@
 #include <string_view>
 
 #include <echion/config.h>
+#include <echion/errors.h>
 #include <echion/mojo.h>
 #include <echion/timing.h>
 
@@ -27,7 +28,7 @@ enum MetricType
 class RendererInterface
 {
 public:
-    virtual void open() = 0;
+    virtual bool open() = 0;
     virtual void close() = 0;
     virtual void header() = 0;
     virtual void metadata(const std::string& label, const std::string& value) = 0;
@@ -101,7 +102,7 @@ public:
         return true;
     }
 
-    void open() override {};
+    bool open() override { return true; };
     void close() override {};
     void header() override {};
     void metadata(const std::string& label, const std::string& value) override {};
@@ -123,6 +124,7 @@ public:
     {
         *output << msg << std::endl;
     }
+    Result<void> render_frame_internal(Frame& frame);
     void render_frame(Frame&) override;
     void render_stack_end(MetricType, uint64_t) override {}
     void render_cpu_time(uint64_t) override {}
@@ -183,14 +185,15 @@ class MojoRenderer : public RendererInterface
 public:
     MojoRenderer() = default;
 
-    void open() override
+    bool open() override
     {
         output.open(std::getenv("ECHION_OUTPUT"));
         if (!output.is_open())
         {
             std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
-            throw std::runtime_error("Failed to open output file");
+            return false;
         }
+        return true;
     }
 
     // ------------------------------------------------------------------------
@@ -422,9 +425,9 @@ public:
         getActiveRenderer()->render_message(msg);
     }
 
-    void open()
+    bool open()
     {
-        getActiveRenderer()->open();
+        return getActiveRenderer()->open();
     }
 
     void close()

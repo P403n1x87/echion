@@ -26,8 +26,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <exception>
 #include <functional>
+
+#include <echion/errors.h>
 
 #ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
@@ -51,25 +52,6 @@ public:
     using Ptr = std::unique_ptr<Frame>;
     using Key = uintptr_t;
 
-    // ------------------------------------------------------------------------
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot read frame";
-        }
-    };
-
-    // ------------------------------------------------------------------------
-    class LocationError : public Error
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot determine frame location information";
-        }
-    };
 
     // ------------------------------------------------------------------------
     Key cache_key = 0;
@@ -89,28 +71,29 @@ public:
 #endif
 
     // ------------------------------------------------------------------------
+    Frame(StringTable::Key filename, StringTable::Key name) : filename(filename), name(name) {};
     Frame(StringTable::Key name) : name(name) {};
     Frame(PyObject* frame);
-    Frame(PyCodeObject* code, int lasti);
+    static Result<Frame> create(PyCodeObject* code, int lasti);
 #ifndef UNWIND_NATIVE_DISABLE
-    Frame(unw_cursor_t& cursor, unw_word_t pc);
+    static Result<Frame> create(unw_cursor_t& cursor, unw_word_t pc);
 #endif  // UNWIND_NATIVE_DISABLE
 
 #if PY_VERSION_HEX >= 0x030b0000
-    static Frame& read(_PyInterpreterFrame* frame_addr, _PyInterpreterFrame** prev_addr);
+    static Result<Frame*> read(_PyInterpreterFrame* frame_addr, _PyInterpreterFrame** prev_addr);
 #else
-    static Frame& read(PyObject* frame_addr, PyObject** prev_addr);
+    static Result<Frame*> read(PyObject* frame_addr, PyObject** prev_addr);
 #endif
 
-    static Frame& get(PyCodeObject* code_addr, int lasti);
+    static Result<Frame*> get(PyCodeObject* code_addr, int lasti);
     static Frame& get(PyObject* frame);
 #ifndef UNWIND_NATIVE_DISABLE
-    static Frame& get(unw_cursor_t& cursor);
+    static Result<Frame*> get(unw_cursor_t& cursor);
 #endif  // UNWIND_NATIVE_DISABLE
-    static Frame& get(StringTable::Key name);
+    static Frame* get(StringTable::Key name);
 
 private:
-    void inline infer_location(PyCodeObject* code, int lasti);
+    Result<void> inline infer_location(PyCodeObject* code, int lasti);
     static inline Key key(PyCodeObject* code, int lasti);
     static inline Key key(PyObject* frame);
 };

@@ -7,22 +7,14 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include <exception>
 #include <memory>
 #include <vector>
 
+#include <echion/errors.h>
 #include <echion/vm.h>
 
 // ----------------------------------------------------------------------------
 
-class StackChunkError : public std::exception
-{
-public:
-    const char* what() const noexcept override
-    {
-        return "Cannot create stack chunk object";
-    }
-};
 
 // ----------------------------------------------------------------------------
 class StackChunk
@@ -30,7 +22,7 @@ class StackChunk
 public:
     StackChunk() {}
 
-    inline void update(_PyStackChunk* chunk_addr);
+    inline Result<void> update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
     inline bool is_valid() const;
 
@@ -42,12 +34,12 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-void StackChunk::update(_PyStackChunk* chunk_addr)
+Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 
     if (copy_type(chunk_addr, chunk))
-        throw StackChunkError();
+        return Result<void>::error(ErrorKind::StackChunkError);
 
     origin = chunk_addr;
     // if data_capacity is not enough, reallocate.
@@ -59,21 +51,21 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 
     // Copy the data up until the size of the chunk
     if (copy_generic(chunk_addr, data.data(), chunk.size))
-        throw StackChunkError();
+        return Result<void>::error(ErrorKind::StackChunkError);
 
     if (chunk.previous != NULL)
     {
-        try
-        {
-            if (previous == nullptr)
-                previous = std::make_unique<StackChunk>();
-            previous->update((_PyStackChunk*)chunk.previous);
-        }
-        catch (StackChunkError& e)
+        if (previous == nullptr)
+            previous = std::make_unique<StackChunk>();
+        auto update_success = previous->update((_PyStackChunk*)chunk.previous);
+        if (!update_success)
         {
             previous = nullptr;
+            // Continue processing even if previous chunk fails
         }
     }
+    
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
