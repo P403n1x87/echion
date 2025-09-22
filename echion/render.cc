@@ -12,7 +12,7 @@ void WhereRenderer::render_frame(Frame& frame)
         return;  // Skip this frame if filename lookup failed
     auto line = frame.location.line;
 
-    if (filename_str.rfind("native@", 0) == 0)
+    if (filename_str.value().rfind("native@", 0) == 0)
     {
         WhereRenderer::get().render_message(
             "\033[38;5;248;1m" + name_str.value() + "\033[0m \033[38;5;246m(" + filename_str.value() +

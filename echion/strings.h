@@ -10,8 +10,10 @@
 
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
@@ -222,7 +224,7 @@ public:
     }
 #endif  // UNWIND_NATIVE_DISABLE
 
-    inline std::optional<const std::string&> lookup(Key key)
+    inline std::optional<std::string> lookup(Key key)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
