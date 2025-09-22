@@ -34,15 +34,6 @@ class ThreadInfo
 public:
     using Ptr = std::unique_ptr<ThreadInfo>;
 
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create thread info object";
-        }
-    };
-
     uintptr_t thread_id;
     unsigned long native_id;
 
@@ -522,31 +513,21 @@ static void for_each_thread(InterpreterInfo& interp,
 #else
                 auto native_id = getpid();
 #endif
-                try
+                bool main_thread_tracked = false;
+                for (auto& kv : thread_info_map)
                 {
-                    bool main_thread_tracked = false;
-                    for (auto& kv : thread_info_map)
+                    if (kv.second->name == "MainThread")
                     {
-                        if (kv.second->name == "MainThread")
-                        {
-                            main_thread_tracked = true;
-                            break;
-                        }
+                        main_thread_tracked = true;
+                        break;
                     }
-                    if (main_thread_tracked)
-                        continue;
-
-                    thread_info_map.emplace(
-                        tstate.thread_id,
-                        std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
                 }
-                catch (ThreadInfo::Error&)
-                {
-                    // We failed to create the thread info object so we skip it.
-                    // We'll likely try again later with the valid thread
-                    // information.
+                if (main_thread_tracked)
                     continue;
-                }
+
+                thread_info_map.emplace(
+                    tstate.thread_id,
+                    std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
             }
 
             // Call back with the thread state and thread info.
