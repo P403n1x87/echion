@@ -425,8 +425,11 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
     {
         for (auto& task_stack_info : current_tasks)
         {
-            Renderer::get().render_task_begin(string_table.lookup(task_stack_info->task_name),
-                                              task_stack_info->on_cpu);
+            auto task_name_opt = string_table.lookup(task_stack_info->task_name);
+            if (!task_name_opt.has_value())
+                continue;  // Skip this task if name lookup failed
+
+            Renderer::get().render_task_begin(task_name_opt.value(), task_stack_info->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
             if (native)
             {
@@ -449,8 +452,11 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
     {
         for (auto& greenlet_stack : current_greenlets)
         {
-            Renderer::get().render_task_begin(string_table.lookup(greenlet_stack->task_name),
-                                              greenlet_stack->on_cpu);
+            auto task_name_opt = string_table.lookup(greenlet_stack->task_name);
+            if (!task_name_opt.has_value())
+                continue;  // Skip this greenlet if name lookup failed
+
+            Renderer::get().render_task_begin(task_name_opt.value(), greenlet_stack->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
 
             auto& stack = greenlet_stack->stack;
