@@ -518,7 +518,9 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
-    {NULL, NULL, 0, NULL} /* Sentinel */
+    {"set_max_frames", set_max_frames, METH_VARARGS, "Set the max number of frames to unwind"},
+    // Sentinel
+    {NULL, NULL, 0, NULL}
 };
 
 // ----------------------------------------------------------------------------
