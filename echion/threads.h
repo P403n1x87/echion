@@ -43,6 +43,15 @@ public:
         }
     };
 
+    class CpuTimeError : public Error
+    {
+    public:
+        const char* what() const noexcept override
+        {
+            return "Cannot update CPU time";
+        }
+    };
+
     uintptr_t thread_id;
     unsigned long native_id;
 
@@ -68,8 +77,12 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id);
+        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id))
+            throw ThreadInfo::Error{};
+
 #elif defined PL_DARWIN
+        // pthread_mach_thread_np does not return a status code; the behaviour is undefined
+        // if thread_id is invalid.
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 #endif
         update_cpu_time();
@@ -85,7 +98,7 @@ void ThreadInfo::update_cpu_time()
 #if defined PL_LINUX
     struct timespec ts;
     if (clock_gettime(cpu_clock_id, &ts))
-        return;
+        throw ThreadInfo::CpuTimeError{};
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
 #elif defined PL_DARWIN
@@ -94,7 +107,10 @@ void ThreadInfo::update_cpu_time()
     kern_return_t kr =
         thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
-    if (kr != KERN_SUCCESS || (info.flags & TH_FLAGS_IDLE))
+    if (kr != KERN_SUCCESS)
+        throw ThreadInfo::CpuTimeError{};
+
+    if (info.flags & TH_FLAGS_IDLE)
         return;
 
     this->cpu_time = TV_TO_MICROSECOND(info.user_time) + TV_TO_MICROSECOND(info.system_time);

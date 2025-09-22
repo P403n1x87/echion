@@ -216,7 +216,11 @@ static inline void _sampler()
 
             for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
-                    thread.sample(interp.id, tstate, wall_time);
+                    try {
+                        thread.sample(interp.id, tstate, wall_time);
+                    } catch (ThreadInfo::CpuTimeError& e) {
+                        // Silently skip sampling this thread
+                    }
                 });
             });
         }
