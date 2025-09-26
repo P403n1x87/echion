@@ -496,10 +496,16 @@ void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
     }
 }
 
+static size_t for_each_thread_runs = 0;
+static std::chrono::duration<unsigned long long, std::nano> for_each_thread_duration;
+
 // ----------------------------------------------------------------------------
 static void for_each_thread(InterpreterInfo& interp,
                             std::function<void(PyThreadState*, ThreadInfo&)> callback)
 {
+    for_each_thread_runs++;
+    auto start = std::chrono::high_resolution_clock::now();
+
     std::unordered_set<PyThreadState*> threads;
     std::unordered_set<PyThreadState*> seen_threads;
 
@@ -577,5 +583,14 @@ static void for_each_thread(InterpreterInfo& interp,
             // Call back with the thread state and thread info.
             callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
         }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    for_each_thread_duration += end - start;
+
+    if (for_each_thread_runs % 1000 == 0) {
+        std::cout << "for_each_thread_runs:         " << for_each_thread_runs << std::endl;
+        std::cout << "for_each_thread_duration:     " << for_each_thread_duration.count() << std::endl;
+        std::cout << "avg for_each_thread_duration: " << for_each_thread_duration.count() / for_each_thread_runs << std::endl;
     }
 }
