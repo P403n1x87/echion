@@ -11,9 +11,12 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <memory_resource>
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #if defined PL_LINUX
 #include <time.h>
@@ -202,10 +205,15 @@ void ThreadInfo::unwind(PyThreadState* tstate)
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind_tasks()
 {
-    std::vector<TaskInfo::Ref> leaf_tasks;
-    std::unordered_set<PyObject*> parent_tasks;
-    std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
-    std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
+    // Use a stack-allocated buffer for PMR allocators to avoid heap allocations
+    // 8KB should be sufficient for most profiling scenarios
+    std::byte stack_buffer[8192];
+    std::pmr::monotonic_buffer_resource buffer_resource(stack_buffer, sizeof(stack_buffer));
+    
+    std::pmr::vector<TaskInfo::Ref> leaf_tasks(&buffer_resource);
+    std::pmr::unordered_set<PyObject*> parent_tasks(&buffer_resource);
+    std::pmr::unordered_map<PyObject*, TaskInfo::Ref> waitee_map(&buffer_resource);  // Indexed by task origin
+    std::pmr::unordered_map<PyObject*, TaskInfo::Ref> origin_map(&buffer_resource);  // Indexed by task origin
 
     auto all_tasks = get_all_tasks((PyObject*)asyncio_loop);
 
@@ -214,12 +222,12 @@ void ThreadInfo::unwind_tasks()
 
         // Clean up the task_link_map. Remove entries associated to tasks that
         // no longer exist.
-        std::unordered_set<PyObject*> all_task_origins;
+        std::pmr::unordered_set<PyObject*> all_task_origins(&buffer_resource);
         std::transform(all_tasks.cbegin(), all_tasks.cend(),
                        std::inserter(all_task_origins, all_task_origins.begin()),
                        [](const TaskInfo::Ptr& task) { return task->origin; });
 
-        std::vector<PyObject*> to_remove;
+        std::pmr::vector<PyObject*> to_remove(&buffer_resource);
         for (auto kv : task_link_map)
         {
             if (all_task_origins.find(kv.first) == all_task_origins.end())
