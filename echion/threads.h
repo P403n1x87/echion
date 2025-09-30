@@ -23,6 +23,7 @@
 #endif
 
 #include <echion/greenlets.h>
+#include <echion/interp.h>
 #include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
@@ -383,7 +384,7 @@ void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id
             if (parent_frame == FRAME_NOT_SET || parent_frame == Py_None)
                 break;
 
-            auto count = parent_greenlet->second->unwind(parent_frame, tstate, stack);
+            parent_greenlet->second->unwind(parent_frame, tstate, stack);
 
             // Move up the greenlet chain
             greenlet_id = parent_greenlet_id;
