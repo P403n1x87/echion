@@ -167,17 +167,10 @@ public:
 
         if (this->find(k) == this->end())
         {
-            try
-            {
-                char buffer[32] = {0};
-                std::snprintf(buffer, 32, "native@%p", (void*)k);
-                this->emplace(k, buffer);
-                Renderer::get().string(k, buffer);
-            }
-            catch (StringError&)
-            {
-                throw Error();
-            }
+            char buffer[32] = {0};
+            std::snprintf(buffer, 32, "native@%p", (void*)k);
+            this->emplace(k, buffer);
+            Renderer::get().string(k, buffer);
         }
 
         return k;
