@@ -202,13 +202,38 @@ void ThreadInfo::unwind(PyThreadState* tstate)
     }
 }
 
+struct counting_resource : std::pmr::memory_resource {
+    std::pmr::memory_resource* upstream;
+    std::size_t allocs = 0, bytes = 0;
+  
+    explicit counting_resource(std::pmr::memory_resource* up = std::pmr::get_default_resource())
+      : upstream(up) {}
+  
+  private:
+    void* do_allocate(std::size_t n, std::size_t align) override {
+      ++allocs; bytes += n;
+      std::cerr << "OMG! We ARE TRYING TO ALLOCATE PLEASE STOP THE PROCESS!" << std::endl;
+      throw std::runtime_error("OMG! We ARE TRYING TO ALLOCATE PLEASE STOP THE PROCESS!");
+      return upstream->allocate(n, align);
+    }
+    void do_deallocate(void* p, std::size_t n, std::size_t align) override {
+      std::cerr << "OMG! We ARE TRYING TO DEALLOCATE PLEASE STOP THE PROCESS!" << std::endl;
+      upstream->deallocate(p, n, align);
+    }
+    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override {
+      return this == &other;
+    }
+  };
+  
+
 // ----------------------------------------------------------------------------
 void ThreadInfo::unwind_tasks()
 {
     // Use a stack-allocated buffer for PMR allocators to avoid heap allocations
     // 8KB should be sufficient for most profiling scenarios
     std::byte stack_buffer[8192];
-    std::pmr::monotonic_buffer_resource buffer_resource(stack_buffer, sizeof(stack_buffer));
+    counting_resource upstream;
+    std::pmr::monotonic_buffer_resource buffer_resource(stack_buffer, sizeof(stack_buffer), &upstream);
     
     std::pmr::vector<TaskInfo::Ref> leaf_tasks(&buffer_resource);
     std::pmr::unordered_set<PyObject*> parent_tasks(&buffer_resource);
