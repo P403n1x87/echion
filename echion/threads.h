@@ -231,7 +231,7 @@ void ThreadInfo::unwind_tasks()
 {
     // Use a stack-allocated buffer for PMR allocators to avoid heap allocations
     // 8KB should be sufficient for most profiling scenarios
-    std::byte stack_buffer[8192];
+    std::byte stack_buffer[1024 * 50];
     counting_resource upstream;
     std::pmr::monotonic_buffer_resource buffer_resource(stack_buffer, sizeof(stack_buffer), &upstream);
     
