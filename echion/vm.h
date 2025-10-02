@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -18,7 +19,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <algorithm>
-#include <memory>
 
 typedef pid_t proc_ref_t;
 
@@ -167,7 +167,7 @@ public:
         }
 
         // Copy the data from the buffer to the remote process
-        memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
+        std::memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
         return ret;
     }
 

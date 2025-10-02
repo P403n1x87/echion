@@ -10,7 +10,6 @@
 #endif
 
 #include <condition_variable>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -18,7 +17,6 @@
 
 #include <fcntl.h>
 #include <sched.h>
-#include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>

@@ -62,7 +62,7 @@ public:
     GenInfo(PyObject* gen_addr);
 };
 
-GenInfo::GenInfo(PyObject* gen_addr)
+inline GenInfo::GenInfo(PyObject* gen_addr)
 {
     PyGenObject gen;
 
@@ -152,7 +152,7 @@ inline std::unordered_map<PyObject*, PyObject*> task_link_map;
 inline std::mutex task_link_map_lock;
 
 // ----------------------------------------------------------------------------
-TaskInfo::TaskInfo(TaskObj* task_addr)
+inline TaskInfo::TaskInfo(TaskObj* task_addr)
 {
     TaskObj task;
     if (copy_type(task_addr, task))
@@ -195,7 +195,7 @@ TaskInfo::TaskInfo(TaskObj* task_addr)
 }
 
 // ----------------------------------------------------------------------------
-TaskInfo TaskInfo::current(PyObject* loop)
+inline TaskInfo TaskInfo::current(PyObject* loop)
 {
     if (loop == NULL)
         throw Error();
@@ -217,7 +217,7 @@ TaskInfo TaskInfo::current(PyObject* loop)
 
 // ----------------------------------------------------------------------------
 // TODO: Make this a "for_each_task" function?
-std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
+inline std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
 {
     std::vector<TaskInfo::Ptr> tasks;
     if (loop == NULL)
