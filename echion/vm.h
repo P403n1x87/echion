@@ -253,6 +253,9 @@ __attribute__((constructor)) inline void init_safe_copy()
 }
 #endif
 
+// Forward declaration for page cache integration
+int copy_memory_direct(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf);
+
 /**
  * Copy a chunk of memory from a portion of the virtual memory of another
  * process.
@@ -264,7 +267,8 @@ __attribute__((constructor)) inline void init_safe_copy()
  *
  * @return  zero on success, otherwise non-zero.
  */
-static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
+// Direct memory copy without page caching (used by page cache internally)
+inline int copy_memory_direct(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
 {
     ssize_t result = -1;
 
@@ -295,6 +299,22 @@ static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void
 #endif
 
     return len != result;
+}
+
+static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
+{
+    // Use page cache for small reads that are likely to benefit from caching
+    // For large reads or when page cache is disabled, fall back to direct copy
+    
+    // Enable page cache for frame-sized reads (typical: 32-4096 bytes)
+    if (len > 0 && len <= 4096) {  // Use 4096 instead of 512 to match page cache logic
+        // Forward declare page cache function
+        extern int use_page_cache_for_read(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf);
+        return use_page_cache_for_read(proc_ref, addr, len, buf);
+    }
+    
+    // For large reads or cache failures, use direct copy
+    return copy_memory_direct(proc_ref, addr, len, buf);
 }
 
 inline pid_t pid = 0;

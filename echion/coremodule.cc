@@ -31,6 +31,7 @@
 #include <echion/greenlets.h>
 #include <echion/interp.h>
 #include <echion/memory.h>
+#include <echion/page_cache.h>
 #include <echion/mojo.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
@@ -167,6 +168,19 @@ static inline void _start()
 // ----------------------------------------------------------------------------
 static inline void _stop()
 {
+    // Print page cache statistics before shutdown
+    auto stats = get_page_cache().get_stats();
+    std::fprintf(stderr, "\n=== Page Cache Statistics ===\n");
+    std::fprintf(stderr, "Total pages cached: %zu\n", stats.total_pages);
+    std::fprintf(stderr, "Valid pages: %zu\n", stats.valid_pages);
+    std::fprintf(stderr, "Invalid pages: %zu\n", stats.invalid_pages);
+    std::fprintf(stderr, "Average age: %.1f ms\n", stats.avg_age_ms);
+    if (stats.total_pages > 0) {
+        std::fprintf(stderr, "Cache effectiveness: %.1f%% valid\n", 
+                    (double)stats.valid_pages / stats.total_pages * 100.0);
+    }
+    std::fprintf(stderr, "==============================\n");
+
     if (memory)
         teardown_memory();
 
@@ -496,6 +510,29 @@ static PyObject* link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 }
 
 // ----------------------------------------------------------------------------
+static PyObject* get_page_cache_stats(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
+{
+    auto stats = get_page_cache().get_stats();
+    
+    PyObject* dict = PyDict_New();
+    if (!dict) return NULL;
+    
+    PyDict_SetItemString(dict, "total_pages", PyLong_FromSize_t(stats.total_pages));
+    PyDict_SetItemString(dict, "valid_pages", PyLong_FromSize_t(stats.valid_pages));
+    PyDict_SetItemString(dict, "invalid_pages", PyLong_FromSize_t(stats.invalid_pages));
+    PyDict_SetItemString(dict, "avg_age_ms", PyFloat_FromDouble(stats.avg_age_ms));
+    
+    return dict;
+}
+
+// ----------------------------------------------------------------------------
+static PyObject* clear_page_cache(PyObject* Py_UNUSED(m), PyObject* Py_UNUSED(args))
+{
+    get_page_cache().clear_cache();
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
 static PyMethodDef echion_core_methods[] = {
     {"start", start, METH_NOARGS, "Start the stack sampler"},
     {"start_async", start_async, METH_NOARGS, "Start the stack sampler asynchronously"},
@@ -522,6 +559,9 @@ static PyMethodDef echion_core_methods[] = {
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
     {"set_max_frames", set_max_frames, METH_VARARGS, "Set the max number of frames to unwind"},
+    // Page cache debugging
+    {"get_page_cache_stats", get_page_cache_stats, METH_NOARGS, "Get page cache statistics"},
+    {"clear_page_cache", clear_page_cache, METH_NOARGS, "Clear the page cache"},
     // Sentinel
     {NULL, NULL, 0, NULL}
 };

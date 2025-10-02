@@ -16,7 +16,7 @@ PLATFORM = sys.platform.lower()
 DISABLE_NATIVE = os.environ.get("UNWIND_NATIVE_DISABLE")
 
 LDADD = {
-    "linux": ["-l:libunwind.a", "-l:liblzma.a"] if not DISABLE_NATIVE else [],
+    "linux": ["-lunwind", "-llzma"] if not DISABLE_NATIVE else [],
 }
 
 # add option to colorize compiler output
@@ -34,7 +34,7 @@ if DISABLE_NATIVE:
 
 echionmodule = Extension(
     "echion.core",
-    sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc"],
+    sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc", "echion/page_cache_integration.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
