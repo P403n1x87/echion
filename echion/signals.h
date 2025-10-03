@@ -8,6 +8,7 @@
 #include <Python.h>
 
 #include <mutex>
+#include <csignal>
 
 #include <echion/stacks.h>
 #include <echion/state.h>
