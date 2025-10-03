@@ -12,7 +12,6 @@
 #include <exception>
 #include <functional>
 #include <mutex>
-#include <sstream>
 #include <unordered_map>
 
 #if defined PL_LINUX
@@ -94,7 +93,7 @@ private:
     void unwind_greenlets(PyThreadState*, unsigned long);
 };
 
-void ThreadInfo::update_cpu_time()
+inline void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
@@ -118,7 +117,7 @@ void ThreadInfo::update_cpu_time()
 #endif
 }
 
-bool ThreadInfo::is_running()
+inline bool ThreadInfo::is_running()
 {
 #if defined PL_LINUX
     struct timespec ts1, ts2;
@@ -157,7 +156,7 @@ inline std::unordered_map<uintptr_t, ThreadInfo::Ptr>& thread_info_map =
 inline std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::unwind(PyThreadState* tstate)
+inline void ThreadInfo::unwind(PyThreadState* tstate)
 {
     if (native)
     {
@@ -200,7 +199,7 @@ void ThreadInfo::unwind(PyThreadState* tstate)
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::unwind_tasks()
+inline void ThreadInfo::unwind_tasks()
 {
     std::vector<TaskInfo::Ref> leaf_tasks;
     std::unordered_set<PyObject*> parent_tasks;
@@ -322,7 +321,7 @@ void ThreadInfo::unwind_tasks()
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id)
+inline void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id)
 {
     const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
 
@@ -395,7 +394,7 @@ void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long native_id
 }
 
 // ----------------------------------------------------------------------------
-void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
+inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
 

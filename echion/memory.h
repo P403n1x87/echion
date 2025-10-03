@@ -6,7 +6,6 @@
 
 #include <Python.h>
 
-#include <exception>
 #include <optional>
 #include <unordered_map>
 
@@ -48,7 +47,7 @@ private:
     }
 };
 
-ResidentMemoryTracker rss_tracker;
+inline ResidentMemoryTracker rss_tracker;
 
 // ----------------------------------------------------------------------------
 

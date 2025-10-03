@@ -36,7 +36,7 @@ public:
 
 // ----------------------------------------------------------------------------
 
-int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameStack& stack)
+inline int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameStack& stack)
 {
     PyObject* frame_addr = NULL;
 #if PY_VERSION_HEX >= 0x030d0000

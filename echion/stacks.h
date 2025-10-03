@@ -84,7 +84,7 @@ inline FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-void unwind_native_stack()
+inline void unwind_native_stack()
 {
     unw_cursor_t cursor;
     unw_context_t context;
