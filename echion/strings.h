@@ -10,7 +10,10 @@
 
 #include <cstdint>
 #include <exception>
+#include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #ifndef UNWIND_NATIVE_DISABLE
 #include <cxxabi.h>
@@ -90,9 +93,6 @@ public:
     {
     };
 
-    class LookupError : public Error
-    {
-    };
 
     static constexpr Key INVALID = 1;
     static constexpr Key UNKNOWN = 2;
@@ -217,13 +217,13 @@ public:
     }
 #endif  // UNWIND_NATIVE_DISABLE
 
-    inline std::string& lookup(Key key)
+    inline std::optional<std::string> lookup(Key key)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
         auto it = this->find(key);
         if (it == this->end())
-            throw LookupError();
+            return std::nullopt;
 
         return it->second;
     };

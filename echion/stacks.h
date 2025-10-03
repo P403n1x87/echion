@@ -270,7 +270,11 @@ static void interleave_stacks(FrameStack& python_stack)
     {
         auto native_frame = *n;
 
-        if (string_table.lookup(native_frame.get().name).find("PyEval_EvalFrameDefault") !=
+        auto native_frame_name_opt = string_table.lookup(native_frame.get().name);
+        if (!native_frame_name_opt.has_value())
+            continue;  // Skip this frame if name lookup failed
+
+        if (native_frame_name_opt.value().find("PyEval_EvalFrameDefault") !=
             std::string::npos)
         {
             if (p == python_stack.rend())
