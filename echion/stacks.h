@@ -44,9 +44,9 @@ private:
 
 // ----------------------------------------------------------------------------
 
-inline FrameStack python_stack;
-inline FrameStack native_stack;
-inline FrameStack interleaved_stack;
+extern FrameStack python_stack;
+extern FrameStack native_stack;
+extern FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE

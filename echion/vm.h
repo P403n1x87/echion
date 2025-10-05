@@ -17,6 +17,8 @@
 
 typedef pid_t proc_ref_t;
 
+class TestVm;
+
 ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long liovcnt,
                          const struct iovec* remote_iov, unsigned long riovcnt,
                          unsigned long flags);
@@ -60,6 +62,17 @@ class VmReader
 
 public:
     static VmReader* get_instance();
+
+#ifdef GTEST_TEST 
+    static void reset() {
+        if (instance) {
+            delete instance;
+            instance = nullptr;
+        }
+    }
+
+    friend TestVm;
+#endif
 
     ssize_t safe_copy(pid_t pid, const struct iovec* local_iov, unsigned long liovcnt,
                       const struct iovec* remote_iov, unsigned long riovcnt, unsigned long flags);

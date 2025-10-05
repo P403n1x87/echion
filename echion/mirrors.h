@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <memory>
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <dictobject.h>
