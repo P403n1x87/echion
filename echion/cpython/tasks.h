@@ -15,13 +15,14 @@
 #include <opcode.h>
 #else
 #include <internal/pycore_opcode.h>
+#include <internal/pycore_frame.h>
 #endif  // PY_VERSION_HEX >= 0x030d0000
 #else
 #include <genobject.h>
 #include <opcode.h>
 #endif
 
-#include <utility>
+#include <memory>
 
 #include <echion/vm.h>
 
@@ -171,7 +172,7 @@ typedef struct
 #endif
 
 #if PY_VERSION_HEX >= 0x030b0000
-PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 {
     PyObject* yf = NULL;
 
@@ -209,7 +210,7 @@ PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 }
 
 #elif PY_VERSION_HEX >= 0x030a0000
-PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
+inline PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 {
     PyObject* yf = NULL;
     PyFrameObject* f = (PyFrameObject*)frame_addr;
@@ -251,7 +252,7 @@ PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 }
 
 #else
-PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
+inline PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 {
     PyObject* yf = NULL;
     PyFrameObject* f = (PyFrameObject*)frame_addr;
