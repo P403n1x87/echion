@@ -9,6 +9,8 @@
 #include <dictobject.h>
 #include <setobject.h>
 
+#include <memory>
+
 #if PY_VERSION_HEX >= 0x030b0000
 #define Py_BUILD_CORE
 #if defined __GNUC__ && defined HAVE_STD_ATOMIC
@@ -93,7 +95,7 @@ private:
     PyDictObject dict;
 };
 
-MirrorDict::MirrorDict(PyObject* dict_addr)
+inline MirrorDict::MirrorDict(PyObject* dict_addr)
 {
     if (copy_type(dict_addr, dict))
         throw MirrorError();
@@ -153,7 +155,7 @@ private:
     PySetObject set;
 };
 
-MirrorSet::MirrorSet(PyObject* set_addr)
+inline MirrorSet::MirrorSet(PyObject* set_addr)
 {
     if (copy_type(set_addr, set))
         throw MirrorError();
@@ -172,7 +174,7 @@ MirrorSet::MirrorSet(PyObject* set_addr)
     reflected = (PyObject*)&set;
 }
 
-std::unordered_set<PyObject*> MirrorSet::as_unordered_set()
+inline std::unordered_set<PyObject*> MirrorSet::as_unordered_set()
 {
     if (data == nullptr)
         throw MirrorError();

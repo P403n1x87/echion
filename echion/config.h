@@ -7,9 +7,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include <iostream>
-
-#include <signal.h>
+#include <string>
 
 // Sampling interval
 inline unsigned int interval = 1000;
