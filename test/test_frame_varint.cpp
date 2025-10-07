@@ -14,7 +14,6 @@ struct TestFrame : public ::testing::Test {
 extern int _read_varint(unsigned char* table, ssize_t size, ssize_t* i);
 extern int _read_signed_varint(unsigned char* table, ssize_t size, ssize_t* i);
 
-
 TEST_F(TestFrame, TestReadVarIntSingleByte) {
     // Test single-byte varint (no continuation bit set)
     // Values 0-63 can be encoded in a single byte
