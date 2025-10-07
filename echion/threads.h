@@ -77,13 +77,19 @@ public:
         : thread_id(thread_id), native_id(native_id), name(name)
     {
 #if defined PL_LINUX
-        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id))
+        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id)) {
+            std::cerr << "pthread_getcpuclockid failed in ThreadInfo constructor" << std::endl;
             throw ThreadInfo::Error{};
+        }
+
+        std::cerr << "resulting cpu_clock_id: " << cpu_clock_id << std::endl;
 
 #elif defined PL_DARWIN
         // pthread_mach_thread_np does not return a status code; the behaviour is undefined
         // if thread_id is invalid.
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
+#else
+        static_assert(false, "Unsupported platform");
 #endif
         update_cpu_time();
     };
@@ -97,8 +103,13 @@ inline void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
-    if (clock_gettime(cpu_clock_id, &ts))
+    if (clock_gettime(cpu_clock_id, &ts)) {
+        std::cerr << "clock_gettime failed in ThreadInfo::update_cpu_time" << std::endl;
+        std::cerr << "cpu_clock_id: " << cpu_clock_id << std::endl;
+        std::cerr << "error string: " << strerror(errno) << std::endl;
+
         throw ThreadInfo::CpuTimeError{};
+    }
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
 #elif defined PL_DARWIN
@@ -108,7 +119,11 @@ inline void ThreadInfo::update_cpu_time()
         thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
     if (kr != KERN_SUCCESS)
+    {
+        std::cerr << "thread_info failed in ThreadInfo::update_cpu_time " << kr << std::endl;
+        std::cerr << "error string: " << strerror(errno) << std::endl;  
         throw ThreadInfo::CpuTimeError{};
+    }
 
     if (info.flags & TH_FLAGS_IDLE)
         return;
