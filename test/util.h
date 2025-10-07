@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <Python.h>
+
 static void* resolve_real(const char* name) {
     return dlsym(RTLD_NEXT, name);
 }
@@ -53,3 +55,25 @@ inline auto real_cpp_function(FunctionType self_fn, Args... args) -> decltype(se
     auto real_function = resolve_cpp_real(self_fn);
     return real_function(args...);
 }
+
+struct PyObjectHandle {
+    PyObject* obj;
+
+    PyObjectHandle(PyObject* obj) : obj(obj) {}
+
+    ~PyObjectHandle() {
+        Py_XDECREF(obj);
+    }
+
+    PyObject* operator->() const {
+        return obj;
+    }
+
+    PyObject* operator*() const {
+        return obj;
+    }
+
+    operator PyObject*() const {
+        return obj;
+    }
+};

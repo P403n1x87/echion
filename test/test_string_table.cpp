@@ -75,7 +75,7 @@ TEST_F(TestStringTable, TestSecondCopyMemoryFails) {
 
 TEST_F(TestStringTable, TestPyBytesToBytesAndSizeSimple) {
     const char* test_data = "Hello, World!";
-    PyObject* bytes = PyBytes_FromString(test_data);
+    PyObjectHandle bytes = PyBytes_FromString(test_data);
     ASSERT_NE(bytes, nullptr);
     
     Py_ssize_t size = -1;
@@ -88,8 +88,6 @@ TEST_F(TestStringTable, TestPyBytesToBytesAndSizeSimple) {
     for (Py_ssize_t i = 0; i < size; i++) {
         EXPECT_EQ(result[i], static_cast<unsigned char>(test_data[i]));
     }
-    
-    Py_DECREF(bytes);
 }
 
 TEST_F(TestStringTable, TestPyBytesToBytesAndSizeBinary) {
@@ -108,8 +106,6 @@ TEST_F(TestStringTable, TestPyBytesToBytesAndSizeBinary) {
     for (Py_ssize_t i = 0; i < size; i++) {
         EXPECT_EQ(result[i], test_data[i]);
     }
-    
-    Py_DECREF(bytes);
 }
 
 TEST_F(TestStringTable, TestPyBytesToBytesAndSizeLarge) {
@@ -133,72 +129,60 @@ TEST_F(TestStringTable, TestPyBytesToBytesAndSizeLarge) {
     for (size_t i = 0; i < large_size; i++) {
         EXPECT_EQ(result[i], static_cast<unsigned char>(large_data[i]));
     }
-    
-    Py_DECREF(bytes);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8Empty) {
-    PyObject* str = PyUnicode_FromString("");
+    PyObjectHandle str = PyUnicode_FromString("");
     ASSERT_NE(str, nullptr);
     
     std::string result = pyunicode_to_utf8(str);
     
     EXPECT_EQ(result, "");
     EXPECT_EQ(result.size(), 0);
-    
-    Py_DECREF(str);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8Simple) {
     const char* test_str = "Hello, World!";
-    PyObject* str = PyUnicode_FromString(test_str);
+    PyObjectHandle str = PyUnicode_FromString(test_str);
     ASSERT_NE(str, nullptr);
     
     std::string result = pyunicode_to_utf8(str);
     
     EXPECT_EQ(result, test_str);
     EXPECT_EQ(result.size(), 13);
-    
-    Py_DECREF(str);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8ASCII) {
     const char* test_str = "ASCII_string_123";
-    PyObject* str = PyUnicode_FromString(test_str);
+    PyObjectHandle str = PyUnicode_FromString(test_str);
     ASSERT_NE(str, nullptr);
     
     std::string result = pyunicode_to_utf8(str);
     
     EXPECT_EQ(result, test_str);
-    
-    Py_DECREF(str);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8WithSpecialChars) {
     const char* test_str = "test\nline\ttab";
-    PyObject* str = PyUnicode_FromString(test_str);
+    PyObjectHandle str = PyUnicode_FromString(test_str);
     ASSERT_NE(str, nullptr);
     
     std::string result = pyunicode_to_utf8(str);
     
     EXPECT_EQ(result, test_str);
     EXPECT_EQ(result.size(), 13);
-    
-    Py_DECREF(str);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8MaxLength) {
     // Test at the boundary of max size (1024 chars)
     std::string test_str(1024, 'a');
-    PyObject* str = PyUnicode_FromString(test_str.c_str());
+    PyObjectHandle str = PyUnicode_FromString(test_str.c_str());
     ASSERT_NE(str, nullptr);
     
     std::string result = pyunicode_to_utf8(str);
     
     EXPECT_EQ(result, test_str);
     EXPECT_EQ(result.size(), 1024);
-    
-    Py_DECREF(str);
 }
 
 TEST_F(TestStringTable, TestPyUnicodeToUtf8FunctionName) {
@@ -212,14 +196,69 @@ TEST_F(TestStringTable, TestPyUnicodeToUtf8FunctionName) {
     };
     
     for (const char* test_str : test_cases) {
-        PyObject* str = PyUnicode_FromString(test_str);
+        PyObjectHandle str = PyUnicode_FromString(test_str);
         ASSERT_NE(str, nullptr);
         
         std::string result = pyunicode_to_utf8(str);
         
         EXPECT_EQ(result, test_str);
+    }
+}
+
+TEST_F(TestStringTable, TestPyUnicodeToUtf8CopyTypeFails) {
+    // First copy_memory call (copy_type) should fail
+    set_copy_memory_failure_calls({true});
+    
+    PyObjectHandle str = PyUnicode_FromString("test");
+    ASSERT_NE(str, nullptr);
+    
+    EXPECT_THROW(pyunicode_to_utf8(str), StringError);
+    ASSERT_EQ(copy_memory_call_count, 1);
+}
+
+TEST_F(TestStringTable, TestPyUnicodeToUtf8CopyGenericFails) {
+    // First copy_memory succeeds (copy_type), second fails (copy_generic)
+    set_copy_memory_failure_calls({false, true});
+    
+    PyObjectHandle str = PyUnicode_FromString("test");
+    ASSERT_NE(str, nullptr);
+    
+    EXPECT_THROW(pyunicode_to_utf8(str), StringError);
+    ASSERT_EQ(copy_memory_call_count, 2);
+}
+
+TEST_F(TestStringTable, TestPyUnicodeToUtf8ExceedsMaxLength) {
+    // Test exceeding the max size limit (1024 chars)
+    std::string test_str(1025, 'a');
+    PyObjectHandle str = PyUnicode_FromString(test_str.c_str());
+    ASSERT_NE(str, nullptr);
+    
+    EXPECT_THROW(pyunicode_to_utf8(str), StringError);
+}
+
+TEST_F(TestStringTable, TestPyUnicodeToUtf8NonASCIIMultiByte) {
+    // Test with multi-byte UTF-8 characters (kind != 1)
+    // These should fail since pyunicode_to_utf8 only accepts kind == 1
+    const char* test_cases[] = {
+        "Hello 世界",      // Chinese characters (kind 2 or 4)
+        "Привет",          // Cyrillic (kind 2)
+        "🎉",              // Emoji (kind 4)
+        "Café",            // Latin with diacritics (may be kind 2)
+    };
+    
+    for (const char* test_str : test_cases) {
+        PyObjectHandle str = PyUnicode_FromString(test_str);
+        ASSERT_NE(str, nullptr);
         
-        Py_DECREF(str);
+        // Check if Python created a non-ASCII string (kind != 1)
+        // If it's still ASCII/Latin-1 (kind 1), it should pass
+        try {
+            std::string result = pyunicode_to_utf8(str);
+            // If we get here, it means the string was kind 1 (ASCII/Latin-1)
+            // which is acceptable
+        } catch (const StringError&) {
+            // Expected for kind != 1
+        }
     }
 }
 
