@@ -40,9 +40,15 @@ int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
 {
     TestStringTable::copy_memory_call_count++;
 
-    if (TestStringTable::copy_memory_failure_calls[TestStringTable::copy_memory_call_count-1]) {
-        std::cout << "copy_memory failed" << std::endl;
-        return -1;
+    if (!TestStringTable::copy_memory_failure_calls.empty()) {
+        if (TestStringTable::copy_memory_call_count-1 >= TestStringTable::copy_memory_failure_calls.size()) {
+            throw std::runtime_error("copy_memory_failure_calls does not have enough items, call count: " + std::to_string(TestStringTable::copy_memory_call_count));
+        }
+
+        if (TestStringTable::copy_memory_failure_calls[TestStringTable::copy_memory_call_count-1]) {
+            std::cout << "copy_memory failed" << std::endl;
+            return -1;
+        }
     }
 
     return real_cpp_function(copy_memory, proc_ref, addr, len, buf);
