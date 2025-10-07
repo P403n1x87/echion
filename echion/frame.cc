@@ -4,7 +4,7 @@
 
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
-static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
+int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
 {
     ssize_t guard = size - 1;
     if (*i >= guard)
@@ -21,7 +21,7 @@ static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
 }
 
 // ----------------------------------------------------------------------------
-static inline int _read_signed_varint(unsigned char* table, ssize_t size, ssize_t* i)
+int _read_signed_varint(unsigned char* table, ssize_t size, ssize_t* i)
 {
     int val = _read_varint(table, size, i);
     return (val & 1) ? -(val >> 1) : (val >> 1);

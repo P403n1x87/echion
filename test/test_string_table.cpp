@@ -3,12 +3,32 @@
 
 #include <echion/strings.h>
 
+#include "echion/vm.h"
+#include "util.h"
+
 // Mock functions
 
-
 struct TestStringTable : public ::testing::Test {
+    inline static size_t copy_memory_call_count = 0;
+    inline static std::vector<bool> copy_memory_failure_calls;
+
+    void reset_calls() {
+        copy_memory_call_count = 0;
+        copy_memory_failure_calls.clear();
+    }
+
+    void set_copy_memory_failure_calls(std::vector<bool> calls) {
+        copy_memory_failure_calls = std::move(calls);
+    }
+
+    static void SetUpTestCase() {
+        _set_pid(getpid());
+    }
+
     void SetUp() override {
         Py_Initialize();
+        
+        reset_calls();
     }
     
     void TearDown() override {
@@ -16,17 +36,35 @@ struct TestStringTable : public ::testing::Test {
     }
 };
 
-TEST_F(TestStringTable, TestPyBytesToBytesAndSizeEmpty) {
-    PyObject* bytes = PyBytes_FromString("");
-    ASSERT_NE(bytes, nullptr);
-    
+int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
+{
+    TestStringTable::copy_memory_call_count++;
+
+    if (TestStringTable::copy_memory_failure_calls[TestStringTable::copy_memory_call_count-1]) {
+        std::cout << "copy_memory failed" << std::endl;
+        return -1;
+    }
+
+    return real_cpp_function(copy_memory, proc_ref, addr, len, buf);
+}
+
+TEST_F(TestStringTable, TestCopyMemoryFails) {
+    TestStringTable::set_copy_memory_failure_calls({true});
+
+    auto result = pybytes_to_bytes_and_size(PyBytes_FromString("test"), nullptr);
+
+    ASSERT_EQ(TestStringTable::copy_memory_call_count, 1);
+    ASSERT_EQ(result, nullptr);
+}
+
+TEST_F(TestStringTable, TestSecondCopyMemoryFails) {
+    TestStringTable::set_copy_memory_failure_calls({false, true});
+
     Py_ssize_t size = -1;
-    auto result = pybytes_to_bytes_and_size(bytes, &size);
-    
-    EXPECT_NE(result, nullptr);
-    EXPECT_EQ(size, 0);
-    
-    Py_DECREF(bytes);
+    auto result = pybytes_to_bytes_and_size(PyBytes_FromString("test"), &size);
+
+    ASSERT_EQ(TestStringTable::copy_memory_call_count, 2);
+    ASSERT_EQ(result, nullptr);
 }
 
 TEST_F(TestStringTable, TestPyBytesToBytesAndSizeSimple) {

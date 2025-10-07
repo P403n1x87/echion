@@ -10,9 +10,11 @@ set(CMAKE_REMOVE_ON_FAILURE OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Use glob to get all the source files
+file(GLOB_RECURSE SOURCE_FILES "echion/*.cc")
 
 # Add source files
-add_library(echion SHARED echion_amalgamated.cc)
+add_library(echion SHARED ${SOURCE_FILES})
 target_include_directories(echion PUBLIC include)
 target_include_directories(echion PUBLIC ${CMAKE_HOME_DIRECTORY})
 target_compile_definitions(echion PUBLIC PL_LINUX)
@@ -54,10 +56,3 @@ foreach(test_src IN LISTS TEST_SOURCES)
   # Register with CTest (uses gtest to enumerate cases)
   gtest_discover_tests("${test_name}" DISCOVERY_MODE PRE_TEST)
 endforeach()
-
-add_library(mock_copy_memory test/mock_copy_memory.cpp)
-
-add_executable(temp_test_thomas test/test_string_table.cpp)
-target_include_directories(temp_test_thomas PRIVATE "${CMAKE_HOME_DIRECTORY}")
-target_link_libraries(temp_test_thomas PRIVATE mock_copy_memory GTest::gtest_main echion)
-gtest_discover_tests("temp_test_thomas" DISCOVERY_MODE PRE_TEST)
