@@ -196,6 +196,7 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
             _Py_OPARG(next) < 2)
             return NULL;
 
+#if PY_VERSION_HEX < 0x030e0000 // FIXME for 3.14
         if (frame.stacktop < 1 || frame.stacktop > (1 << 20))
             return NULL;
 
@@ -204,6 +205,7 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
             return NULL;
 
         yf = localsplus[frame.stacktop - 1];
+#endif
     }
 
     return yf;

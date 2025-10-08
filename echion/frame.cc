@@ -46,7 +46,11 @@ Frame::Frame(PyObject* frame)
 {
 #if PY_VERSION_HEX >= 0x030b0000
 
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
+    const int lasti = _PyInterpreterFrame_LASTI(iframe);
+    PyCodeObject* code = nullptr; // FIXME
+#elif PY_VERSION_HEX >= 0x030d0000
     _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject* code = reinterpret_cast<PyCodeObject*>(iframe->f_executable);
@@ -244,7 +248,11 @@ Frame::Key Frame::key(PyCodeObject* code, int lasti)
 // ----------------------------------------------------------------------------
 Frame::Key Frame::key(PyObject* frame)
 {
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
+    const int lasti = _PyInterpreterFrame_LASTI(iframe);
+    PyCodeObject* code = nullptr;  // FIXME
+#elif PY_VERSION_HEX >= 0x030d0000
     _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject* code = reinterpret_cast<PyCodeObject*>(iframe->f_executable);
@@ -293,10 +301,18 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
             }
             frame_addr = &iframe;
         }
+
+#if PY_VERSION_HEX >= 0x030e0000
+        if (copy_type((void*) frame_addr->f_executable.bits, f_executable))
+        {
+            throw Frame::Error();
+        }
+#else   // PY_VERSION_HEX < 0x030e0000
         if (copy_type(frame_addr->f_executable, f_executable))
         {
             throw Frame::Error();
         }
+#endif
         if (f_executable.ob_type == &PyCode_Type)
         {
             break;
@@ -328,7 +344,14 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    const int lasti =
+        (static_cast<int>((frame_addr->instr_ptr - 1 -
+                           reinterpret_cast<_Py_CODEUNIT*>(
+                               (reinterpret_cast<PyCodeObject*>(frame_addr->f_executable.bits)))))) -
+        offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto& frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable.bits), lasti);
+#elif PY_VERSION_HEX >= 0x030d0000
     const int lasti =
         (static_cast<int>((frame_addr->instr_ptr - 1 -
                            reinterpret_cast<_Py_CODEUNIT*>(
