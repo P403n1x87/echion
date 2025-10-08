@@ -97,8 +97,15 @@ inline void ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
-    if (clock_gettime(cpu_clock_id, &ts))
+    if (clock_gettime(cpu_clock_id, &ts)) {
+        // If the clock is invalid, we skip updating the CPU time.
+        // This can happen if we try to compute CPU time for a thread that has exited.
+        if (errno == EINVAL) {
+            return;
+        }
+
         throw ThreadInfo::CpuTimeError{};
+    }
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
 #elif defined PL_DARWIN
@@ -107,8 +114,15 @@ inline void ThreadInfo::update_cpu_time()
     kern_return_t kr =
         thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
-    if (kr != KERN_SUCCESS)
+    if (kr != KERN_SUCCESS) {
+        // If the thread is invalid, we skip updating the CPU time.
+        // This can happen if we try to compute CPU time for a thread that has exited.
+        if (kr == KERN_INVALID_ARGUMENT) {
+            return;
+        }
+
         throw ThreadInfo::CpuTimeError{};
+    }
 
     if (info.flags & TH_FLAGS_IDLE)
         return;
