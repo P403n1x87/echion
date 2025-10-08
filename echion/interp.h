@@ -38,13 +38,14 @@ static void for_each_interp(std::function<void(InterpreterInfo& interp)> callbac
     {
         if (copy_type(interp_addr + offsetof(PyInterpreterState, id), interpreter_info.id))
             continue;
-#if PY_VERSION_HEX >= 0x030b0000
-        if (copy_type(interp_addr + offsetof(PyInterpreterState, threads.head),
+
+            #if PY_VERSION_HEX >= 0x030b0000
+        if (copy_type(interp_addr + offsetof(PyInterpreterState, threads.head), interpreter_info.tstate_head))
 #else
-        if (copy_type(interp_addr + offsetof(PyInterpreterState, tstate_head),
+        if (copy_type(interp_addr + offsetof(PyInterpreterState, tstate_head), interpreter_info.tstate_head))
 #endif
-                      interpreter_info.tstate_head))
             continue;
+
         if (copy_type(interp_addr + offsetof(PyInterpreterState, next), interpreter_info.next))
             continue;
 

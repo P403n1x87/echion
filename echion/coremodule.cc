@@ -532,6 +532,10 @@ static struct PyModuleDef coremodule = {
     -1,     /* size of per-interpreter state of the module,
                or -1 if the module keeps state in global variables. */
     echion_core_methods,
+    nullptr,   /* m_traverse */
+    nullptr,   /* m_clear */
+    nullptr,   /* m_free */
+    nullptr,   /* m_is_preinitialised */
 };
 
 // ----------------------------------------------------------------------------
