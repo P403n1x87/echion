@@ -86,7 +86,7 @@ public:
     static constexpr Key UNKNOWN = 2;
 
     // Python string object
-    inline Result<Key> key(PyObject* s)
+    [[nodiscard]] inline Result<Key> key(PyObject* s)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -128,7 +128,7 @@ public:
     };
 
     // Python string object
-    inline Key key_unsafe(PyObject* s)
+    [[nodiscard]] inline Key key_unsafe(PyObject* s)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -152,7 +152,7 @@ public:
 
 #ifndef UNWIND_NATIVE_DISABLE
     // Native filename by program counter
-    inline Key key(unw_word_t pc)
+    [[nodiscard]] inline Key key(unw_word_t pc)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -170,7 +170,7 @@ public:
     }
 
     // Native scope name by unwinding cursor
-    inline Result<Key> key(unw_cursor_t& cursor)
+    [[nodiscard]] inline Result<Key> key(unw_cursor_t& cursor)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -210,7 +210,7 @@ public:
     }
 #endif  // UNWIND_NATIVE_DISABLE
 
-    inline Result<std::string*> lookup(Key key)
+    [[nodiscard]] inline Result<std::string*> lookup(Key key)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 

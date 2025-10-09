@@ -124,7 +124,7 @@ public:
     {
         *output << msg << std::endl;
     }
-    Result<void> render_frame_internal(Frame& frame);
+    [[nodiscard]] Result<void> render_frame_internal(Frame& frame);
     void render_frame(Frame&) override;
     void render_stack_end(MetricType, uint64_t) override {}
     void render_cpu_time(uint64_t) override {}

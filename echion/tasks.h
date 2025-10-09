@@ -50,7 +50,7 @@ public:
 
     bool is_running = false;
 
-    static Result<GenInfo> create(PyObject* gen_addr);
+    [[nodiscard]] static Result<GenInfo> create(PyObject* gen_addr);
 
     GenInfo(PyObject* origin, PyObject* frame, std::unique_ptr<GenInfo> await, bool is_running)
         : origin(origin), frame(frame), await(std::move(await)), is_running(is_running)
@@ -65,7 +65,7 @@ private:
     GenInfo& operator=(const GenInfo&) = delete;
 };
 
-inline Result<GenInfo> GenInfo::create(PyObject* gen_addr)
+[[nodiscard]] inline Result<GenInfo> GenInfo::create(PyObject* gen_addr)
 {
     PyGenObject gen;
 
@@ -149,7 +149,7 @@ inline std::unordered_map<PyObject*, PyObject*> task_link_map;
 inline std::mutex task_link_map_lock;
 
 // ----------------------------------------------------------------------------
-inline Result<TaskInfo> TaskInfo::create(TaskObj* task_addr)
+[[nodiscard]] inline Result<TaskInfo> TaskInfo::create(TaskObj* task_addr)
 {
     TaskObj task;
     
@@ -184,7 +184,7 @@ inline Result<TaskInfo> TaskInfo::create(TaskObj* task_addr)
 }
 
 // ----------------------------------------------------------------------------
-inline Result<TaskInfo> TaskInfo::current(PyObject* loop)
+[[nodiscard]] inline Result<TaskInfo> TaskInfo::current(PyObject* loop)
 {
     if (loop == NULL)
         return Result<TaskInfo>::error(ErrorKind::TaskInfoError);

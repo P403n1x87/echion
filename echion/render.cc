@@ -2,7 +2,7 @@
 #include <echion/render.h>
 
 // ------------------------------------------------------------------------
-Result<void> WhereRenderer::render_frame_internal(Frame& frame)
+[[nodiscard]] Result<void> WhereRenderer::render_frame_internal(Frame& frame)
 {
     auto maybe_name = string_table.lookup(frame.name);
     if (!maybe_name)

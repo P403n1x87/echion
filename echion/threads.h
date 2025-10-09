@@ -51,14 +51,14 @@ public:
 
     uintptr_t asyncio_loop = 0;
 
-    Result<void> update_cpu_time();
+    [[nodiscard]] Result<void> update_cpu_time();
     bool is_running();
 
-    Result<void> sample(int64_t, PyThreadState*, microsecond_t);
-    Result<void> unwind(PyThreadState*);
+    [[nodiscard]] Result<void> sample(int64_t, PyThreadState*, microsecond_t);
+    [[nodiscard]] Result<void> unwind(PyThreadState*);
 
     // ------------------------------------------------------------------------
-    static Result<std::unique_ptr<ThreadInfo>> create(uintptr_t thread_id, unsigned long native_id, const char* name)
+    [[nodiscard]] static Result<std::unique_ptr<ThreadInfo>> create(uintptr_t thread_id, unsigned long native_id, const char* name)
     {
 #if defined PL_LINUX
         clockid_t cpu_clock_id;
@@ -98,11 +98,11 @@ public:
 
 
 private:
-    Result<void> unwind_tasks();
-    Result<void> unwind_greenlets(PyThreadState*, unsigned long);
+    [[nodiscard]] Result<void> unwind_tasks();
+    [[nodiscard]] Result<void> unwind_greenlets(PyThreadState*, unsigned long);
 };
 
-inline Result<void> ThreadInfo::update_cpu_time()
+[[nodiscard]] inline Result<void> ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
@@ -181,7 +181,7 @@ inline std::unordered_map<uintptr_t, ThreadInfo::Ptr>& thread_info_map =
 inline std::mutex thread_info_map_lock;
 
 // ----------------------------------------------------------------------------
-inline Result<void> ThreadInfo::unwind(PyThreadState* tstate)
+[[nodiscard]] inline Result<void> ThreadInfo::unwind(PyThreadState* tstate)
 {
     if (native)
     {

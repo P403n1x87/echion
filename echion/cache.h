@@ -17,7 +17,7 @@ class LRUCache
 public:
     LRUCache(size_t capacity) : capacity(capacity) {}
 
-    Result<V*> lookup(const K& k);
+    [[nodiscard]] Result<V*> lookup(const K& k);
 
     void store(const K& k, std::unique_ptr<V> v);
 

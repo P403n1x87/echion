@@ -22,7 +22,7 @@ class StackChunk
 public:
     StackChunk() {}
 
-    inline Result<void> update(_PyStackChunk* chunk_addr);
+    [[nodiscard]] inline Result<void> update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
     inline bool is_valid() const;
 
@@ -34,7 +34,7 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
+[[nodiscard]] Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 

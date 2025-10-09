@@ -23,7 +23,7 @@ typedef unsigned short digit;
 
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030c0000
-static Result<long long> pylong_to_llong(PyObject* long_addr)
+[[nodiscard]] static Result<long long> pylong_to_llong(PyObject* long_addr)
 {
     // Only used to extract a task-id on Python 3.12, omits overflow checks
     PyLongObject long_obj;

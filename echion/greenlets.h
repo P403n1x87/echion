@@ -32,7 +32,7 @@ public:
     {
     }
 
-    Result<int> unwind(PyObject*, PyThreadState*, FrameStack&);
+    [[nodiscard]] Result<int> unwind(PyObject*, PyThreadState*, FrameStack&);
 };
 
 // ----------------------------------------------------------------------------

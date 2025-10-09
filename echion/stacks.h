@@ -182,7 +182,7 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
 }
 
 // ----------------------------------------------------------------------------
-static Result<void> unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
+[[nodiscard]] static Result<void> unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
@@ -242,13 +242,13 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 }
 
 // ----------------------------------------------------------------------------
-static Result<void> unwind_python_stack(PyThreadState* tstate)
+[[nodiscard]] static Result<void> unwind_python_stack(PyThreadState* tstate)
 {
     return unwind_python_stack(tstate, python_stack);
 }
 
 // ----------------------------------------------------------------------------
-static Result<void> interleave_stacks(FrameStack& python_stack)
+[[nodiscard]] static Result<void> interleave_stacks(FrameStack& python_stack)
 {
     interleaved_stack.clear();
 
@@ -306,7 +306,7 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
 }
 
 // ----------------------------------------------------------------------------
-static Result<void> interleave_stacks()
+[[nodiscard]] static Result<void> interleave_stacks()
 {
     return interleave_stacks(python_stack);
 }
