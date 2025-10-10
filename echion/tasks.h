@@ -67,10 +67,18 @@ private:
 
 [[nodiscard]] inline Result<GenInfo> GenInfo::create(PyObject* gen_addr)
 {
+    static thread_local int depth = 0;
+    if (++depth > 24) {
+        --depth;
+        return Result<GenInfo>::error(ErrorKind::GenInfoError);
+    }
+
     PyGenObject gen;
 
-    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
+    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen)) {
+        --depth;
         return Result<GenInfo>::error(ErrorKind::GenInfoError);
+    }
 
     auto origin = gen_addr;
 
@@ -84,8 +92,10 @@ private:
 #endif
 
     PyFrameObject f;
-    if (copy_type(frame, f))
+    if (copy_type(frame, f)) {
+        --depth;
         return Result<GenInfo>::error(ErrorKind::GenInfoError);
+    }
 
     PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
     std::unique_ptr<GenInfo> await = nullptr;
@@ -105,6 +115,7 @@ private:
     auto is_running = gen.gi_running;
 #endif
 
+    --depth;
     return Result<GenInfo>(GenInfo(origin, frame, std::move(await), is_running));
 }
 
