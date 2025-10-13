@@ -2,6 +2,7 @@
 //
 // Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
+#include <echion/page_cache_integration.h>
 #include <echion/page_cache.h>
 #include <echion/vm.h>
 

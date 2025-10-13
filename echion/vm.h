@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <echion/page_cache_integration.h>
+
 #if defined PL_LINUX
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -308,8 +310,6 @@ static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void
     
     // Enable page cache for frame-sized reads (typical: 32-4096 bytes)
     if (len > 0 && len <= 4096) {  // Use 4096 instead of 512 to match page cache logic
-        // Forward declare page cache function
-        extern int use_page_cache_for_read(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf);
         return use_page_cache_for_read(proc_ref, addr, len, buf);
     }
     
