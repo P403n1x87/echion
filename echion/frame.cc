@@ -79,19 +79,23 @@ Frame::Frame(PyObject* frame)
 // ------------------------------------------------------------------------
 Frame::Frame(PyCodeObject* code, int lasti)
 {
-    try
-    {
-        filename = string_table.key(code->co_filename);
-#if PY_VERSION_HEX >= 0x030b0000
-        name = string_table.key(code->co_qualname);
-#else
-        name = string_table.key(code->co_name);
-#endif
-    }
-    catch (StringTable::Error&)
-    {
+    auto maybe_filename = string_table.key(code->co_filename);
+    if (!maybe_filename) {
         throw Error();
     }
+
+    filename = *maybe_filename;
+#if PY_VERSION_HEX >= 0x030b0000
+    auto maybe_name = string_table.key(code->co_qualname);
+#else
+    auto maybe_name = string_table.key(code->co_name);
+#endif
+
+    if (!maybe_name) {
+        throw Error();
+    }
+
+    name = *maybe_name;
 
     infer_location(code, lasti);
 }
@@ -100,15 +104,14 @@ Frame::Frame(PyCodeObject* code, int lasti)
 #ifndef UNWIND_NATIVE_DISABLE
 Frame::Frame(unw_cursor_t& cursor, unw_word_t pc)
 {
-    try
-    {
-        filename = string_table.key(pc);
-        name = string_table.key(cursor);
-    }
-    catch (StringTable::Error&)
-    {
+    filename = string_table.key(pc);
+
+    auto maybe_name = string_table.key(cursor);
+    if (!maybe_name) {
         throw Error();
     }
+
+    name = *maybe_name;
 }
 #endif  // UNWIND_NATIVE_DISABLE
 

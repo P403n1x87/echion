@@ -79,19 +79,12 @@ class StringTable : public std::unordered_map<uintptr_t, std::string>
 public:
     using Key = uintptr_t;
 
-    class Error : public std::exception
-    {
-    };
-
-    class LookupError : public Error
-    {
-    };
 
     static constexpr Key INVALID = 1;
     static constexpr Key UNKNOWN = 2;
 
     // Python string object
-    inline Key key(PyObject* s)
+    [[nodiscard]] inline Result<Key> key(PyObject* s)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -110,17 +103,17 @@ public:
             }
             else
             {
-                auto maybe_str = pyunicode_to_utf8(s);
-                if (!maybe_str) {
-                    throw Error();
+                auto maybe_unicode = pyunicode_to_utf8(s);
+                if (!maybe_unicode) {
+                    return Result<Key>::error(ErrorKind::PyUnicodeError);
                 }
 
-                str = *maybe_str;
+                str = *maybe_unicode;
             }
 #else
             auto maybe_unicode = pyunicode_to_utf8(s);
             if (!maybe_unicode) {
-                throw Error();
+                return Result<Key>::error(ErrorKind::PyUnicodeError);
             }
             
             std::string str = std::move(*maybe_unicode);
@@ -129,11 +122,11 @@ public:
             Renderer::get().string(k, str);
         }
 
-        return k;
+        return Result<Key>(k);
     };
 
     // Python string object
-    inline Key key_unsafe(PyObject* s)
+    [[nodiscard]] inline Key key_unsafe(PyObject* s)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -157,7 +150,7 @@ public:
 
 #ifndef UNWIND_NATIVE_DISABLE
     // Native filename by program counter
-    inline Key key(unw_word_t pc)
+    [[nodiscard]] inline Key key(unw_word_t pc)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -175,13 +168,13 @@ public:
     }
 
     // Native scope name by unwinding cursor
-    inline Key key(unw_cursor_t& cursor)
+    [[nodiscard]] inline Result<Key> key(unw_cursor_t& cursor)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
         unw_proc_info_t pi;
         if ((unw_get_proc_info(&cursor, &pi)))
-            throw Error();
+            return Result<Key>::error(ErrorKind::UnwindError);
 
         auto k = (Key)pi.start_ip;
 
@@ -190,7 +183,7 @@ public:
             unw_word_t offset;  // Ignored. All the information is in the PC anyway.
             char sym[256];
             if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset))
-                throw Error();
+                return Result<Key>::error(ErrorKind::UnwindError);
 
             char* name = sym;
 
@@ -211,19 +204,19 @@ public:
                 std::free(demangled);
         }
 
-        return k;
+        return Result<Key>(k);
     }
 #endif  // UNWIND_NATIVE_DISABLE
 
-    inline std::string& lookup(Key key)
+    [[nodiscard]] inline Result<std::string*> lookup(Key key)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
         auto it = this->find(key);
         if (it == this->end())
-            throw LookupError();
+            return Result<std::string*>::error(ErrorKind::LookupError);
 
-        return it->second;
+        return Result<std::string*>(&it->second);
     };
 
     StringTable() : std::unordered_map<uintptr_t, std::string>()

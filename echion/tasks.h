@@ -198,15 +198,14 @@ inline TaskInfo::TaskInfo(TaskObj* task_addr)
 
     origin = (PyObject*)task_addr;
 
-    try
-    {
-        name = string_table.key(task.task_name);
-    }
-    catch (StringTable::Error&)
+    auto maybe_name = string_table.key(task.task_name);
+    if (!maybe_name)
     {
         recursion_depth--;
         throw Error();
     }
+
+    name = *maybe_name;
 
     loop = task.task_loop;
 

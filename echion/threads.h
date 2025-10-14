@@ -455,8 +455,13 @@ inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t
     {
         for (auto& task_stack_info : current_tasks)
         {
-            Renderer::get().render_task_begin(string_table.lookup(task_stack_info->task_name),
-                                              task_stack_info->on_cpu);
+            auto maybe_task_name = string_table.lookup(task_stack_info->task_name);
+            if (!maybe_task_name) {
+                throw std::logic_error{"did not expected string_table.lookup to error"};
+            }
+
+            auto task_name = *maybe_task_name;
+            Renderer::get().render_task_begin(*task_name, task_stack_info->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
             if (native)
             {
@@ -479,8 +484,13 @@ inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t
     {
         for (auto& greenlet_stack : current_greenlets)
         {
-            Renderer::get().render_task_begin(string_table.lookup(greenlet_stack->task_name),
-                                              greenlet_stack->on_cpu);
+            auto maybe_task_name = string_table.lookup(greenlet_stack->task_name);
+            if (!maybe_task_name) {
+                throw std::logic_error{"did not expect string_table.lookup to fail"};
+            }
+
+            auto task_name = *maybe_task_name;
+            Renderer::get().render_task_begin(*task_name, greenlet_stack->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
 
             auto& stack = greenlet_stack->stack;
