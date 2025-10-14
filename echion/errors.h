@@ -163,6 +163,7 @@ class [[nodiscard]] Result<void> {
 public:
     static Result ok() noexcept                 { return Result(true, ErrorKind::Undefined); }
     static Result error(ErrorKind e) noexcept   { return Result(false, e); }
+    Result(ErrorKind e) noexcept : success_(false), error_(e) {}
 
     explicit operator bool() const noexcept { return success_; }
     bool has_value() const noexcept { return success_; }

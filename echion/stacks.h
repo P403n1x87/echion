@@ -20,6 +20,9 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
+#if PY_VERSION_HEX >= 0x030b0000
+#include "echion/stack_chunk.h"
+#endif  // PY_VERSION_HEX >= 0x030b0000
 
 // ----------------------------------------------------------------------------
 
@@ -193,16 +196,12 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
+    if (stack_chunk == nullptr)
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk = std::make_unique<StackChunk>();
     }
-    catch (StackChunkError& e)
-    {
+    
+    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
         stack_chunk = nullptr;
     }
 #endif
@@ -228,16 +227,12 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
+    if (stack_chunk == nullptr)
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk = std::make_unique<StackChunk>();
     }
-    catch (StackChunkError& e)
-    {
+    
+    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
         stack_chunk = nullptr;
     }
 #endif
