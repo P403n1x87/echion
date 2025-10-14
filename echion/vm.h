@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <stdexcept>
+#include <cstring>
 #include <string>
 
 #if defined PL_LINUX
@@ -59,11 +59,17 @@ class VmReader
     int fd{-1};
     inline static VmReader* instance{nullptr};  // Prevents having to set this in implementation
 
-    void* init(size_t new_sz)
+    VmReader(size_t _sz, void* _buffer, int _fd) : buffer(_buffer), sz{_sz}, fd{_fd}
+    {
+    }
+
+    static VmReader* create(size_t sz)
     {
         // Makes a temporary file and ftruncates it to the specified size
         std::array<std::string, 3> tmp_dirs = {"/dev/shm", "/tmp", "/var/tmp"};
         std::string tmp_suffix = "/echion-XXXXXX";
+
+        int fd = -1;
         void* ret = nullptr;
 
         for (auto& tmp_dir : tmp_dirs)
@@ -82,13 +88,13 @@ class VmReader
             unlink(tmpfile.data());
 
             // Make sure we have enough size
-            if (ftruncate(fd, new_sz) == -1)
+            if (ftruncate(fd, sz) == -1)
             {
                 continue;
             }
 
             // Map the file
-            ret = mmap(NULL, new_sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+            ret = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
             if (ret == MAP_FAILED)
             {
                 ret = nullptr;
@@ -96,37 +102,27 @@ class VmReader
             }
 
             // Successful.  Break.
-            sz = new_sz;
             break;
         }
 
-        return ret;
+        return new VmReader(sz, ret, fd);
     }
-
-    VmReader(size_t _sz) : sz{_sz}
-    {
-        buffer = init(sz);
-        if (!buffer)
-        {
-            throw std::runtime_error("Failed to initialize buffer with size " + std::to_string(sz));
-        }
-        instance = this;
-    }
+    
+    bool is_valid() const { return buffer != nullptr; }
 
 public:
     static VmReader* get_instance()
     {
         if (instance == nullptr)
         {
-            try
+            instance = VmReader::create(1024 * 1024);  // A megabyte?
+            if (!instance)
             {
-                instance = new VmReader(1024 * 1024);  // A megabyte?
-            }
-            catch (std::exception& e)
-            {
-                std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
+                std::cerr << "Failed to initialize VmReader with buffer size " << instance->sz << std::endl;
+                return nullptr;
             }
         }
+
         return instance;
     }
 

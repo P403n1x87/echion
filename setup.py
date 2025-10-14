@@ -32,6 +32,8 @@ else:
 if DISABLE_NATIVE:
     CFLAGS += ["-DUNWIND_NATIVE_DISABLE"]
 
+CFLAGS += ["-g"]
+
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc"],
@@ -39,6 +41,7 @@ echionmodule = Extension(
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
+    libraries=["lzma", "unwind"]
 )
 
 setup(
