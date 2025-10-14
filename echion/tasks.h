@@ -35,6 +35,7 @@
 #include <echion/state.h>
 #include <echion/strings.h>
 #include <echion/timing.h>
+#include <echion/errors.h>
 
 #include <echion/cpython/tasks.h>
 
@@ -63,65 +64,67 @@ public:
 
     bool is_running = false;
 
-    GenInfo(PyObject* gen_addr);
+    [[nodiscard]] static Result<GenInfo::Ptr> create(PyObject* gen_addr);
+    GenInfo(PyObject* origin, PyObject* frame, GenInfo::Ptr await, bool is_running)
+        : origin(origin), frame(frame), await(std::move(await)), is_running(is_running) {
+        
+    }
 };
 
-inline GenInfo::GenInfo(PyObject* gen_addr)
+inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 {
     static thread_local size_t recursion_depth = 0;
     recursion_depth++;
 
     if (recursion_depth > MAX_RECURSION_DEPTH) {
         recursion_depth--;
-        throw Error();
+        return ErrorKind::GenInfoError;
     }
 
     PyGenObject gen;
 
     if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen)) {
         recursion_depth--;
-        throw Error();
+        return ErrorKind::GenInfoError;
     }
 
-    origin = gen_addr;
+    auto origin = gen_addr;
 
 #if PY_VERSION_HEX >= 0x030b0000
     // The frame follows the generator object
-    frame = (gen.gi_frame_state == FRAME_CLEARED)
+    auto frame = (gen.gi_frame_state == FRAME_CLEARED)
                 ? NULL
                 : (PyObject*)((char*)gen_addr + offsetof(PyGenObject, gi_iframe));
 #else
-    frame = (PyObject*)gen.gi_frame;
+    auto frame = (PyObject*)gen.gi_frame;
 #endif
 
     PyFrameObject f;
     if (copy_type(frame, f)) {
         recursion_depth--;
-        throw Error();
+        return ErrorKind::GenInfoError;
     }
 
     PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
+    GenInfo::Ptr await = nullptr;
     if (yf != NULL && yf != gen_addr)
     {
-        try
-        {
-            await = std::make_unique<GenInfo>(yf);
-        }
-        catch (GenInfo::Error&)
-        {
-            await = nullptr;
+        auto maybe_await = GenInfo::create(yf);
+        if (maybe_await) {
+            await = std::move(*maybe_await);
         }
     }
 
 #if PY_VERSION_HEX >= 0x030b0000
-    is_running = (gen.gi_frame_state == FRAME_EXECUTING);
+    auto is_running = (gen.gi_frame_state == FRAME_EXECUTING);
 #elif PY_VERSION_HEX >= 0x030a0000
-    is_running = (frame != NULL) ? _PyFrame_IsExecuting(&f) : false;
+    auto is_running = (frame != NULL) ? _PyFrame_IsExecuting(&f) : false;
 #else
-    is_running = gen.gi_running;
+    auto is_running = gen.gi_running;
 #endif
 
     recursion_depth--;
+    return std::make_unique<GenInfo>(origin, frame, std::move(await), is_running);
 }
 
 // ----------------------------------------------------------------------------
@@ -186,15 +189,12 @@ inline TaskInfo::TaskInfo(TaskObj* task_addr)
         throw Error();
     }
 
-    try
-    {
-        coro = std::make_unique<GenInfo>(task.task_coro);
-    }
-    catch (GenInfo::Error&)
-    {
+    auto maybe_coro = GenInfo::create(task.task_coro);
+    if (!maybe_coro) {
         recursion_depth--;
         throw GeneratorError();
     }
+    coro = std::move(*maybe_coro);
 
     origin = (PyObject*)task_addr;
 
