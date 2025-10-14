@@ -9,6 +9,19 @@
 
 enum class ErrorKind {
     Undefined,
+    LookupError,
+    PyBytesError,
+    BytecodeError,
+    FrameError,
+    MirrorError,
+    PyLongError,
+    PyUnicodeError,
+    UnwindError,
+    StackChunkError,
+    GenInfoError,
+    TaskInfoError,
+    ThreadInfoError,
+    CpuTimeError,
 };
 
 template <typename T>

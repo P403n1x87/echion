@@ -109,16 +109,18 @@ public:
             try
             {
 #if PY_VERSION_HEX >= 0x030c0000
-                // The task name might hold a PyLong for deferred task name formatting.
-                std::string str = "Task-";
-                try
-                {
-                    str += std::to_string(pylong_to_llong(s));
-                }
-                catch (LongError&)
-                {
-                    str = pyunicode_to_utf8(s);
-                }
+            // The task name might hold a PyLong for deferred task name formatting.
+            std::string str = "Task-";
+            
+            auto maybe_long = pylong_to_llong(s);
+            if (maybe_long)
+            {
+                str += std::to_string(*maybe_long);
+            }
+            else
+            {
+                str = pyunicode_to_utf8(s);
+            }
 #else
                 auto str = pyunicode_to_utf8(s);
 #endif
