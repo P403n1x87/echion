@@ -231,19 +231,22 @@ inline TaskInfo TaskInfo::current(PyObject* loop)
     if (loop == NULL)
         throw Error();
 
-    try
-    {
-        MirrorDict current_tasks_dict(asyncio_current_tasks);
-        PyObject* task = current_tasks_dict.get_item(loop);
-        if (task == NULL)
-            throw Error();
-
-        return TaskInfo((TaskObj*)task);
-    }
-    catch (MirrorError& e)
-    {
+    auto maybe_current_tasks_dict = MirrorDict::create(asyncio_current_tasks);
+    if (!maybe_current_tasks_dict) {
         throw Error();
     }
+
+    auto current_tasks_dict = std::move(*maybe_current_tasks_dict);
+    auto maybe_task = current_tasks_dict.get_item(loop);
+    if (!maybe_task) {
+        throw Error();
+    }
+
+    PyObject* task = *maybe_task;
+    if (task == NULL)
+        throw Error();
+
+    return TaskInfo((TaskObj*)task);
 }
 
 // ----------------------------------------------------------------------------
@@ -254,20 +257,56 @@ inline std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
     if (loop == NULL)
         return tasks;
 
-    try
+    auto maybe_scheduled_tasks_set = MirrorSet::create(asyncio_scheduled_tasks);
+    if (!maybe_scheduled_tasks_set) {
+        throw TaskInfo::Error();
+    }
+
+    auto scheduled_tasks_set = std::move(*maybe_scheduled_tasks_set);
+    auto maybe_scheduled_tasks = scheduled_tasks_set.as_unordered_set();
+    if (!maybe_scheduled_tasks) {
+        throw TaskInfo::Error();
+    }
+
+    auto scheduled_tasks = std::move(*maybe_scheduled_tasks);
+    for (auto task_wr_addr : scheduled_tasks)
     {
-        MirrorSet scheduled_tasks_set(asyncio_scheduled_tasks);
-        auto scheduled_tasks = scheduled_tasks_set.as_unordered_set();
+        PyWeakReference task_wr;
+        if (copy_type(task_wr_addr, task_wr))
+            continue;
 
-        for (auto task_wr_addr : scheduled_tasks)
+        try
         {
-            PyWeakReference task_wr;
-            if (copy_type(task_wr_addr, task_wr))
-                continue;
+            auto task_info = std::make_unique<TaskInfo>((TaskObj*)task_wr.wr_object);
+            if (task_info->loop == loop)
+                tasks.push_back(std::move(task_info));
+        }
+        catch (TaskInfo::Error& e)
+        {
+            // We failed to get this task but we keep going
+        }
+    }
 
+    if (asyncio_eager_tasks != NULL)
+    {
+        auto maybe_eager_tasks_set = MirrorSet::create(asyncio_eager_tasks);
+        if (!maybe_eager_tasks_set) {
+            throw TaskInfo::Error();
+        }
+
+        auto eager_tasks_set = std::move(*maybe_eager_tasks_set);
+
+        auto maybe_eager_tasks = eager_tasks_set.as_unordered_set();
+        if (!maybe_eager_tasks) {
+            throw TaskInfo::Error();
+        }
+
+        auto eager_tasks = std::move(*maybe_eager_tasks);
+        for (auto task_addr : eager_tasks)
+        {
             try
             {
-                auto task_info = std::make_unique<TaskInfo>((TaskObj*)task_wr.wr_object);
+                auto task_info = std::make_unique<TaskInfo>((TaskObj*)task_addr);
                 if (task_info->loop == loop)
                     tasks.push_back(std::move(task_info));
             }
@@ -276,33 +315,9 @@ inline std::vector<TaskInfo::Ptr> get_all_tasks(PyObject* loop)
                 // We failed to get this task but we keep going
             }
         }
-
-        if (asyncio_eager_tasks != NULL)
-        {
-            MirrorSet eager_tasks_set(asyncio_eager_tasks);
-            auto eager_tasks = eager_tasks_set.as_unordered_set();
-
-            for (auto task_addr : eager_tasks)
-            {
-                try
-                {
-                    auto task_info = std::make_unique<TaskInfo>((TaskObj*)task_addr);
-                    if (task_info->loop == loop)
-                        tasks.push_back(std::move(task_info));
-                }
-                catch (TaskInfo::Error& e)
-                {
-                    // We failed to get this task but we keep going
-                }
-            }
-        }
-
-        return tasks;
     }
-    catch (MirrorError& e)
-    {
-        throw TaskInfo::Error();
-    }
+
+    return tasks;
 }
 
 // ----------------------------------------------------------------------------

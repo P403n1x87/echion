@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "echion/errors.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <dictobject.h>
@@ -51,31 +52,24 @@ typedef struct _dictkeysobject
 typedef PyObject* PyDictValues;
 #endif
 
-#include <exception>
 #include <unordered_set>
 
 #include <echion/vm.h>
 
-class MirrorError : public std::exception
-{
-public:
-    const char* what() const noexcept override
-    {
-        return "Cannot create mirror object";
-    }
-};
-
 class MirrorObject
 {
 public:
-    inline PyObject* reflect()
+    [[nodiscard]] inline Result<PyObject*> reflect()
     {
         if (reflected == NULL)
-            throw MirrorError();
+            return ErrorKind::MirrorError;
+
         return reflected;
     }
 
 protected:
+    MirrorObject(std::unique_ptr<char[]> data, PyObject* reflected) : data(std::move(data)), reflected(reflected) {}
+
     std::unique_ptr<char[]> data = nullptr;
     PyObject* reflected = NULL;
 };
@@ -84,25 +78,35 @@ protected:
 class MirrorDict : public MirrorObject
 {
 public:
-    MirrorDict(PyObject*);
+    [[nodiscard]] static inline Result<MirrorDict> create(PyObject* dict_addr) noexcept;
 
-    PyObject* get_item(PyObject* key)
+    [[nodiscard]] Result<PyObject*> get_item(PyObject* key)
     {
-        return PyDict_GetItem(reflect(), key);
+        auto maybe_reflected = reflect();
+        if (!maybe_reflected) {
+            return maybe_reflected;
+        }
+
+        return PyDict_GetItem(reflected, key);
     }
 
 private:
+    MirrorDict(PyDictObject dict, std::unique_ptr<char[]> data, PyObject* reflected) : MirrorObject(std::move(data), reflected), dict(dict) {}
     PyDictObject dict;
 };
 
-inline MirrorDict::MirrorDict(PyObject* dict_addr)
+[[nodiscard]] inline Result<MirrorDict> MirrorDict::create(PyObject* dict_addr) noexcept
 {
-    if (copy_type(dict_addr, dict))
-        throw MirrorError();
+    PyDictObject dict;
+
+    if (copy_type(dict_addr, dict)) {
+        return ErrorKind::MirrorError;
+    }
 
     PyDictKeysObject keys;
-    if (copy_type(dict.ma_keys, keys))
-        throw MirrorError();
+    if (copy_type(dict.ma_keys, keys)) {
+        return ErrorKind::MirrorError;
+    }
 
     // Compute the full dictionary data size
 #if PY_VERSION_HEX >= 0x030b0000
@@ -119,14 +123,16 @@ inline MirrorDict::MirrorDict(PyObject* dict_addr)
 
     // Allocate the buffer
     ssize_t data_size = keys_size + (keys.dk_nentries * entry_size) + values_size;
-    if (data_size < 0 || data_size > (1 << 20))
-        throw MirrorError();
+    if (data_size < 0 || data_size > (1 << 20)) {
+        return ErrorKind::MirrorError;
+    }
 
-    data = std::make_unique<char[]>(data_size);
+    auto data = std::make_unique<char[]>(data_size);
 
     // Copy the key data and update the pointer
-    if (copy_generic(dict.ma_keys, data.get(), keys_size))
-        throw MirrorError();
+    if (copy_generic(dict.ma_keys, data.get(), keys_size)) {
+        return ErrorKind::MirrorError;
+    }
 
     dict.ma_keys = (PyDictKeysObject*)data.get();
 
@@ -134,50 +140,61 @@ inline MirrorDict::MirrorDict(PyObject* dict_addr)
     {
         // Copy the value data and update the pointer
         char* values_addr = data.get() + keys_size;
-        if (copy_generic(dict.ma_values, keys_size, values_size))
-            throw MirrorError();
+        if (copy_generic(dict.ma_values, keys_size, values_size)) {
+            return ErrorKind::MirrorError;
+        }
 
         dict.ma_values = (PyDictValues*)values_addr;
     }
 
-    reflected = (PyObject*)&dict;
+    auto reflected = (PyObject*)&dict;
+    return MirrorDict(dict, std::move(data), reflected);
 }
 
 // ----------------------------------------------------------------------------
 class MirrorSet : public MirrorObject
 {
 public:
-    MirrorSet(PyObject*);
-    std::unordered_set<PyObject*> as_unordered_set();
+    [[nodiscard]] inline static Result<MirrorSet> create(PyObject*);
+    [[nodiscard]] Result<std::unordered_set<PyObject*>> as_unordered_set();
 
 private:
+    MirrorSet(size_t size, PySetObject set, std::unique_ptr<char[]> data, PyObject* reflected) : MirrorObject(std::move(data), reflected), size(size), set(set) {}
+
     size_t size;
     PySetObject set;
 };
 
-inline MirrorSet::MirrorSet(PyObject* set_addr)
+[[nodiscard]] inline Result<MirrorSet> MirrorSet::create(PyObject* set_addr)
 {
-    if (copy_type(set_addr, set))
-        throw MirrorError();
+    PySetObject set;
 
-    size = set.mask + 1;
+    if (copy_type(set_addr, set)) {
+        return ErrorKind::MirrorError;
+    }
+
+    auto size = set.mask + 1;
     ssize_t table_size = size * sizeof(setentry);
-    if (table_size < 0 || table_size > (1 << 20))
-        throw MirrorError();
+    if (table_size < 0 || table_size > (1 << 20)) {
+        return ErrorKind::MirrorError;
+    }
 
-    data = std::make_unique<char[]>(table_size);
-    if (copy_generic(set.table, data.get(), table_size))
-        throw MirrorError();
+    auto data = std::make_unique<char[]>(table_size);
+    if (copy_generic(set.table, data.get(), table_size)) {
+        return ErrorKind::MirrorError;
+    }
 
     set.table = (setentry*)data.get();
 
-    reflected = (PyObject*)&set;
+    auto reflected = (PyObject*)&set;
+    return MirrorSet(size, set, std::move(data), reflected);
 }
 
-inline std::unordered_set<PyObject*> MirrorSet::as_unordered_set()
+[[nodiscard]] inline Result<std::unordered_set<PyObject*>> MirrorSet::as_unordered_set()
 {
-    if (data == nullptr)
-        throw MirrorError();
+    if (data == nullptr) {
+        return ErrorKind::MirrorError;
+    }
 
     std::unordered_set<PyObject*> uset;
 
