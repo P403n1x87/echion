@@ -619,8 +619,10 @@ static void for_each_thread(InterpreterInfo& interp,
                 auto maybe_thread_info = ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
                 if (!maybe_thread_info)
                 {
-                    PyErr_SetString(PyExc_RuntimeError, "Failed to create thread info");
-                    return;
+                    // We failed to create the thread info object so we skip it.
+                    // We'll likely try again later with the valid thread
+                    // information.
+                    continue;
                 }
 
                 thread_info_map.emplace(tstate.thread_id, std::move(*maybe_thread_info));
