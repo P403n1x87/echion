@@ -376,31 +376,29 @@ Frame& Frame::get(PyCodeObject* code_addr, int lasti)
 {
     auto frame_key = Frame::key(code_addr, lasti);
 
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame) {
+        return *maybe_frame;
+    }
+
     try
     {
-        return frame_cache->lookup(frame_key);
-    }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        try
-        {
-            PyCodeObject code;
-            if (copy_type(code_addr, code))
-                return INVALID_FRAME;
-
-            auto new_frame = std::make_unique<Frame>(&code, lasti);
-            new_frame->cache_key = frame_key;
-            auto& f = *new_frame;
-            Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
-                                  new_frame->location.line, new_frame->location.line_end,
-                                  new_frame->location.column, new_frame->location.column_end);
-            frame_cache->store(frame_key, std::move(new_frame));
-            return f;
-        }
-        catch (Frame::Error&)
-        {
+        PyCodeObject code;
+        if (copy_type(code_addr, code))
             return INVALID_FRAME;
-        }
+
+        auto new_frame = std::make_unique<Frame>(&code, lasti);
+        new_frame->cache_key = frame_key;
+        auto& f = *new_frame;
+        Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
+                                new_frame->location.line, new_frame->location.line_end,
+                                new_frame->location.column, new_frame->location.column_end);
+        frame_cache->store(frame_key, std::move(new_frame));
+        return f;
+    }
+    catch (Frame::Error&)
+    {
+        return INVALID_FRAME;
     }
 }
 
@@ -409,21 +407,19 @@ Frame& Frame::get(PyObject* frame)
 {
     auto frame_key = Frame::key(frame);
 
-    try
-    {
-        return frame_cache->lookup(frame_key);
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame) {
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        auto new_frame = std::make_unique<Frame>(frame);
-        new_frame->cache_key = frame_key;
-        auto& f = *new_frame;
-        Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
-                              new_frame->location.line, new_frame->location.line_end,
-                              new_frame->location.column, new_frame->location.column_end);
-        frame_cache->store(frame_key, std::move(new_frame));
-        return f;
-    }
+
+    auto new_frame = std::make_unique<Frame>(frame);
+    new_frame->cache_key = frame_key;
+    auto& f = *new_frame;
+    Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
+                            new_frame->location.line, new_frame->location.line_end,
+                            new_frame->location.column, new_frame->location.column_end);
+    frame_cache->store(frame_key, std::move(new_frame));
+    return f;
 }
 
 // ----------------------------------------------------------------------------
@@ -436,27 +432,25 @@ Frame& Frame::get(unw_cursor_t& cursor)
         throw Error();
 
     uintptr_t frame_key = (uintptr_t)pc;
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame) {
+        return *maybe_frame;
+    }
+
     try
     {
-        return frame_cache->lookup(frame_key);
+        auto frame = std::make_unique<Frame>(cursor, pc);
+        frame->cache_key = frame_key;
+        auto& f = *frame;
+        Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
+                                frame->location.line_end, frame->location.column,
+                                frame->location.column_end);
+        frame_cache->store(frame_key, std::move(frame));
+        return f;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+    catch (Frame::Error&)
     {
-        try
-        {
-            auto frame = std::make_unique<Frame>(cursor, pc);
-            frame->cache_key = frame_key;
-            auto& f = *frame;
-            Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
-                                  frame->location.line_end, frame->location.column,
-                                  frame->location.column_end);
-            frame_cache->store(frame_key, std::move(frame));
-            return f;
-        }
-        catch (Frame::Error&)
-        {
-            return UNKNOWN_FRAME;
-        }
+        return UNKNOWN_FRAME;
     }
 }
 #endif  // UNWIND_NATIVE_DISABLE
@@ -465,19 +459,18 @@ Frame& Frame::get(unw_cursor_t& cursor)
 Frame& Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = static_cast<uintptr_t>(name);
-    try
-    {
-        return frame_cache->lookup(frame_key);
+
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame) {
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        auto frame = std::make_unique<Frame>(name);
-        frame->cache_key = frame_key;
-        auto& f = *frame;
-        Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
-                              frame->location.line_end, frame->location.column,
-                              frame->location.column_end);
-        frame_cache->store(frame_key, std::move(frame));
-        return f;
-    }
+
+    auto frame = std::make_unique<Frame>(name);
+    frame->cache_key = frame_key;
+    auto& f = *frame;
+    Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
+                            frame->location.line_end, frame->location.column,
+                            frame->location.column_end);
+    frame_cache->store(frame_key, std::move(frame));
+    return f;
 }
