@@ -23,6 +23,7 @@ enum class ErrorKind {
     TaskInfoGeneratorError,
     ThreadInfoError,
     CpuTimeError,
+    LocationError,
 };
 
 template <typename T>

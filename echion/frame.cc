@@ -97,7 +97,10 @@ Frame::Frame(PyCodeObject* code, int lasti)
 
     name = *maybe_name;
 
-    infer_location(code, lasti);
+    auto infer_location_success = infer_location(code, lasti);
+    if (!infer_location_success) {
+        throw LocationError();
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -116,15 +119,16 @@ Frame::Frame(unw_cursor_t& cursor, unw_word_t pc)
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-void Frame::infer_location(PyCodeObject* code_obj, int lasti)
+Result<void> Frame::infer_location(PyCodeObject* code_obj, int lasti)
 {
     unsigned int lineno = code_obj->co_firstlineno;
     Py_ssize_t len = 0;
 
 #if PY_VERSION_HEX >= 0x030b0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
-    if (table == nullptr)
-        throw LocationError();
+    if (table == nullptr) {
+        return ErrorKind::LocationError;
+    }
 
     auto table_data = table.get();
 
@@ -160,8 +164,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
             case 12:  // New lineno
             case 11:
             case 10:
-                if (i >= len - 2)
-                    throw LocationError();
+                if (i >= len - 2) {
+                    return ErrorKind::LocationError;
+                }
 
                 lineno += code - 10;
 
@@ -173,8 +178,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
                 break;
 
             default:
-                if (i >= len - 1)
-                    throw LocationError();
+                if (i >= len - 1) {
+                    return ErrorKind::LocationError;
+                }
 
                 next_byte = table[++i];
 
@@ -190,8 +196,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
 #elif PY_VERSION_HEX >= 0x030a0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
-    if (table == nullptr)
-        throw LocationError();
+    if (table == nullptr) {
+        return ErrorKind::LocationError;
+    }
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -215,8 +222,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
 #else
     auto table = pybytes_to_bytes_and_size(code_obj->co_lnotab, &len);
-    if (table == nullptr)
-        throw LocationError();
+    if (table == nullptr) {
+        return ErrorKind::LocationError;
+    }
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -236,6 +244,8 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
     this->location.line_end = lineno;
     this->location.column = 0;
     this->location.column_end = 0;
+
+    return Result<void>::ok();
 }
 
 // ------------------------------------------------------------------------

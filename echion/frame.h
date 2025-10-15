@@ -110,7 +110,7 @@ public:
     static Frame& get(StringTable::Key name);
 
 private:
-    void inline infer_location(PyCodeObject* code, int lasti);
+    [[nodiscard]] Result<void> inline infer_location(PyCodeObject* code, int lasti);
     static inline Key key(PyCodeObject* code, int lasti);
     static inline Key key(PyObject* frame);
 };
