@@ -66,26 +66,48 @@ public:
 
     uintptr_t asyncio_loop = 0;
 
-    void update_cpu_time();
+    [[nodiscard]] Result<void> update_cpu_time();
     bool is_running();
 
     void sample(int64_t, PyThreadState*, microsecond_t);
     void unwind(PyThreadState*);
 
     // ------------------------------------------------------------------------
-    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name)
-        : thread_id(thread_id), native_id(native_id), name(name)
-    {
 #if defined PL_LINUX
-        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id))
-            throw ThreadInfo::Error{};
-
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name, clockid_t cpu_clock_id)
+        : thread_id(thread_id), native_id(native_id), name(name), cpu_clock_id(cpu_clock_id)
+    {
+    }
 #elif defined PL_DARWIN
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name, mach_port_t mach_port)
+        : thread_id(thread_id), native_id(native_id), name(name), mach_port(mach_port)
+    {
+    }
+#endif
+    
+    [[nodiscard]] static Result<std::unique_ptr<ThreadInfo>> create(uintptr_t thread_id, unsigned long native_id, const char* name) {
+#if defined PL_LINUX
+        clockid_t cpu_clock_id;
+        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id)) {
+            return ErrorKind::ThreadInfoError;
+        }
+
+        auto result = std::make_unique<ThreadInfo>(thread_id, native_id, name, cpu_clock_id);
+#elif defined PL_DARWIN
+        mach_port_t mach_port;
         // pthread_mach_thread_np does not return a status code; the behaviour is undefined
         // if thread_id is invalid.
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
-#endif
-        update_cpu_time();
+
+        auto result = std::make_unique<ThreadInfo>(thread_id, native_id, name, mach_port);
+        #endif
+
+        auto update_cpu_time_success = result->update_cpu_time();
+        if (!update_cpu_time_success) {
+            return ErrorKind::ThreadInfoError;
+        }
+
+        return result;
     };
 
 private:
@@ -93,7 +115,7 @@ private:
     void unwind_greenlets(PyThreadState*, unsigned long);
 };
 
-inline void ThreadInfo::update_cpu_time()
+inline Result<void> ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
@@ -101,10 +123,10 @@ inline void ThreadInfo::update_cpu_time()
         // If the clock is invalid, we skip updating the CPU time.
         // This can happen if we try to compute CPU time for a thread that has exited.
         if (errno == EINVAL) {
-            return;
+            return Result<void>::ok();
         }
 
-        throw ThreadInfo::CpuTimeError{};
+        return ErrorKind::CpuTimeError;
     }
 
     this->cpu_time = TS_TO_MICROSECOND(ts);
@@ -118,17 +140,20 @@ inline void ThreadInfo::update_cpu_time()
         // If the thread is invalid, we skip updating the CPU time.
         // This can happen if we try to compute CPU time for a thread that has exited.
         if (kr == KERN_INVALID_ARGUMENT) {
-            return;
+            return Result<void>::ok();
         }
 
-        throw ThreadInfo::CpuTimeError{};
+        return ErrorKind::CpuTimeError;
     }
 
-    if (info.flags & TH_FLAGS_IDLE)
-        return;
+    if (info.flags & TH_FLAGS_IDLE) {
+        return Result<void>::ok();
+    }
 
     this->cpu_time = TV_TO_MICROSECOND(info.user_time) + TV_TO_MICROSECOND(info.system_time);
 #endif
+
+    return Result<void>::ok();
 }
 
 inline bool ThreadInfo::is_running()
@@ -419,7 +444,10 @@ inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t
     if (cpu)
     {
         microsecond_t previous_cpu_time = cpu_time;
-        update_cpu_time();
+        auto update_cpu_time_success = update_cpu_time();
+        if (!update_cpu_time_success) {
+            throw ThreadInfo::CpuTimeError();
+        }
 
         bool running = is_running();
         if (!running && ignore_non_running_threads)
@@ -580,9 +608,12 @@ static void for_each_thread(InterpreterInfo& interp,
                     if (main_thread_tracked)
                         continue;
 
-                    thread_info_map.emplace(
-                        tstate.thread_id,
-                        std::make_unique<ThreadInfo>(tstate.thread_id, native_id, "MainThread"));
+                    auto maybe_thread_info = ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
+                    if (!maybe_thread_info) {
+                        throw ThreadInfo::Error{};
+                    }
+
+                    thread_info_map.emplace(tstate.thread_id, std::move(*maybe_thread_info));
                 }
                 catch (ThreadInfo::Error&)
                 {

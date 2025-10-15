@@ -305,13 +305,18 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
+        auto maybe_thread_info = ThreadInfo::create(thread_id, native_id, thread_name);
+        if (!maybe_thread_info) {
+            throw ThreadInfo::Error{};
+        }
+
         auto entry = thread_info_map.find(thread_id);
-        if (entry != thread_info_map.end())
+        if (entry != thread_info_map.end()) {
             // Thread is already tracked so we update its info
-            entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
-        else
-            thread_info_map.emplace(
-                thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
+            entry->second = std::move(*maybe_thread_info);
+        } else {
+            thread_info_map.emplace(thread_id, std::move(*maybe_thread_info));
+        }
     }
 
     Py_RETURN_NONE;
