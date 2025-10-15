@@ -24,6 +24,7 @@ enum class ErrorKind {
     ThreadInfoError,
     CpuTimeError,
     LocationError,
+    RendererError,
 };
 
 template <typename T>

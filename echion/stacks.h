@@ -23,6 +23,7 @@
 #if PY_VERSION_HEX >= 0x030b0000
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
+#include <echion/errors.h>
 
 // ----------------------------------------------------------------------------
 
@@ -248,7 +249,7 @@ static void unwind_python_stack(PyThreadState* tstate)
 }
 
 // ----------------------------------------------------------------------------
-static void interleave_stacks(FrameStack& python_stack)
+static Result<void> interleave_stacks(FrameStack& python_stack)
 {
     interleaved_stack.clear();
 
@@ -261,7 +262,7 @@ static void interleave_stacks(FrameStack& python_stack)
 
         auto maybe_name = string_table.lookup(native_frame.get().name);
         if (!maybe_name) {
-            throw std::logic_error{"did not expected string_table.lookup to fail"};
+            return ErrorKind::LookupError;
         }
 
         auto name = *maybe_name;
@@ -306,12 +307,14 @@ static void interleave_stacks(FrameStack& python_stack)
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
     }
+    
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
-static void interleave_stacks()
+static Result<void> interleave_stacks()
 {
-    interleave_stacks(python_stack);
+    return interleave_stacks(python_stack);
 }
 
 // ----------------------------------------------------------------------------

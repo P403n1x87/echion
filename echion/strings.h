@@ -9,7 +9,6 @@
 #include <unicodeobject.h>
 
 #include <cstdint>
-#include <exception>
 #include <string>
 
 #ifndef UNWIND_NATIVE_DISABLE

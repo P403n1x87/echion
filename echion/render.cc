@@ -1,19 +1,21 @@
 #include <echion/frame.h>
 #include <echion/render.h>
-#include <stdexcept>
 
 // ------------------------------------------------------------------------
 void WhereRenderer::render_frame(Frame& frame)
 {
     auto maybe_name_str = string_table.lookup(frame.name);
     if (!maybe_name_str) {
-        throw std::logic_error{"did not expect to fail"};
+        std::cerr << "could not get name for render_frame" << std::endl;
+        return;
     }
     const auto& name_str = **maybe_name_str;
+
     
     auto maybe_filename_str = string_table.lookup(frame.filename);
     if (!maybe_filename_str) {
-        throw std::logic_error{"did not expect to fail"};
+        std::cerr << "could not get filename for render_frame" << std::endl;
+        return;
     }
     const auto& filename_str = **maybe_filename_str;
     

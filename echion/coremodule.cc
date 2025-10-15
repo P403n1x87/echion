@@ -51,7 +51,12 @@ static void do_where(std::ostream& stream)
 
             if (native)
             {
-                interleave_stacks();
+                auto interleave_success = interleave_stacks();
+                if (!interleave_success) {
+                    std::cerr << "could not interleave stacks" << std::endl;
+                    return;
+                }
+
                 interleaved_stack.render_where();
             }
             else
@@ -103,12 +108,9 @@ static inline void _start()
 {
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
-    try
-    {
-        Renderer::get().open();
-    }
-    catch (std::exception& e)
-    {
+    auto open_success = Renderer::get().open();
+    if (!open_success) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to open renderer");
         return;
     }
 
@@ -306,7 +308,8 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
 
         auto maybe_thread_info = ThreadInfo::create(thread_id, native_id, thread_name);
         if (!maybe_thread_info) {
-            throw ThreadInfo::Error{};
+            PyErr_SetString(PyExc_RuntimeError, "Failed to track thread");
+            return nullptr;
         }
 
         auto entry = thread_info_map.find(thread_id);

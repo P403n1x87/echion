@@ -464,7 +464,10 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             // Print the stack
             if (native)
             {
-                interleave_stacks();
+                if (!interleave_stacks()) {
+                    return ErrorKind::ThreadInfoError;
+                }
+
                 interleaved_stack.render();
             }
             else
@@ -479,7 +482,7 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
         {
             auto maybe_task_name = string_table.lookup(task_stack_info->task_name);
             if (!maybe_task_name) {
-                throw std::logic_error{"did not expected string_table.lookup to error"};
+                return ErrorKind::ThreadInfoError;
             }
 
             auto task_name = *maybe_task_name;
@@ -489,7 +492,10 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                interleave_stacks(task_stack_info->stack);
+                if (!interleave_stacks(task_stack_info->stack)) {
+                    return ErrorKind::ThreadInfoError;
+                }
+
                 interleaved_stack.render();
             }
             else
@@ -508,7 +514,7 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
         {
             auto maybe_task_name = string_table.lookup(greenlet_stack->task_name);
             if (!maybe_task_name) {
-                throw std::logic_error{"did not expect string_table.lookup to fail"};
+                return ErrorKind::ThreadInfoError;
             }
 
             auto task_name = *maybe_task_name;
@@ -520,7 +526,10 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                interleave_stacks(stack);
+                if (!interleave_stacks(stack)) {
+                    return ErrorKind::ThreadInfoError;
+                }
+
                 interleaved_stack.render();
             }
             else

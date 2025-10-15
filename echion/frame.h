@@ -26,7 +26,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <exception>
 #include <functional>
 
 #ifndef UNWIND_NATIVE_DISABLE
