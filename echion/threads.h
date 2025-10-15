@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <exception>
 #include <functional>
 #include <mutex>
 #include <unordered_map>
@@ -21,6 +20,7 @@
 #include <mach/mach.h>
 #endif
 
+#include <echion/errors.h>
 #include <echion/greenlets.h>
 #include <echion/interp.h>
 #include <echion/render.h>
@@ -43,14 +43,6 @@ public:
         }
     };
 
-    class CpuTimeError : public Error
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot update CPU time";
-        }
-    };
 
     uintptr_t thread_id;
     unsigned long native_id;
@@ -69,7 +61,7 @@ public:
     [[nodiscard]] Result<void> update_cpu_time();
     bool is_running();
 
-    void sample(int64_t, PyThreadState*, microsecond_t);
+    [[nodiscard]] Result<void> sample(int64_t, PyThreadState*, microsecond_t);
     void unwind(PyThreadState*);
 
     // ------------------------------------------------------------------------
@@ -111,7 +103,7 @@ public:
     };
 
 private:
-    void unwind_tasks();
+    [[nodiscard]] Result<void> unwind_tasks();
     void unwind_greenlets(PyThreadState*, unsigned long);
 };
 
@@ -220,13 +212,9 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
         unwind_python_stack(tstate);
         if (asyncio_loop)
         {
-            try
-            {
-                unwind_tasks();
-            }
-            catch (TaskInfo::Error&)
-            {
-                // We failed to unwind tasks
+            auto unwind_tasks_success = unwind_tasks();
+            if (!unwind_tasks_success) {
+                // If we fail, that's OK
             }
         }
 
@@ -238,7 +226,7 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
 }
 
 // ----------------------------------------------------------------------------
-inline void ThreadInfo::unwind_tasks()
+inline Result<void> ThreadInfo::unwind_tasks()
 {
     std::vector<TaskInfo::Ref> leaf_tasks;
     std::unordered_set<PyObject*> parent_tasks;
@@ -247,7 +235,7 @@ inline void ThreadInfo::unwind_tasks()
 
     auto maybe_all_tasks = get_all_tasks((PyObject*)asyncio_loop);
     if (!maybe_all_tasks) {
-        throw TaskInfo::Error{};
+        return ErrorKind::TaskInfoError;
     }
 
     auto all_tasks = std::move(*maybe_all_tasks);
@@ -361,6 +349,8 @@ inline void ThreadInfo::unwind_tasks()
 
         current_tasks.push_back(std::move(stack_info));
     }
+
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
@@ -437,7 +427,7 @@ inline void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long na
 }
 
 // ----------------------------------------------------------------------------
-inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
+inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t delta)
 {
     Renderer::get().render_thread_begin(tstate, name, delta, thread_id, native_id);
 
@@ -446,13 +436,13 @@ inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t
         microsecond_t previous_cpu_time = cpu_time;
         auto update_cpu_time_success = update_cpu_time();
         if (!update_cpu_time_success) {
-            throw ThreadInfo::CpuTimeError();
+            return ErrorKind::CpuTimeError;
         }
 
         bool running = is_running();
         if (!running && ignore_non_running_threads)
         {
-            return;
+            return Result<void>::ok();
         }
 
         Renderer::get().render_cpu_time(running ? cpu_time - previous_cpu_time : 0);
@@ -541,6 +531,8 @@ inline void ThreadInfo::sample(int64_t iid, PyThreadState* tstate, microsecond_t
 
         current_greenlets.clear();
     }
+    
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
@@ -594,34 +586,27 @@ static void for_each_thread(InterpreterInfo& interp,
 #else
                 auto native_id = getpid();
 #endif
-                try
+                bool main_thread_tracked = false;
+                for (auto& kv : thread_info_map)
                 {
-                    bool main_thread_tracked = false;
-                    for (auto& kv : thread_info_map)
+                    if (kv.second->name == "MainThread")
                     {
-                        if (kv.second->name == "MainThread")
-                        {
-                            main_thread_tracked = true;
-                            break;
-                        }
+                        main_thread_tracked = true;
+                        break;
                     }
-                    if (main_thread_tracked)
-                        continue;
-
-                    auto maybe_thread_info = ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
-                    if (!maybe_thread_info) {
-                        throw ThreadInfo::Error{};
-                    }
-
-                    thread_info_map.emplace(tstate.thread_id, std::move(*maybe_thread_info));
                 }
-                catch (ThreadInfo::Error&)
-                {
+                if (main_thread_tracked)
+                    continue;
+
+                auto maybe_thread_info = ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
+                if (!maybe_thread_info) {
                     // We failed to create the thread info object so we skip it.
                     // We'll likely try again later with the valid thread
                     // information.
                     continue;
                 }
+
+                thread_info_map.emplace(tstate.thread_id, std::move(*maybe_thread_info));
             }
 
             // Call back with the thread state and thread info.
