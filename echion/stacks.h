@@ -99,14 +99,12 @@ inline void unwind_native_stack()
 
     while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
     {
-        try
-        {
-            native_stack.push_back(Frame::get(cursor));
-        }
-        catch (Frame::Error&)
-        {
+        auto maybe_frame = Frame::get(cursor);
+        if (!maybe_frame) {
             break;
         }
+
+        native_stack.push_back(*maybe_frame);
     }
 }
 #endif  // UNWIND_NATIVE_DISABLE
@@ -125,22 +123,18 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 
         seen_frames.insert(current_frame_addr);
 
-        try
-        {
 #if PY_VERSION_HEX >= 0x030b0000
-            Frame& frame =
-                Frame::read(reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr),
-                            reinterpret_cast<_PyInterpreterFrame**>(&current_frame_addr));
+        auto maybe_frame =
+            Frame::read(reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr),
+                        reinterpret_cast<_PyInterpreterFrame**>(&current_frame_addr));
 #else
-            Frame& frame = Frame::read(current_frame_addr, &current_frame_addr);
+        auto maybe_frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
-            stack.push_back(frame);
-        }
-        catch (Frame::Error& e)
-        {
+        if (!maybe_frame) {
             break;
         }
 
+        stack.push_back(*maybe_frame);
         count++;
     }
 
