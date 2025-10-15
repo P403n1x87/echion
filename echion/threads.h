@@ -220,8 +220,12 @@ inline void ThreadInfo::unwind_tasks()
     std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
     std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
 
-    auto all_tasks = get_all_tasks((PyObject*)asyncio_loop);
+    auto maybe_all_tasks = get_all_tasks((PyObject*)asyncio_loop);
+    if (!maybe_all_tasks) {
+        throw TaskInfo::Error{};
+    }
 
+    auto all_tasks = std::move(*maybe_all_tasks);
     {
         std::lock_guard<std::mutex> lock(task_link_map_lock);
 

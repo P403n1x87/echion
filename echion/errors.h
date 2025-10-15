@@ -20,6 +20,7 @@ enum class ErrorKind {
     StackChunkError,
     GenInfoError,
     TaskInfoError,
+    TaskInfoGeneratorError,
     ThreadInfoError,
     CpuTimeError,
 };
