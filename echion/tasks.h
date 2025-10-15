@@ -38,6 +38,10 @@
 
 #include <echion/cpython/tasks.h>
 
+// Max number of recursive calls GenInfo::GenInfo and TaskInfo::TaskInfo can do
+// before raising an error.
+const constexpr size_t MAX_RECURSION_DEPTH = 500;
+
 class GenInfo
 {
 public:
@@ -64,10 +68,20 @@ public:
 
 inline GenInfo::GenInfo(PyObject* gen_addr)
 {
+    static thread_local size_t recursion_depth = 0;
+    recursion_depth++;
+
+    if (recursion_depth > MAX_RECURSION_DEPTH) {
+        recursion_depth--;
+        throw Error();
+    }
+
     PyGenObject gen;
 
-    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
+    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen)) {
+        recursion_depth--;
         throw Error();
+    }
 
     origin = gen_addr;
 
@@ -81,8 +95,10 @@ inline GenInfo::GenInfo(PyObject* gen_addr)
 #endif
 
     PyFrameObject f;
-    if (copy_type(frame, f))
+    if (copy_type(frame, f)) {
+        recursion_depth--;
         throw Error();
+    }
 
     PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
     if (yf != NULL && yf != gen_addr)
@@ -104,6 +120,8 @@ inline GenInfo::GenInfo(PyObject* gen_addr)
 #else
     is_running = gen.gi_running;
 #endif
+
+    recursion_depth--;
 }
 
 // ----------------------------------------------------------------------------
@@ -154,9 +172,19 @@ inline std::mutex task_link_map_lock;
 // ----------------------------------------------------------------------------
 inline TaskInfo::TaskInfo(TaskObj* task_addr)
 {
-    TaskObj task;
-    if (copy_type(task_addr, task))
+    static thread_local size_t recursion_depth = 0;
+    recursion_depth++;
+
+    if (recursion_depth > MAX_RECURSION_DEPTH) {
+        recursion_depth--;
         throw Error();
+    }
+
+    TaskObj task;
+    if (copy_type(task_addr, task)) {
+        recursion_depth--;
+        throw Error();
+    }
 
     try
     {
@@ -164,6 +192,7 @@ inline TaskInfo::TaskInfo(TaskObj* task_addr)
     }
     catch (GenInfo::Error&)
     {
+        recursion_depth--;
         throw GeneratorError();
     }
 
@@ -175,6 +204,7 @@ inline TaskInfo::TaskInfo(TaskObj* task_addr)
     }
     catch (StringTable::Error&)
     {
+        recursion_depth--;
         throw Error();
     }
 
@@ -192,6 +222,8 @@ inline TaskInfo::TaskInfo(TaskObj* task_addr)
             waiter = nullptr;
         }
     }
+
+    recursion_depth--;
 }
 
 // ----------------------------------------------------------------------------
