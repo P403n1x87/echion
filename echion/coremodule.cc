@@ -17,9 +17,9 @@
 
 #include <fcntl.h>
 #include <sched.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
@@ -198,11 +198,15 @@ static inline void _sampler()
     // 1. The interpreter state object lives as long as the process itself.
 
     last_time = gettime();
+    auto start_time = last_time;
+    unsigned long samples = 0;
+    unsigned long long_samples = 0;
+    unsigned long sampling = 0;
+    microsecond_t wall_time = 0;
 
     while (running)
     {
-        microsecond_t now = gettime();
-        microsecond_t end_time = now + interval;
+        microsecond_t end_time = last_time + interval;
 
         if (memory)
         {
@@ -211,22 +215,45 @@ static inline void _sampler()
         }
         else
         {
-            microsecond_t wall_time = now - last_time;
-
             for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
-                    try {
+                    try
+                    {
                         thread.sample(interp.id, tstate, wall_time);
-                    } catch (ThreadInfo::CpuTimeError& e) {
+                    }
+                    catch (ThreadInfo::CpuTimeError& e)
+                    {
                         // Silently skip sampling this thread
                     }
                 });
             });
         }
 
-        std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
-        last_time = now;
+        // A sample in this case is a set of sample across all subinterpreters
+        // and threads.
+        samples++;
+
+        wall_time = last_time;
+        last_time = gettime();
+        wall_time = last_time - wall_time;
+
+        sampling += (last_time - (end_time - interval));
+        if (end_time > last_time)
+        {
+            microsecond_t delta = end_time - last_time;
+            std::this_thread::sleep_for(std::chrono::microseconds(delta));
+            last_time += delta;
+            wall_time += delta;
+        }
+        else
+            long_samples++;
     }
+
+    Renderer::get().metadata("duration", std::to_string(gettime() - start_time));
+    Renderer::get().metadata("saturation",
+                             std::to_string(long_samples) + "/" + std::to_string(samples));
+    Renderer::get().metadata("errors", "0");
+    Renderer::get().metadata("sampling", "0," + std::to_string(sampling / samples) + ",0");
 }
 
 static void sampler()
@@ -521,8 +548,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
     {"set_max_frames", set_max_frames, METH_VARARGS, "Set the max number of frames to unwind"},
     // Sentinel
-    {NULL, NULL, 0, NULL}
-};
+    {NULL, NULL, 0, NULL}};
 
 // ----------------------------------------------------------------------------
 static struct PyModuleDef coremodule = {
