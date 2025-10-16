@@ -9,6 +9,7 @@ def test_asyncio_gather_wall_time():
     result, data = run_target("target_gather")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"
