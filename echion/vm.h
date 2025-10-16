@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <algorithm>
 
+#include <echion/danger.h>
+
 typedef pid_t proc_ref_t;
 
 ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long liovcnt,
@@ -208,6 +210,17 @@ inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsi
  */
 __attribute__((constructor)) inline void init_safe_copy()
 {
+    // Check if env variable
+    auto use_safe_copy = std::getenv("ECHION_SAFE_COPY");
+    if (!use_safe_copy || use_safe_copy[0] != '0')
+    {
+        init_segv_catcher();
+        safe_copy = safe_memcpy_wrapper;
+        printf("ECHION_SAFE_COPY set, using safe_memcpy_wrapper\n");
+        return;
+    }
+
+    printf("ECHION_SAFE_COPY is not set/not 1, using whatever\n");
     char src[128];
     char dst[128];
     for (size_t i = 0; i < 128; i++)
