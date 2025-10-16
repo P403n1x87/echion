@@ -2,6 +2,7 @@ import pytest
 
 from tests.utils import DataSummary, run_target
 
+
 @pytest.mark.xfail(reason="Memory profiling is flaky")
 def test_memory():
     result, data = run_target("target_mem", "-m")
@@ -16,4 +17,6 @@ def test_memory():
     expected_nthreads = 1
     assert summary.nthreads == expected_nthreads
 
-    assert summary.query("0:MainThread", (("<module>", 25), ("leak", 21))) is not None, summary.threads["0:MainThread"]
+    assert (
+        summary.query("0:MainThread", (("<module>", 25), ("leak", 21))) is not None
+    ), summary.threads["0:MainThread"]
