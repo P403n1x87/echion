@@ -22,6 +22,8 @@ typedef unsigned short digit;
 
 #include <echion/vm.h>
 
+constexpr Py_ssize_t MAX_DIGITS = 128;
+
 class LongError : public std::exception
 {
     const char* what() const noexcept override
@@ -54,10 +56,15 @@ static long long pylong_to_llong(PyObject* long_addr)
         // We might overflow, but we don't care for now
         int sign = _PyLong_NonCompactSign(&long_obj);
         Py_ssize_t i = _PyLong_DigitCount(&long_obj);
+
+        if (i > MAX_DIGITS) {
+            throw LongError();
+        }
+
         // Copy over the digits as ob_digit is allocated dynamically with
         // PyObject_Malloc.
-        std::vector<digit> digits(i);
-        if (copy_generic(long_obj.long_value.ob_digit, digits.data(), i * sizeof(digit)))
+        digit digits[MAX_DIGITS];
+        if (copy_generic(long_obj.long_value.ob_digit, digits, i * sizeof(digit)))
         {
             throw LongError();
         }

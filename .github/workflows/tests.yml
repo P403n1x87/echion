@@ -37,11 +37,18 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install branch
 
+      - name: Set core dump file pattern
+        run: |
+          sudo echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
+
+          sudo bash -c 'ulimit -c unlimited && python3 -c "import ctypes;ctypes.string_at(0)" || true'
+          ls core.*
+          rm core.*
+
       - name: Run tests
         run: |
-          ulimit -c unlimited
-          echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} hatch run tests.py${{ matrix.python-version }}:tests -svv
+          sudo echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
+          sudo -E env PATH="$PATH" bash -c 'ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} ulimit -c unlimited && hatch run tests.py${{ matrix.python-version }}:tests -svv'
 
       - name: Upload profiles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -55,9 +62,9 @@ jobs:
         run: |
           ls -l core.* || pwd
           for core in core.*; do
-            gdb -q -batch -ex "bt full" -ex q `which python${{ matrix.python-version }}` ${core} | pygmentize
+            sudo gdb -q -batch -ex "bt full" -ex q `which python${{ matrix.python-version }}` ${core} | pygmentize
           done
-        if: always()
+        if: failure()
 
       # - name: Publish coverage metrics
       #   run: |
