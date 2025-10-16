@@ -7,7 +7,7 @@ git clone https://github.com/libunwind/libunwind --branch "v${LIBUNWIND_VERSION}
 cd libunwind
 autoreconf -i
 ./configure CFLAGS='-fPIC' CXXFLAGS='-fPIC'
-make -j$(nproc)
-make install -j$(nproc)
+make -j
+make install -j
 cd ..
 rm -rf libunwind

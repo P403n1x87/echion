@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 
+#include <echion/danger.h>
+
 #if defined PL_LINUX
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -42,12 +44,36 @@ typedef mach_port_t proc_ref_t;
 #define copy_type_p(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(*dest), dest))
 #define copy_generic(addr, dest, size) \
     (copy_memory(mach_task_self(), (void*)(addr), size, (void*)(dest)))
+
+inline kern_return_t (*safe_copy)(vm_map_read_t, mach_vm_address_t, mach_vm_size_t, mach_vm_address_t, mach_vm_size_t*) = mach_vm_read_overwrite;
+
 #endif
 
+inline bool is_truthy(const char* s) {
+    const static std::array<std::string, 6> truthy_values = {"1",  "true",   "yes", "on", "enable", "enabled"};
+    
+    return std::find(truthy_values.begin(), truthy_values.end(), s) != truthy_values.end();
+
+}
+
+inline bool use_alternative_copy_memory() {
+    const char* use_fast_copy_memory = std::getenv("ECHION_USE_FAST_COPY_MEMORY");
+    if (!use_fast_copy_memory) {
+        return false;
+    }
+
+    if (is_truthy(use_fast_copy_memory)) {
+        fprintf(stderr, "YES\n");
+        return true;
+    }
+
+    return false;
+}
+
+#if defined PL_LINUX
 // Some checks are done at static initialization, so use this to read them at runtime
 inline bool failed_safe_copy = false;
 
-#if defined PL_LINUX
 inline ssize_t (*safe_copy)(pid_t, const struct iovec*, unsigned long, const struct iovec*,
                             unsigned long, unsigned long) = process_vm_readv;
 
@@ -208,6 +234,13 @@ inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsi
  */
 __attribute__((constructor)) inline void init_safe_copy()
 {
+    if (use_alternative_copy_memory())
+    {
+        init_segv_catcher();
+        safe_copy = safe_memcpy_wrapper;
+        return;
+    }
+
     char src[128];
     char dst[128];
     for (size_t i = 0; i < 128; i++)
@@ -218,11 +251,8 @@ __attribute__((constructor)) inline void init_safe_copy()
 
     // Check to see that process_vm_readv works, unless it's overridden
     const char force_override_str[] = "ECHION_ALT_VM_READ_FORCE";
-    const std::array<std::string, 6> truthy_values = {"1",  "true",   "yes",
-                                                      "on", "enable", "enabled"};
     const char* force_override = std::getenv(force_override_str);
-    if (!force_override || std::find(truthy_values.begin(), truthy_values.end(), force_override) ==
-                               truthy_values.end())
+    if (!force_override || !is_truthy(force_override))
     {
         struct iovec iov_dst = {dst, sizeof(dst)};
         struct iovec iov_src = {src, sizeof(src)};
@@ -248,7 +278,22 @@ __attribute__((constructor)) inline void init_safe_copy()
 
     safe_copy = vmreader_safe_copy;
 }
-#endif
+#elif defined PL_DARWIN
+/**
+ * Initialize the safe copy operation on Linux
+ *
+ * This occurs at static init
+ */
+__attribute__((constructor)) inline void init_safe_copy()
+{
+    if (use_alternative_copy_memory())
+    {
+        init_segv_catcher();
+        safe_copy = safe_memcpy_wrapper;
+        return;
+    }
+}
+#endif // if defined PL_DARWIN
 
 /**
  * Copy a chunk of memory from a portion of the virtual memory of another
@@ -283,7 +328,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void
     result = safe_copy(proc_ref, local, 1, remote, 1, 0);
 
 #elif defined PL_DARWIN
-    kern_return_t kr = mach_vm_read_overwrite(proc_ref, (mach_vm_address_t)addr, len,
+    kern_return_t kr = safe_copy(proc_ref, (mach_vm_address_t)addr, len,
                                               (mach_vm_address_t)buf, (mach_vm_size_t*)&result);
 
     if (kr != KERN_SUCCESS)

@@ -34,7 +34,7 @@ jobs:
           mkdir cmake_build/
           cd cmake_build/
           cmake .. -DPython3_EXECUTABLE=$(which python)
-          make -j$(nproc)
+          make -j
 
   tests-build-macos:
     runs-on: macos-latest
@@ -56,4 +56,4 @@ jobs:
           mkdir cmake_build/
           cd cmake_build/
           cmake .. -DPython3_EXECUTABLE=$(which python)
-          make -j$(nproc)
+          make -j
