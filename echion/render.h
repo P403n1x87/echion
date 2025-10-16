@@ -46,7 +46,7 @@ public:
     virtual void render_thread_begin(PyThreadState* tstate, std::string_view name,
                                      microsecond_t cpu_time, uintptr_t thread_id,
                                      unsigned long native_id) = 0;
-    virtual void render_task_begin(std::string task_name, bool on_cpu) = 0;
+    virtual void render_task_begin(const std::string& task_name, bool on_cpu) = 0;
     virtual void render_stack_begin(long long pid, long long iid,
                                     const std::string& thread_name) = 0;
     virtual void render_frame(Frame& frame) = 0;
@@ -117,7 +117,7 @@ public:
     {
         *output << "    🧵 " << name << ":" << std::endl;
     }
-    void render_task_begin(std::string task_name, bool on_cpu) override {}
+    void render_task_begin(const std::string& task_name, bool on_cpu) override {}
     void render_stack_begin(long long, long long, const std::string&) override {}
     void render_message(std::string_view msg) override
     {
@@ -313,7 +313,7 @@ public:
     void render_message(std::string_view msg) override {};
     void render_thread_begin(PyThreadState* tstate, std::string_view name, microsecond_t cpu_time,
                              uintptr_t thread_id, unsigned long native_id) override {};
-    void render_task_begin(std::string task_name, bool on_cpu) override {};
+    void render_task_begin(const std::string& task_name, bool on_cpu) override {};
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {
         stack(pid, iid, name);
@@ -438,7 +438,7 @@ public:
         getActiveRenderer()->render_thread_begin(tstate, name, cpu_time, thread_id, native_id);
     }
 
-    void render_task_begin(std::string task_name, bool on_cpu)
+    void render_task_begin(const std::string& task_name, bool on_cpu)
     {
         getActiveRenderer()->render_task_begin(task_name, on_cpu);
     }
