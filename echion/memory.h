@@ -95,7 +95,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(this->lock);
 
-        this->emplace(address, (MemoryTableEntry){stack, size});
+        this->emplace(address, MemoryTableEntry{stack, size});
     }
 
     // ------------------------------------------------------------------------
