@@ -155,15 +155,16 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
     {
         if (seen_frames.find(current_frame) != seen_frames.end())
             break;
-
 #if PY_VERSION_HEX >= 0x030d0000
         // See the comment in unwind_frame()
         while (current_frame != NULL)
         {
+#if PY_VERSION_HEX < 0x030e0000 // FIXME for 3.14
             if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type)
             {
                 break;
             }
+#endif
             current_frame = (PyObject*)((_PyInterpreterFrame*)current_frame)->previous;
         }
 
