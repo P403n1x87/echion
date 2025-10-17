@@ -56,21 +56,27 @@ public:
 
     // ------------------------------------------------------------------------
 #if defined PL_LINUX
-    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name, clockid_t cpu_clock_id)
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name,
+               clockid_t cpu_clock_id)
         : thread_id(thread_id), native_id(native_id), name(name), cpu_clock_id(cpu_clock_id)
     {
     }
 #elif defined PL_DARWIN
-    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name, mach_port_t mach_port)
+    ThreadInfo(uintptr_t thread_id, unsigned long native_id, const char* name,
+               mach_port_t mach_port)
         : thread_id(thread_id), native_id(native_id), name(name), mach_port(mach_port)
     {
     }
 #endif
-    
-    [[nodiscard]] static Result<std::unique_ptr<ThreadInfo>> create(uintptr_t thread_id, unsigned long native_id, const char* name) {
+
+    [[nodiscard]] static Result<std::unique_ptr<ThreadInfo>> create(uintptr_t thread_id,
+                                                                    unsigned long native_id,
+                                                                    const char* name)
+    {
 #if defined PL_LINUX
         clockid_t cpu_clock_id;
-        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id)) {
+        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id))
+        {
             return ErrorKind::ThreadInfoError;
         }
 
@@ -82,10 +88,11 @@ public:
         mach_port = pthread_mach_thread_np((pthread_t)thread_id);
 
         auto result = std::make_unique<ThreadInfo>(thread_id, native_id, name, mach_port);
-        #endif
+#endif
 
         auto update_cpu_time_success = result->update_cpu_time();
-        if (!update_cpu_time_success) {
+        if (!update_cpu_time_success)
+        {
             return ErrorKind::ThreadInfoError;
         }
 
@@ -101,10 +108,12 @@ inline Result<void> ThreadInfo::update_cpu_time()
 {
 #if defined PL_LINUX
     struct timespec ts;
-    if (clock_gettime(cpu_clock_id, &ts)) {
+    if (clock_gettime(cpu_clock_id, &ts))
+    {
         // If the clock is invalid, we skip updating the CPU time.
         // This can happen if we try to compute CPU time for a thread that has exited.
-        if (errno == EINVAL) {
+        if (errno == EINVAL)
+        {
             return Result<void>::ok();
         }
 
@@ -118,17 +127,20 @@ inline Result<void> ThreadInfo::update_cpu_time()
     kern_return_t kr =
         thread_info((thread_act_t)this->mach_port, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
 
-    if (kr != KERN_SUCCESS) {
+    if (kr != KERN_SUCCESS)
+    {
         // If the thread is invalid, we skip updating the CPU time.
         // This can happen if we try to compute CPU time for a thread that has exited.
-        if (kr == KERN_INVALID_ARGUMENT) {
+        if (kr == KERN_INVALID_ARGUMENT)
+        {
             return Result<void>::ok();
         }
 
         return ErrorKind::CpuTimeError;
     }
 
-    if (info.flags & TH_FLAGS_IDLE) {
+    if (info.flags & TH_FLAGS_IDLE)
+    {
         return Result<void>::ok();
     }
 
@@ -203,7 +215,8 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
         if (asyncio_loop)
         {
             auto unwind_tasks_success = unwind_tasks();
-            if (!unwind_tasks_success) {
+            if (!unwind_tasks_success)
+            {
                 // If we fail, that's OK
             }
         }
@@ -224,7 +237,8 @@ inline Result<void> ThreadInfo::unwind_tasks()
     std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
 
     auto maybe_all_tasks = get_all_tasks((PyObject*)asyncio_loop);
-    if (!maybe_all_tasks) {
+    if (!maybe_all_tasks)
+    {
         return ErrorKind::TaskInfoError;
     }
 
@@ -425,7 +439,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
     {
         microsecond_t previous_cpu_time = cpu_time;
         auto update_cpu_time_success = update_cpu_time();
-        if (!update_cpu_time_success) {
+        if (!update_cpu_time_success)
+        {
             return ErrorKind::CpuTimeError;
         }
 
@@ -454,7 +469,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             // Print the stack
             if (native)
             {
-                if (!interleave_stacks()) {
+                if (!interleave_stacks())
+                {
                     return ErrorKind::ThreadInfoError;
                 }
 
@@ -471,7 +487,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
         for (auto& task_stack_info : current_tasks)
         {
             auto maybe_task_name = string_table.lookup(task_stack_info->task_name);
-            if (!maybe_task_name) {
+            if (!maybe_task_name)
+            {
                 return ErrorKind::ThreadInfoError;
             }
 
@@ -482,7 +499,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                if (!interleave_stacks(task_stack_info->stack)) {
+                if (!interleave_stacks(task_stack_info->stack))
+                {
                     return ErrorKind::ThreadInfoError;
                 }
 
@@ -503,7 +521,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
         for (auto& greenlet_stack : current_greenlets)
         {
             auto maybe_task_name = string_table.lookup(greenlet_stack->task_name);
-            if (!maybe_task_name) {
+            if (!maybe_task_name)
+            {
                 return ErrorKind::ThreadInfoError;
             }
 
@@ -516,7 +535,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
             {
                 // NOTE: These stacks might be non-sensical, especially with
                 // Python < 3.11.
-                if (!interleave_stacks(stack)) {
+                if (!interleave_stacks(stack))
+                {
                     return ErrorKind::ThreadInfoError;
                 }
 
@@ -530,7 +550,7 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
 
         current_greenlets.clear();
     }
-    
+
     return Result<void>::ok();
 }
 
@@ -597,8 +617,10 @@ static void for_each_thread(InterpreterInfo& interp,
                 if (main_thread_tracked)
                     continue;
 
-                auto maybe_thread_info = ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
-                if (!maybe_thread_info) {
+                auto maybe_thread_info =
+                    ThreadInfo::create(tstate.thread_id, native_id, "MainThread");
+                if (!maybe_thread_info)
+                {
                     // We failed to create the thread info object so we skip it.
                     // We'll likely try again later with the valid thread
                     // information.

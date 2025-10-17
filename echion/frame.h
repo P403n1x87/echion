@@ -77,12 +77,15 @@ public:
 #endif  // UNWIND_NATIVE_DISABLE
 
 #if PY_VERSION_HEX >= 0x030b0000
-    [[nodiscard]] static Result<std::reference_wrapper<Frame>> read(_PyInterpreterFrame* frame_addr, _PyInterpreterFrame** prev_addr);
+    [[nodiscard]] static Result<std::reference_wrapper<Frame>> read(
+        _PyInterpreterFrame* frame_addr, _PyInterpreterFrame** prev_addr);
 #else
-    [[nodiscard]] static Result<std::reference_wrapper<Frame>> read(PyObject* frame_addr, PyObject** prev_addr);
+    [[nodiscard]] static Result<std::reference_wrapper<Frame>> read(PyObject* frame_addr,
+                                                                    PyObject** prev_addr);
 #endif
 
-    [[nodiscard]] static Result<std::reference_wrapper<Frame>> get(PyCodeObject* code_addr, int lasti);
+    [[nodiscard]] static Result<std::reference_wrapper<Frame>> get(PyCodeObject* code_addr,
+                                                                   int lasti);
     static Frame& get(PyObject* frame);
 #ifndef UNWIND_NATIVE_DISABLE
     [[nodiscard]] static Result<std::reference_wrapper<Frame>> get(unw_cursor_t& cursor);

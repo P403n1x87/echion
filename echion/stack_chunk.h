@@ -15,8 +15,8 @@
 #include <memory>
 #include <vector>
 
-#include <echion/vm.h>
 #include <echion/errors.h>
+#include <echion/vm.h>
 
 
 // ----------------------------------------------------------------------------
@@ -41,7 +41,8 @@ Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 
-    if (copy_type(chunk_addr, chunk)) {
+    if (copy_type(chunk_addr, chunk))
+    {
         return ErrorKind::StackChunkError;
     }
 
@@ -54,7 +55,8 @@ Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
     }
 
     // Copy the data up until the size of the chunk
-    if (copy_generic(chunk_addr, data.data(), chunk.size)) {
+    if (copy_generic(chunk_addr, data.data(), chunk.size))
+    {
         return ErrorKind::StackChunkError;
     }
 
@@ -64,7 +66,8 @@ Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
             previous = std::make_unique<StackChunk>();
 
         auto update_success = previous->update((_PyStackChunk*)chunk.previous);
-        if (!update_success) {
+        if (!update_success)
+        {
             previous = nullptr;
         }
     }
@@ -96,11 +99,8 @@ void* StackChunk::resolve(void* address)
 // ----------------------------------------------------------------------------
 bool StackChunk::is_valid() const
 {
-    return data_capacity > 0 &&
-           data.size() > 0 &&
-           data.size() >= sizeof(_PyStackChunk) &&
-           data.data() != nullptr &&
-           origin != nullptr;
+    return data_capacity > 0 && data.size() > 0 && data.size() >= sizeof(_PyStackChunk) &&
+           data.data() != nullptr && origin != nullptr;
 }
 
 // ----------------------------------------------------------------------------

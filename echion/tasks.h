@@ -28,13 +28,13 @@
 #include <vector>
 
 #include <echion/config.h>
+#include <echion/errors.h>
 #include <echion/frame.h>
 #include <echion/mirrors.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
 #include <echion/strings.h>
 #include <echion/timing.h>
-#include <echion/errors.h>
 
 #include <echion/cpython/tasks.h>
 
@@ -56,8 +56,8 @@ public:
 
     [[nodiscard]] static Result<GenInfo::Ptr> create(PyObject* gen_addr);
     GenInfo(PyObject* origin, PyObject* frame, GenInfo::Ptr await, bool is_running)
-        : origin(origin), frame(frame), await(std::move(await)), is_running(is_running) {
-        
+        : origin(origin), frame(frame), await(std::move(await)), is_running(is_running)
+    {
     }
 };
 
@@ -66,14 +66,16 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     static thread_local size_t recursion_depth = 0;
     recursion_depth++;
 
-    if (recursion_depth > MAX_RECURSION_DEPTH) {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
         recursion_depth--;
         return ErrorKind::GenInfoError;
     }
 
     PyGenObject gen;
 
-    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen)) {
+    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
+    {
         recursion_depth--;
         return ErrorKind::GenInfoError;
     }
@@ -83,14 +85,15 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 #if PY_VERSION_HEX >= 0x030b0000
     // The frame follows the generator object
     auto frame = (gen.gi_frame_state == FRAME_CLEARED)
-                ? NULL
-                : (PyObject*)((char*)gen_addr + offsetof(PyGenObject, gi_iframe));
+                     ? NULL
+                     : (PyObject*)((char*)gen_addr + offsetof(PyGenObject, gi_iframe));
 #else
     auto frame = (PyObject*)gen.gi_frame;
 #endif
 
     PyFrameObject f;
-    if (copy_type(frame, f)) {
+    if (copy_type(frame, f))
+    {
         recursion_depth--;
         return ErrorKind::GenInfoError;
     }
@@ -100,7 +103,8 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     if (yf != NULL && yf != gen_addr)
     {
         auto maybe_await = GenInfo::create(yf);
-        if (maybe_await) {
+        if (maybe_await)
+        {
             await = std::move(*maybe_await);
         }
     }
@@ -136,9 +140,10 @@ public:
     TaskInfo::Ptr waiter = nullptr;
 
     [[nodiscard]] static Result<TaskInfo::Ptr> create(TaskObj*);
-    TaskInfo(PyObject* origin, PyObject* loop, GenInfo::Ptr coro, StringTable::Key name, TaskInfo::Ptr waiter)
-        : origin(origin), loop(loop), coro(std::move(coro)), name(name), waiter(std::move(waiter)) {
-        
+    TaskInfo(PyObject* origin, PyObject* loop, GenInfo::Ptr coro, StringTable::Key name,
+             TaskInfo::Ptr waiter)
+        : origin(origin), loop(loop), coro(std::move(coro)), name(name), waiter(std::move(waiter))
+    {
     }
 
     [[nodiscard]] static Result<TaskInfo::Ptr> current(PyObject*);
@@ -154,19 +159,22 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
     static thread_local size_t recursion_depth = 0;
     recursion_depth++;
 
-    if (recursion_depth > MAX_RECURSION_DEPTH) {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
         recursion_depth--;
         return ErrorKind::TaskInfoError;
     }
 
     TaskObj task;
-    if (copy_type(task_addr, task)) {
+    if (copy_type(task_addr, task))
+    {
         recursion_depth--;
         return ErrorKind::TaskInfoError;
     }
 
     auto maybe_coro = GenInfo::create(task.task_coro);
-    if (!maybe_coro) {
+    if (!maybe_coro)
+    {
         recursion_depth--;
         return ErrorKind::TaskInfoGeneratorError;
     }
@@ -174,7 +182,8 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
     auto origin = (PyObject*)task_addr;
 
     auto maybe_name = string_table.key(task.task_name);
-    if (!maybe_name) {
+    if (!maybe_name)
+    {
         recursion_depth--;
         return ErrorKind::TaskInfoError;
     }
@@ -186,35 +195,41 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
     if (task.task_fut_waiter)
     {
         auto maybe_waiter = TaskInfo::create((TaskObj*)task.task_fut_waiter);  // TODO: Make lazy?
-        if (maybe_waiter) {
+        if (maybe_waiter)
+        {
             waiter = std::move(*maybe_waiter);
         }
     }
 
     recursion_depth--;
-    return std::make_unique<TaskInfo>(origin, loop, std::move(*maybe_coro), name, std::move(waiter));
+    return std::make_unique<TaskInfo>(origin, loop, std::move(*maybe_coro), name,
+                                      std::move(waiter));
 }
 
 // ----------------------------------------------------------------------------
 inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
 {
-    if (loop == NULL) {
+    if (loop == NULL)
+    {
         return ErrorKind::TaskInfoError;
     }
 
     auto maybe_current_tasks_dict = MirrorDict::create(asyncio_current_tasks);
-    if (!maybe_current_tasks_dict) {
+    if (!maybe_current_tasks_dict)
+    {
         return ErrorKind::TaskInfoError;
     }
 
     auto current_tasks_dict = std::move(*maybe_current_tasks_dict);
     auto maybe_task = current_tasks_dict.get_item(loop);
-    if (!maybe_task) {
+    if (!maybe_task)
+    {
         return ErrorKind::TaskInfoError;
     }
 
     PyObject* task = *maybe_task;
-    if (task == NULL) {
+    if (task == NULL)
+    {
         return ErrorKind::TaskInfoError;
     }
 
@@ -230,13 +245,15 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         return tasks;
 
     auto maybe_scheduled_tasks_set = MirrorSet::create(asyncio_scheduled_tasks);
-    if (!maybe_scheduled_tasks_set) {
+    if (!maybe_scheduled_tasks_set)
+    {
         return ErrorKind::TaskInfoError;
     }
 
     auto scheduled_tasks_set = std::move(*maybe_scheduled_tasks_set);
     auto maybe_scheduled_tasks = scheduled_tasks_set.as_unordered_set();
-    if (!maybe_scheduled_tasks) {
+    if (!maybe_scheduled_tasks)
+    {
         return ErrorKind::TaskInfoError;
     }
 
@@ -248,8 +265,10 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
             continue;
 
         auto maybe_task_info = TaskInfo::create((TaskObj*)task_wr.wr_object);
-        if (maybe_task_info) {
-            if ((*maybe_task_info)->loop == loop) {
+        if (maybe_task_info)
+        {
+            if ((*maybe_task_info)->loop == loop)
+            {
                 tasks.push_back(std::move(*maybe_task_info));
             }
         }
@@ -258,14 +277,16 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
     if (asyncio_eager_tasks != NULL)
     {
         auto maybe_eager_tasks_set = MirrorSet::create(asyncio_eager_tasks);
-        if (!maybe_eager_tasks_set) {
+        if (!maybe_eager_tasks_set)
+        {
             return ErrorKind::TaskInfoError;
         }
 
         auto eager_tasks_set = std::move(*maybe_eager_tasks_set);
 
         auto maybe_eager_tasks = eager_tasks_set.as_unordered_set();
-        if (!maybe_eager_tasks) {
+        if (!maybe_eager_tasks)
+        {
             return ErrorKind::TaskInfoError;
         }
 
@@ -273,8 +294,10 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         for (auto task_addr : eager_tasks)
         {
             auto maybe_task_info = TaskInfo::create((TaskObj*)task_addr);
-            if (maybe_task_info) {
-                if ((*maybe_task_info)->loop == loop) {
+            if (maybe_task_info)
+            {
+                if ((*maybe_task_info)->loop == loop)
+                {
                     tasks.push_back(std::move(*maybe_task_info));
                 }
             }

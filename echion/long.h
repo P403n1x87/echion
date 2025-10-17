@@ -48,7 +48,8 @@ constexpr Py_ssize_t MAX_DIGITS = 128;
         int sign = _PyLong_NonCompactSign(&long_obj);
         Py_ssize_t i = _PyLong_DigitCount(&long_obj);
 
-        if (i > MAX_DIGITS) {
+        if (i > MAX_DIGITS)
+        {
             return ErrorKind::PyLongError;
         }
 
