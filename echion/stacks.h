@@ -270,8 +270,8 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
             return ErrorKind::LookupError;
         }
 
-        auto name = *maybe_name;
-        if (name->find("PyEval_EvalFrameDefault") != std::string::npos)
+        const auto& name = maybe_name->get();
+        if (name.find("PyEval_EvalFrameDefault") != std::string::npos)
         {
             if (p == python_stack.rend())
             {
