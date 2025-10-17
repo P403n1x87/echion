@@ -104,7 +104,8 @@ public:
             else
             {
                 auto maybe_unicode = pyunicode_to_utf8(s);
-                if (!maybe_unicode) {
+                if (!maybe_unicode)
+                {
                     return ErrorKind::PyUnicodeError;
                 }
 
@@ -112,7 +113,8 @@ public:
             }
 #else
             auto maybe_unicode = pyunicode_to_utf8(s);
-            if (!maybe_unicode) {
+            if (!maybe_unicode)
+            {
                 return ErrorKind::PyUnicodeError;
             }
 

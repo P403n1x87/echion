@@ -12,9 +12,9 @@
 #include <string_view>
 
 #include <echion/config.h>
+#include <echion/errors.h>
 #include <echion/mojo.h>
 #include <echion/timing.h>
-#include <echion/errors.h>
 
 // Forward declaration
 class Frame;
@@ -102,17 +102,22 @@ public:
         return true;
     }
 
-    [[nodiscard]] Result<void> open() override { return Result<void>::ok(); };
+    [[nodiscard]] Result<void> open() override
+    {
+        return Result<void>::ok();
+    };
     void close() override {};
     void header() override {};
     void metadata(const std::string&, const std::string&) override {};
-    void frame(mojo_ref_t, mojo_ref_t, mojo_ref_t, mojo_int_t, mojo_int_t, mojo_int_t, mojo_int_t) override {};
-    void frame_ref(mojo_ref_t) override {};
+    void frame(mojo_ref_t, mojo_ref_t, mojo_ref_t, mojo_int_t, mojo_int_t, mojo_int_t,
+               mojo_int_t) override{};
+    void frame_ref(mojo_ref_t) override{};
     void frame_kernel(const std::string&) override {};
     void string(mojo_ref_t, const std::string&) override {};
-    void string_ref(mojo_ref_t) override {};
+    void string_ref(mojo_ref_t) override{};
 
-    void render_thread_begin(PyThreadState*, std::string_view name, microsecond_t, uintptr_t, unsigned long) override
+    void render_thread_begin(PyThreadState*, std::string_view name, microsecond_t, uintptr_t,
+                             unsigned long) override
     {
         *output << "    🧵 " << name << ":" << std::endl;
     }
@@ -311,8 +316,9 @@ public:
         ref(key);
     }
 
-    void render_message(std::string_view) override {};
-    void render_thread_begin(PyThreadState*, std::string_view, microsecond_t, uintptr_t, unsigned long) override {};
+    void render_message(std::string_view) override{};
+    void render_thread_begin(PyThreadState*, std::string_view, microsecond_t, uintptr_t,
+                             unsigned long) override {};
     void render_task_begin(std::string, bool) override {};
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {

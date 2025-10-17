@@ -14,8 +14,8 @@
 #if PY_VERSION_HEX >= 0x030d0000
 #include <opcode.h>
 #else
-#include <internal/pycore_opcode.h>
 #include <internal/pycore_frame.h>
+#include <internal/pycore_opcode.h>
 #endif  // PY_VERSION_HEX >= 0x030d0000
 #else
 #include <genobject.h>
