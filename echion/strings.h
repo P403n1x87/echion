@@ -81,6 +81,7 @@ public:
 
     static constexpr Key INVALID = 1;
     static constexpr Key UNKNOWN = 2;
+    static constexpr Key C_FRAME = 3;
 
     // Python string object
     [[nodiscard]] inline Result<Key> key(PyObject* s)

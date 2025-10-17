@@ -137,6 +137,10 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
+        if (maybe_frame->get().name == StringTable::C_FRAME) {
+            continue;
+        }
+
         stack.push_back(*maybe_frame);
         count++;
     }

@@ -293,46 +293,6 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 {
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
-#if PY_VERSION_HEX >= 0x030d0000
-    // From Python versions 3.13, f_executable can have objects other than
-    // code objects for an internal frame. We need to skip some frames if
-    // its f_executable is not code as suggested here:
-    // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
-    PyObject f_executable;
-
-    for (; frame_addr; frame_addr = frame_addr->previous)
-    {
-        auto resolved_addr =
-            stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
-                        : frame_addr;
-        if (resolved_addr != frame_addr)
-        {
-            frame_addr = resolved_addr;
-        }
-        else
-        {
-            if (copy_type(frame_addr, iframe))
-            {
-                return ErrorKind::FrameError;
-            }
-            frame_addr = &iframe;
-        }
-        if (copy_type(frame_addr->f_executable, f_executable))
-        {
-            return ErrorKind::FrameError;
-        }
-        if (f_executable.ob_type == &PyCode_Type)
-        {
-            break;
-        }
-    }
-
-    if (frame_addr == NULL)
-    {
-        return ErrorKind::FrameError;
-    }
-#else   // PY_VERSION_HEX < 0x030d0000
-    // Code Specific to Python < 3.13 and >= 3.11
     auto resolved_addr =
         stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
                     : frame_addr;
@@ -348,7 +308,24 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
         }
         frame_addr = &iframe;
     }
-#endif  // PY_VERSION_HEX >= 0x030d0000
+    if (frame_addr == NULL)
+    {
+        return ErrorKind::FrameError;
+    }
+
+#if PY_VERSION_HEX >= 0x030c0000
+    if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
+    {
+        *prev_addr = frame_addr->previous;
+        // This is a C frame, we just need to ignore it
+        return std::ref(C_FRAME);
+    }
+
+    if (frame_addr->owner != FRAME_OWNED_BY_THREAD && frame_addr->owner != FRAME_OWNED_BY_GENERATOR)
+    {
+        return ErrorKind::FrameError;
+    }
+#endif  // PY_VERSION_HEX >= 0x030c0000
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
