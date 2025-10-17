@@ -14,6 +14,7 @@
 #include <echion/config.h>
 #include <echion/mojo.h>
 #include <echion/timing.h>
+#include <echion/errors.h>
 
 // Forward declaration
 class Frame;
@@ -27,7 +28,7 @@ enum MetricType
 class RendererInterface
 {
 public:
-    virtual void open() = 0;
+    [[nodiscard]] virtual Result<void> open() = 0;
     virtual void close() = 0;
     virtual void header() = 0;
     virtual void metadata(const std::string& label, const std::string& value) = 0;
@@ -101,23 +102,21 @@ public:
         return true;
     }
 
-    void open() override {};
+    [[nodiscard]] Result<void> open() override { return Result<void>::ok(); };
     void close() override {};
     void header() override {};
-    void metadata(const std::string& label, const std::string& value) override {};
-    void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name, mojo_int_t line,
-               mojo_int_t line_end, mojo_int_t column, mojo_int_t column_end) override {};
-    void frame_ref(mojo_ref_t key) override {};
-    void frame_kernel(const std::string& scope) override {};
-    void string(mojo_ref_t key, const std::string& value) override {};
-    void string_ref(mojo_ref_t key) override {};
+    void metadata(const std::string&, const std::string&) override {};
+    void frame(mojo_ref_t, mojo_ref_t, mojo_ref_t, mojo_int_t, mojo_int_t, mojo_int_t, mojo_int_t) override {};
+    void frame_ref(mojo_ref_t) override {};
+    void frame_kernel(const std::string&) override {};
+    void string(mojo_ref_t, const std::string&) override {};
+    void string_ref(mojo_ref_t) override {};
 
-    void render_thread_begin(PyThreadState*, std::string_view name, microsecond_t, uintptr_t,
-                             unsigned long) override
+    void render_thread_begin(PyThreadState*, std::string_view name, microsecond_t, uintptr_t, unsigned long) override
     {
         *output << "    🧵 " << name << ":" << std::endl;
     }
-    void render_task_begin(std::string task_name, bool on_cpu) override {}
+    void render_task_begin(std::string, bool) override {}
     void render_stack_begin(long long, long long, const std::string&) override {}
     void render_message(std::string_view msg) override
     {
@@ -183,14 +182,16 @@ class MojoRenderer : public RendererInterface
 public:
     MojoRenderer() = default;
 
-    void open() override
+    [[nodiscard]] Result<void> open() override
     {
         output.open(std::getenv("ECHION_OUTPUT"));
         if (!output.is_open())
         {
             std::cerr << "Failed to open output file " << std::getenv("ECHION_OUTPUT") << std::endl;
-            throw std::runtime_error("Failed to open output file");
+            return ErrorKind::RendererError;
         }
+
+        return Result<void>::ok();
     }
 
     // ------------------------------------------------------------------------
@@ -310,10 +311,9 @@ public:
         ref(key);
     }
 
-    void render_message(std::string_view msg) override {};
-    void render_thread_begin(PyThreadState* tstate, std::string_view name, microsecond_t cpu_time,
-                             uintptr_t thread_id, unsigned long native_id) override {};
-    void render_task_begin(std::string task_name, bool on_cpu) override {};
+    void render_message(std::string_view) override {};
+    void render_thread_begin(PyThreadState*, std::string_view, microsecond_t, uintptr_t, unsigned long) override {};
+    void render_task_begin(std::string, bool) override {};
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {
         stack(pid, iid, name);
@@ -422,9 +422,9 @@ public:
         getActiveRenderer()->render_message(msg);
     }
 
-    void open()
+    [[nodiscard]] Result<void> open()
     {
-        getActiveRenderer()->open();
+        return getActiveRenderer()->open();
     }
 
     void close()

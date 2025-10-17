@@ -51,7 +51,12 @@ static void do_where(std::ostream& stream)
 
             if (native)
             {
-                interleave_stacks();
+                auto interleave_success = interleave_stacks();
+                if (!interleave_success) {
+                    std::cerr << "could not interleave stacks" << std::endl;
+                    return;
+                }
+
                 interleaved_stack.render_where();
             }
             else
@@ -103,12 +108,9 @@ static inline void _start()
 {
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
-    try
-    {
-        Renderer::get().open();
-    }
-    catch (std::exception& e)
-    {
+    auto open_success = Renderer::get().open();
+    if (!open_success) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to open renderer");
         return;
     }
 
@@ -215,9 +217,8 @@ static inline void _sampler()
 
             for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
-                    try {
-                        thread.sample(interp.id, tstate, wall_time);
-                    } catch (ThreadInfo::CpuTimeError& e) {
+                    auto sample_success = thread.sample(interp.id, tstate, wall_time);
+                    if (!sample_success) {
                         // Silently skip sampling this thread
                     }
                 });
@@ -305,13 +306,19 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
+        auto maybe_thread_info = ThreadInfo::create(thread_id, native_id, thread_name);
+        if (!maybe_thread_info) {
+            PyErr_SetString(PyExc_RuntimeError, "Failed to track thread");
+            return nullptr;
+        }
+
         auto entry = thread_info_map.find(thread_id);
-        if (entry != thread_info_map.end())
+        if (entry != thread_info_map.end()) {
             // Thread is already tracked so we update its info
-            entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
-        else
-            thread_info_map.emplace(
-                thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
+            entry->second = std::move(*maybe_thread_info);
+        } else {
+            thread_info_map.emplace(thread_id, std::move(*maybe_thread_info));
+        }
     }
 
     Py_RETURN_NONE;
@@ -388,16 +395,15 @@ static PyObject* track_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
 
     StringTable::Key greenlet_name;
 
-    try
-    {
-        greenlet_name = string_table.key(name);
-    }
-    catch (StringTable::Error&)
+    auto maybe_greenlet_name = string_table.key(name);
+    if (!maybe_greenlet_name)
     {
         // We failed to get this task but we keep going
         PyErr_SetString(PyExc_RuntimeError, "Failed to get greenlet name from the string table");
         return NULL;
     }
+    greenlet_name = *maybe_greenlet_name;
+
     {
         const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
 

@@ -18,33 +18,24 @@ typedef unsigned short digit;
 #endif  // PYLONG_BITS_IN_DIGIT
 #endif  // PY_VERSION_HEX >= 0x030c0000
 
-#include <exception>
-
+#include <echion/errors.h>
 #include <echion/vm.h>
 
 constexpr Py_ssize_t MAX_DIGITS = 128;
 
-class LongError : public std::exception
-{
-    const char* what() const noexcept override
-    {
-        return "LongError";
-    }
-};
-
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030c0000
-static long long pylong_to_llong(PyObject* long_addr)
+[[nodiscard]] static Result<long long> pylong_to_llong(PyObject* long_addr)
 {
     // Only used to extract a task-id on Python 3.12, omits overflow checks
     PyLongObject long_obj;
     long long ret = 0;
 
     if (copy_type(long_addr, long_obj))
-        throw LongError();
+        return ErrorKind::PyLongError;
 
     if (!PyLong_CheckExact(&long_obj))
-        throw LongError();
+        return ErrorKind::PyLongError;
 
     if (_PyLong_IsCompact(&long_obj))
     {
@@ -58,7 +49,7 @@ static long long pylong_to_llong(PyObject* long_addr)
         Py_ssize_t i = _PyLong_DigitCount(&long_obj);
 
         if (i > MAX_DIGITS) {
-            throw LongError();
+            return ErrorKind::PyLongError;
         }
 
         // Copy over the digits as ob_digit is allocated dynamically with
@@ -66,7 +57,7 @@ static long long pylong_to_llong(PyObject* long_addr)
         digit digits[MAX_DIGITS];
         if (copy_generic(long_obj.long_value.ob_digit, digits, i * sizeof(digit)))
         {
-            throw LongError();
+            return ErrorKind::PyLongError;
         }
         while (--i >= 0)
         {

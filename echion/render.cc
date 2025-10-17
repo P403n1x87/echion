@@ -4,8 +4,21 @@
 // ------------------------------------------------------------------------
 void WhereRenderer::render_frame(Frame& frame)
 {
-    auto name_str = string_table.lookup(frame.name);
-    auto filename_str = string_table.lookup(frame.filename);
+    auto maybe_name_str = string_table.lookup(frame.name);
+    if (!maybe_name_str) {
+        std::cerr << "could not get name for render_frame" << std::endl;
+        return;
+    }
+    const auto& name_str = **maybe_name_str;
+
+    
+    auto maybe_filename_str = string_table.lookup(frame.filename);
+    if (!maybe_filename_str) {
+        std::cerr << "could not get filename for render_frame" << std::endl;
+        return;
+    }
+    const auto& filename_str = **maybe_filename_str;
+    
     auto line = frame.location.line;
 
     if (filename_str.rfind("native@", 0) == 0)
