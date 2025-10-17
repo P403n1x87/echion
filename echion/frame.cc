@@ -316,6 +316,7 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 #if PY_VERSION_HEX >= 0x030c0000
     if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
     {
+        *prev_addr = frame_addr->previous;
         // This is a C frame, we just need to ignore it
         return std::ref(C_FRAME);
     }
