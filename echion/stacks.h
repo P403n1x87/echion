@@ -135,6 +135,10 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
+        if (maybe_frame->get().name == StringTable::C_FRAME) {
+            continue;
+        }
+
         stack.push_back(*maybe_frame);
         count++;
     }
@@ -195,7 +199,7 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
     {
         stack_chunk = std::make_unique<StackChunk>();
     }
-    
+
     if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
         stack_chunk = nullptr;
     }
@@ -226,7 +230,7 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
     {
         stack_chunk = std::make_unique<StackChunk>();
     }
-    
+
     if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
         stack_chunk = nullptr;
     }
@@ -307,7 +311,7 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
     }
-    
+
     return Result<void>::ok();
 }
 

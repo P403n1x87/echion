@@ -81,6 +81,7 @@ public:
 
     static constexpr Key INVALID = 1;
     static constexpr Key UNKNOWN = 2;
+    static constexpr Key C_FRAME = 3;
 
     // Python string object
     [[nodiscard]] inline Result<Key> key(PyObject* s)
@@ -94,7 +95,7 @@ public:
 #if PY_VERSION_HEX >= 0x030c0000
             // The task name might hold a PyLong for deferred task name formatting.
             std::string str = "Task-";
-            
+
             auto maybe_long = pylong_to_llong(s);
             if (maybe_long)
             {
@@ -114,7 +115,7 @@ public:
             if (!maybe_unicode) {
                 return ErrorKind::PyUnicodeError;
             }
-            
+
             std::string str = std::move(*maybe_unicode);
 #endif
             this->emplace(k, str);

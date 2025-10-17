@@ -97,6 +97,7 @@ private:
 
 inline auto INVALID_FRAME = Frame(StringTable::INVALID);
 inline auto UNKNOWN_FRAME = Frame(StringTable::UNKNOWN);
+inline auto C_FRAME = Frame(StringTable::C_FRAME);
 
 // We make this a raw pointer to prevent its destruction on exit, since we
 // control the lifetime of the cache.
