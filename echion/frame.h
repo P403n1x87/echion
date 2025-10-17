@@ -9,6 +9,7 @@
 #if defined __GNUC__ && defined HAVE_STD_ATOMIC
 #undef HAVE_STD_ATOMIC
 #endif
+
 #if PY_VERSION_HEX >= 0x030c0000
 // https://github.com/python/cpython/issues/108216#issuecomment-1696565797
 #undef _PyGC_FINALIZED
@@ -36,9 +37,7 @@
 
 #include <echion/cache.h>
 #include <echion/mojo.h>
-#if PY_VERSION_HEX >= 0x030b0000
 #include <echion/stack_chunk.h>
-#endif  // PY_VERSION_HEX >= 0x030b0000
 #include <echion/strings.h>
 #include <echion/vm.h>
 
@@ -69,7 +68,7 @@ public:
 
     // ------------------------------------------------------------------------
     Frame(StringTable::Key filename, StringTable::Key name) : filename(filename), name(name) {}
-    Frame(StringTable::Key name) : name(name) {};
+    Frame(StringTable::Key name) : name(name){};
     Frame(PyObject* frame);
     [[nodiscard]] static Result<Frame::Ptr> create(PyCodeObject* code, int lasti);
 #ifndef UNWIND_NATIVE_DISABLE
@@ -93,9 +92,9 @@ public:
     static Frame& get(StringTable::Key name);
 
 private:
-    [[nodiscard]] Result<void> inline infer_location(PyCodeObject* code, int lasti);
-    static inline Key key(PyCodeObject* code, int lasti);
-    static inline Key key(PyObject* frame);
+    [[nodiscard]] Result<void> infer_location(PyCodeObject* code, int lasti);
+    static Key key(PyCodeObject* code, int lasti);
+    static Key key(PyObject* frame);
 };
 
 inline auto INVALID_FRAME = Frame(StringTable::INVALID);
