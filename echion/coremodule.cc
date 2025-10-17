@@ -17,9 +17,9 @@
 
 #include <fcntl.h>
 #include <sched.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
@@ -52,7 +52,8 @@ static void do_where(std::ostream& stream)
             if (native)
             {
                 auto interleave_success = interleave_stacks();
-                if (!interleave_success) {
+                if (!interleave_success)
+                {
                     std::cerr << "could not interleave stacks" << std::endl;
                     return;
                 }
@@ -109,7 +110,8 @@ static inline void _start()
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
     auto open_success = Renderer::get().open();
-    if (!open_success) {
+    if (!open_success)
+    {
         PyErr_SetString(PyExc_RuntimeError, "Failed to open renderer");
         return;
     }
@@ -218,7 +220,8 @@ static inline void _sampler()
             for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
                     auto sample_success = thread.sample(interp.id, tstate, wall_time);
-                    if (!sample_success) {
+                    if (!sample_success)
+                    {
                         // Silently skip sampling this thread
                     }
                 });
@@ -307,16 +310,20 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
         auto maybe_thread_info = ThreadInfo::create(thread_id, native_id, thread_name);
-        if (!maybe_thread_info) {
+        if (!maybe_thread_info)
+        {
             PyErr_SetString(PyExc_RuntimeError, "Failed to track thread");
             return nullptr;
         }
 
         auto entry = thread_info_map.find(thread_id);
-        if (entry != thread_info_map.end()) {
+        if (entry != thread_info_map.end())
+        {
             // Thread is already tracked so we update its info
             entry->second = std::move(*maybe_thread_info);
-        } else {
+        }
+        else
+        {
             thread_info_map.emplace(thread_id, std::move(*maybe_thread_info));
         }
     }
@@ -527,8 +534,7 @@ static PyMethodDef echion_core_methods[] = {
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
     {"set_max_frames", set_max_frames, METH_VARARGS, "Set the max number of frames to unwind"},
     // Sentinel
-    {NULL, NULL, 0, NULL}
-};
+    {NULL, NULL, 0, NULL}};
 
 // ----------------------------------------------------------------------------
 static struct PyModuleDef coremodule = {
@@ -538,10 +544,10 @@ static struct PyModuleDef coremodule = {
     -1,     /* size of per-interpreter state of the module,
                or -1 if the module keeps state in global variables. */
     echion_core_methods,
-    nullptr,   /* m_traverse */
-    nullptr,   /* m_clear */
-    nullptr,   /* m_free */
-    nullptr,   /* m_is_preinitialised */
+    nullptr, /* m_traverse */
+    nullptr, /* m_clear */
+    nullptr, /* m_free */
+    nullptr, /* m_is_preinitialised */
 };
 
 // ----------------------------------------------------------------------------

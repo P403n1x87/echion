@@ -7,8 +7,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include <mutex>
 #include <csignal>
+#include <mutex>
 
 #include <echion/stacks.h>
 #include <echion/state.h>

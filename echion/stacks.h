@@ -101,7 +101,8 @@ inline void unwind_native_stack()
     while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
     {
         auto maybe_frame = Frame::get(cursor);
-        if (!maybe_frame) {
+        if (!maybe_frame)
+        {
             break;
         }
 
@@ -131,7 +132,8 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 #else
         auto maybe_frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
-        if (!maybe_frame) {
+        if (!maybe_frame)
+        {
             break;
         }
 
@@ -195,8 +197,9 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
     {
         stack_chunk = std::make_unique<StackChunk>();
     }
-    
-    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
+
+    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk))
+    {
         stack_chunk = nullptr;
     }
 #endif
@@ -226,8 +229,9 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
     {
         stack_chunk = std::make_unique<StackChunk>();
     }
-    
-    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk)) {
+
+    if (!stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk))
+    {
         stack_chunk = nullptr;
     }
 #endif
@@ -261,13 +265,13 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
         auto native_frame = *n;
 
         auto maybe_name = string_table.lookup(native_frame.get().name);
-        if (!maybe_name) {
+        if (!maybe_name)
+        {
             return ErrorKind::LookupError;
         }
 
         auto name = *maybe_name;
-        if (name->find("PyEval_EvalFrameDefault") !=
-            std::string::npos)
+        if (name->find("PyEval_EvalFrameDefault") != std::string::npos)
         {
             if (p == python_stack.rend())
             {
@@ -307,7 +311,7 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
     }
-    
+
     return Result<void>::ok();
 }
 

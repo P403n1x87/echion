@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <cstring>
 #include <string>
 
 #if defined PL_LINUX
@@ -59,9 +58,7 @@ class VmReader
     int fd{-1};
     inline static VmReader* instance{nullptr};  // Prevents having to set this in implementation
 
-    VmReader(size_t _sz, void* _buffer, int _fd) : buffer(_buffer), sz{_sz}, fd{_fd}
-    {
-    }
+    VmReader(size_t _sz, void* _buffer, int _fd) : buffer(_buffer), sz{_sz}, fd{_fd} {}
 
     static VmReader* create(size_t sz)
     {
@@ -107,8 +104,11 @@ class VmReader
 
         return new VmReader(sz, ret, fd);
     }
-    
-    bool is_valid() const { return buffer != nullptr; }
+
+    bool is_valid() const
+    {
+        return buffer != nullptr;
+    }
 
 public:
     static VmReader* get_instance()
@@ -118,7 +118,8 @@ public:
             instance = VmReader::create(1024 * 1024);  // A megabyte?
             if (!instance)
             {
-                std::cerr << "Failed to initialize VmReader with buffer size " << instance->sz << std::endl;
+                std::cerr << "Failed to initialize VmReader with buffer size " << instance->sz
+                          << std::endl;
                 return nullptr;
             }
         }
