@@ -78,7 +78,7 @@ protected:
 class MirrorDict : public MirrorObject
 {
 public:
-    [[nodiscard]] static inline Result<MirrorDict> create(PyObject* dict_addr) noexcept;
+    [[nodiscard]] static inline Result<MirrorDict> create(PyObject* dict_addr);
 
     [[nodiscard]] Result<PyObject*> get_item(PyObject* key)
     {
@@ -95,7 +95,7 @@ private:
     PyDictObject dict;
 };
 
-[[nodiscard]] inline Result<MirrorDict> MirrorDict::create(PyObject* dict_addr) noexcept
+[[nodiscard]] inline Result<MirrorDict> MirrorDict::create(PyObject* dict_addr)
 {
     PyDictObject dict;
 

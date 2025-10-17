@@ -23,15 +23,6 @@ public:
 
     void store(const K& k, std::unique_ptr<V> v);
 
-    class LookupError : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Key not found in cache";
-        }
-    };
-
 private:
     size_t capacity;
     std::list<std::pair<K, std::unique_ptr<V>>> items;
