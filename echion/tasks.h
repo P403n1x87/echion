@@ -47,15 +47,6 @@ class GenInfo
 public:
     typedef std::unique_ptr<GenInfo> Ptr;
 
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create generator info object";
-        }
-    };
-
     PyObject* origin = NULL;
     PyObject* frame = NULL;
 
@@ -133,15 +124,6 @@ class TaskInfo
 public:
     typedef std::unique_ptr<TaskInfo> Ptr;
     typedef std::reference_wrapper<TaskInfo> Ref;
-
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create task info object";
-        }
-    };
 
     PyObject* origin = NULL;
     PyObject* loop = NULL;

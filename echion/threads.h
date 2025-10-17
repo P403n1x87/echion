@@ -34,16 +34,6 @@ class ThreadInfo
 public:
     using Ptr = std::unique_ptr<ThreadInfo>;
 
-    class Error : public std::exception
-    {
-    public:
-        const char* what() const noexcept override
-        {
-            return "Cannot create thread info object";
-        }
-    };
-
-
     uintptr_t thread_id;
     unsigned long native_id;
 
