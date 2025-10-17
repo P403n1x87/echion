@@ -209,7 +209,7 @@ public:
     }
 #endif  // UNWIND_NATIVE_DISABLE
 
-    [[nodiscard]] inline Result<std::string*> lookup(Key key)
+    [[nodiscard]] inline Result<std::reference_wrapper<std::string>> lookup(Key key)
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
@@ -217,7 +217,7 @@ public:
         if (it == this->end())
             return ErrorKind::LookupError;
 
-        return Result<std::string*>(&it->second);
+        return std::ref(it->second);
     };
 
     StringTable() : std::unordered_map<uintptr_t, std::string>()

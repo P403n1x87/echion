@@ -10,7 +10,7 @@ void WhereRenderer::render_frame(Frame& frame)
         std::cerr << "could not get name for render_frame" << std::endl;
         return;
     }
-    const auto& name_str = **maybe_name_str;
+    const auto& name_str = maybe_name_str->get();
 
 
     auto maybe_filename_str = string_table.lookup(frame.filename);
@@ -19,7 +19,7 @@ void WhereRenderer::render_frame(Frame& frame)
         std::cerr << "could not get filename for render_frame" << std::endl;
         return;
     }
-    const auto& filename_str = **maybe_filename_str;
+    const auto& filename_str = maybe_filename_str->get();
 
     auto line = frame.location.line;
 
