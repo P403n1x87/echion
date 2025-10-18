@@ -1,18 +1,31 @@
-#include <assert.h>
 #include <cassert>
-#include <csignal>
-#include <cstddef>
-#include <cstdio>
-#include <cstring>
+#include <signal.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <signal.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
-#include <ucontext.h>
 #include <unistd.h>
+#include <cstdio>
+
+#include <signal.h>
+#include <ucontext.h>
+#include <stdint.h>
+#include <stddef.h>
+
+#include <pthread.h>
+#include <sys/mman.h>
+#include <signal.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <assert.h>
 
 #if defined PL_DARWIN
-#include <pthread.h>
-
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <mach/machine/kern_return.h>
@@ -20,7 +33,31 @@
 #include <sys/types.h>
 #endif
 
+
+extern thread_local stack_t g_altstack;
+extern struct sigaction g_old_segv;
+extern struct sigaction g_old_bus;
+
+extern __thread volatile sig_atomic_t t_faulted;
+extern __thread volatile void* t_landing_ip;
+
+extern void arm_landing(void* p);
+extern void disarm_landing();
+
+void segv_handler(int signo, siginfo_t*, void* uctx);
+void ensure_altstack_for_this_thread();
+
 int init_segv_catcher();
+
+
+
+#if defined PL_LINUX
+using safe_memcpy_return_t = ssize_t;
+#elif defined PL_DARWIN
+using safe_memcpy_return_t = mach_vm_size_t;
+#endif
+
+safe_memcpy_return_t safe_memcpy(void* dst, const void* src, size_t n);
 
 #if defined PL_LINUX
 ssize_t safe_memcpy_wrapper(
@@ -67,8 +104,8 @@ public:
         assert(mem != MAP_FAILED);
 
         stack_t ss{};
-        ss.ss_sp = mem;
-        ss.ss_size = kAltStackSize;
+        ss.ss_sp    = mem;
+        ss.ss_size  = kAltStackSize;
         ss.ss_flags = 0;
         int rc = sigaltstack(&ss, nullptr);
         assert(rc == 0);
@@ -90,3 +127,5 @@ public:
         munmap(mem, size);
     }
 };
+
+extern thread_local ThreadAltStack t_altstack;
