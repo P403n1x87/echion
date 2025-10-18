@@ -19,31 +19,31 @@
 
 namespace {
 
-// --- Per-thread jump buffer stack pointer
-static __thread sigjmp_buf* t_segv_env = nullptr;  // top of a linked "stack" of envs
-
 // --- Alt signal stack (process-wide)
 static stack_t g_altstack;
 static struct sigaction g_old_segv;
+static struct sigaction g_old_bus;
 
-// Tiny, async-signal-safe handler.
-// On fault: jump to the most recent probe point if present; else re-raise.
-static void segv_handler(int sig, siginfo_t* si, void* uctx) {
-    (void)sig;
-    (void)si;
-    (void)uctx;
 
-    auto* env = t_segv_env;
-    if (env) {
-        // Jump back to the probe site (returning 1 from sigsetjmp)
-        siglongjmp(*env, 1);
-    }
+static __thread volatile sig_atomic_t t_faulted;
+static __thread void* t_landing_ip;
 
-    // XXX: This isn't async-signal-safe so I let's not keep it
-    // No probe to catch this: restore default and re-raise to crash normally.
-    // sigaction(SIGSEGV, &g_old_segv, nullptr);
-    raise(SIGSEGV);
+// SIGSEGV handler: mark fault + redirect to landing label
+static void segv_handler(int, siginfo_t*, void* uctx) {
+    if (!t_landing_ip) return;        // no guard set → not our probe; let default handler run (up to you)
+    t_faulted = 1;
+
+    ucontext_t* uc = (ucontext_t*)uctx;
+#if defined(__x86_64__)
+    uc->uc_mcontext.gregs[REG_RIP] = (greg_t)(uintptr_t)t_landing_ip;
+#elif defined(__aarch64__)
+    uc->uc_mcontext.pc = (uintptr_t)t_landing_ip;
+#else
+# error "Set saved PC for your architecture"
+#endif
+    // return → kernel rt_sigreturn → resume at landing label
 }
+
 
 // Install once at program/library init.
 inline static int init_segv_catcher() {
@@ -71,50 +71,52 @@ inline static int init_segv_catcher() {
     if (sigaction(SIGSEGV, &sa, &g_old_segv) != 0) {
         return -1;
     }
+    if (sigaction(SIGBUS,  &sa, &g_old_bus)  != 0) {
+        return -1;
+    }
 
     return 0;
 }
 
-// Scope helper: push/pop the thread-local jump target safely.
-struct segv_scope {
-    sigjmp_buf env;
-    sigjmp_buf* prev;
-};
+#include <signal.h>
+#include <ucontext.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <algorithm>
 
-static inline void segv_scope_push(struct segv_scope* s) {
-    s->prev = t_segv_env;
-    t_segv_env = &s->env;
-}
+int safe_memcpy(void* dst, const void* src, size_t n) {
+    t_faulted = 0;
 
-static inline void segv_scope_pop(struct segv_scope* s) {
-    (void)s;
-    t_segv_env = s->prev;
-}
+    uint8_t* d = (uint8_t*)dst;
+    const uint8_t* s = (const uint8_t*)src;
+    size_t rem = n;
 
-}
+    // Publish landing target for the handler
+    t_landing_ip = &&landing;
 
-// Public API: attempt to copy N bytes from SRC to DST via direct read.
-// Returns the number of bytes read on success, -1 if the read would segfault.
-inline static int safe_memcpy(void* dst, const void* src, size_t n) {
-    struct segv_scope scope;
-    segv_scope_push(&scope);
+    // Copy in page-bounded chunks (at most one fault per bad page)
+    while (rem && !t_faulted) {
+        size_t to_src_pg = 4096 - ((uintptr_t)s & 4095);
+        size_t to_dst_pg = 4096 - ((uintptr_t)d & 4095);
+        size_t chunk = std::min(rem, std::min(to_src_pg, to_dst_pg));
 
-    // Save signal mask with sigsetjmp variant so we return with the same mask.
-    if (sigsetjmp(scope.env, /*savesigs=*/0) == 0) {
-        // TODO: Page-bound reads? Currently all-or-nothing.
+        // Optional early probe to fault before entering large memcpy
+        (void)*(volatile const uint8_t*)s;
 
-        // Barrier so the compiler doesn't hoist the copy past setjmp.
-        __asm__ __volatile__("" ::: "memory");
-        memcpy(dst, src, n);
-        __asm__ __volatile__("" ::: "memory");
-        segv_scope_pop(&scope);
-        return n;
+        // If this faults, we’ll resume at `landing` label
+        memcpy(d, s, chunk);
+
+        d += chunk; s += chunk; rem -= chunk;
     }
 
-    // We arrived here from segv_handler via siglongjmp()
-    segv_scope_pop(&scope);
-    errno = EFAULT;
-    return -1;
+landing:               // ← handler redirects RIP here
+    t_landing_ip = NULL;      // disarm for safety (avoid miscatching unrelated faults)
+
+    if (t_faulted) { errno = EFAULT; return -1; }
+    return (int)n;
+}
+
 }
 
 inline static ssize_t safe_memcpy_wrapper(
@@ -125,6 +127,8 @@ inline static ssize_t safe_memcpy_wrapper(
     unsigned long int __srciovcnt,
     unsigned long int)
 {
+    (void)__dstiovcnt;
+    (void)__srciovcnt;
     assert(__dstiovcnt == 1);
     assert(__srciovcnt == 1);
 
