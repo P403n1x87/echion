@@ -492,8 +492,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
                 return ErrorKind::ThreadInfoError;
             }
 
-            auto task_name = *maybe_task_name;
-            Renderer::get().render_task_begin(*task_name, task_stack_info->on_cpu);
+            const auto& task_name = maybe_task_name->get();
+            Renderer::get().render_task_begin(task_name, task_stack_info->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
             if (native)
             {
@@ -526,8 +526,8 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
                 return ErrorKind::ThreadInfoError;
             }
 
-            auto task_name = *maybe_task_name;
-            Renderer::get().render_task_begin(*task_name, greenlet_stack->on_cpu);
+            const auto& task_name = maybe_task_name->get();
+            Renderer::get().render_task_begin(task_name, greenlet_stack->on_cpu);
             Renderer::get().render_stack_begin(pid, iid, name);
 
             auto& stack = greenlet_stack->stack;
