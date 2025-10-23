@@ -17,9 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
-        echion-alt-vm-force: ["1", "0"]
+        mode: ["normal", "alt-vm-force", "fast-memcpy"]
 
-    name: Tests with Python ${{ matrix.python-version }}, ECHION_ALT_VM_FORCE=${{ matrix.echion-alt-vm-force }} on ubuntu-latest
+    name: Tests with Python ${{ matrix.python-version }}, mode=${{ matrix.mode }} on ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -49,12 +49,19 @@ jobs:
       - name: Run tests
         run: |
           sudo echo "core.%p" | sudo tee /proc/sys/kernel/core_pattern
-          sudo -E env PATH="$PATH" bash -c 'ECHION_ALT_VM_READ_FORCE=${{ matrix.echion-alt-vm-force }} ulimit -c unlimited && hatch run tests.py${{ matrix.python-version }}:tests -svv'
+          if [ "${{ matrix.mode }}" = "alt-vm-force" ]; then
+            ENV_VARS="ECHION_ALT_VM_READ_FORCE=1"
+          elif [ "${{ matrix.mode }}" = "fast-memcpy" ]; then
+            ENV_VARS="ECHION_USE_FAST_COPY_MEMORY=1"
+          else
+            ENV_VARS="ECHION_ALT_VM_READ_FORCE=0"
+          fi
+          sudo -E env PATH="$PATH" bash -c "$ENV_VARS ulimit -c unlimited && hatch run tests.py${{ matrix.python-version }}:tests -svv"
 
       - name: Upload profiles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: profiles-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.echion-alt-vm-force }}
+          name: profiles-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.mode }}
           path: profiles/
           overwrite: true
         if: always()
@@ -82,8 +89,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        mode: ["normal", "fast-memcpy"]
 
-    name: Tests with Python ${{ matrix.python-version }} on macos-latest
+    name: Tests with Python ${{ matrix.python-version }}, mode=${{ matrix.mode }} on macos-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -95,12 +103,16 @@ jobs:
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install branch
 
       - name: Run tests
-        run: sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
+        run: |
+          if [ "${{ matrix.mode }}" = "fast-memcpy" ]; then
+            export ECHION_USE_FAST_COPY_MEMORY=1
+          fi
+          sudo -E hatch run tests.py${{ matrix.python-version }}:tests -svv
 
       - name: Upload profiles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: profiles-${{ runner.os }}-${{ matrix.python-version }}
+          name: profiles-${{ runner.os }}-${{ matrix.python-version }}-${{ matrix.mode }}
           path: profiles/
           overwrite: true
         if: always()
