@@ -117,7 +117,7 @@ def run_echion(*args: str) -> CompletedProcess:
 
 
 def run_target(
-    target: Path, *args: str
+    target: t.Union[str, Path], *args: str
 ) -> t.Tuple[CompletedProcess, t.Optional[MojoFile]]:
     test_name = sys._getframe(1).f_code.co_name
     output_file = (PROFILES / test_name).with_suffix(".mojo")

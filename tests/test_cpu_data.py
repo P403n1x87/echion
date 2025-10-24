@@ -76,6 +76,7 @@ def test_cpu_time_native(stealth):
     result, data = run_target("target_cpu", *stealth, "-cn")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "cpu"
     assert md["interval"] == "1000"
