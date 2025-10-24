@@ -32,9 +32,6 @@ else:
 if DISABLE_NATIVE:
     CFLAGS += ["-DUNWIND_NATIVE_DISABLE"]
 
-if PLATFORM == "darwin":
-    CFLAGS += ["-D_XOPEN_SOURCE"]
-
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc", "echion/danger.cc"],

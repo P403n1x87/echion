@@ -7,7 +7,6 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
-#include <ucontext.h>
 #include <unistd.h>
 
 #if defined PL_DARWIN
