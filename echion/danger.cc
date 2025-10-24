@@ -97,7 +97,7 @@ safe_memcpy_return_t safe_memcpy(void* dst, const void* src, size_t n) {
 
     // Arm and capture a landing site. Save/restore signal mask with savesigs=1.
     arm_landing();
-    if (sigsetjmp(t_jmpenv, /*savesigs=*/1) != 0) {
+    if (sigsetjmp(t_jmpenv, /*savesigs=*/0) != 0) {
         // We arrived here from siglongjmp after a fault.
         goto landing;
     }
