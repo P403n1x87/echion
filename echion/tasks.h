@@ -221,13 +221,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
     }
 
     auto current_tasks_dict = std::move(*maybe_current_tasks_dict);
-    auto maybe_task = current_tasks_dict.get_item(loop);
-    if (!maybe_task)
-    {
-        return ErrorKind::TaskInfoError;
-    }
-
-    PyObject* task = *maybe_task;
+    PyObject* task = current_tasks_dict.get_item(loop);
     if (task == NULL)
     {
         return ErrorKind::TaskInfoError;

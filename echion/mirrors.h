@@ -58,23 +58,10 @@ typedef PyObject* PyDictValues;
 
 class MirrorObject
 {
-public:
-    [[nodiscard]] inline Result<PyObject*> reflect()
-    {
-        if (reflected == NULL)
-            return ErrorKind::MirrorError;
-
-        return reflected;
-    }
-
 protected:
-    MirrorObject(std::unique_ptr<char[]> data, PyObject* reflected)
-        : data(std::move(data)), reflected(reflected)
-    {
-    }
+    MirrorObject(std::unique_ptr<char[]> data) : data(std::move(data)) {}
 
     std::unique_ptr<char[]> data = nullptr;
-    PyObject* reflected = NULL;
 };
 
 // ----------------------------------------------------------------------------
@@ -83,20 +70,14 @@ class MirrorDict : public MirrorObject
 public:
     [[nodiscard]] static inline Result<MirrorDict> create(PyObject* dict_addr);
 
-    [[nodiscard]] Result<PyObject*> get_item(PyObject* key)
+    [[nodiscard]] PyObject* get_item(PyObject* key)
     {
-        auto maybe_reflected = reflect();
-        if (!maybe_reflected)
-        {
-            return maybe_reflected;
-        }
-
-        return PyDict_GetItem(reflected, key);
+        return PyDict_GetItem(reinterpret_cast<PyObject*>(&dict), key);
     }
 
 private:
-    MirrorDict(PyDictObject dict, std::unique_ptr<char[]> data, PyObject* reflected)
-        : MirrorObject(std::move(data), reflected), dict(dict)
+    MirrorDict(PyDictObject dict, std::unique_ptr<char[]> data)
+        : MirrorObject(std::move(data)), dict(dict)
     {
     }
     PyDictObject dict;
@@ -159,8 +140,7 @@ private:
         dict.ma_values = (PyDictValues*)values_addr;
     }
 
-    auto reflected = (PyObject*)&dict;
-    return MirrorDict(dict, std::move(data), reflected);
+    return MirrorDict(dict, std::move(data));
 }
 
 // ----------------------------------------------------------------------------
@@ -171,8 +151,8 @@ public:
     [[nodiscard]] Result<std::unordered_set<PyObject*>> as_unordered_set();
 
 private:
-    MirrorSet(size_t size, PySetObject set, std::unique_ptr<char[]> data, PyObject* reflected)
-        : MirrorObject(std::move(data), reflected), size(size), set(set)
+    MirrorSet(size_t size, PySetObject set, std::unique_ptr<char[]> data)
+        : MirrorObject(std::move(data)), size(size), set(set)
     {
     }
 
@@ -204,8 +184,7 @@ private:
 
     set.table = (setentry*)data.get();
 
-    auto reflected = (PyObject*)&set;
-    return MirrorSet(size, set, std::move(data), reflected);
+    return MirrorSet(size, set, std::move(data));
 }
 
 [[nodiscard]] inline Result<std::unordered_set<PyObject*>> MirrorSet::as_unordered_set()
