@@ -86,7 +86,7 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     // The frame follows the generator object
     auto frame = (gen.gi_frame_state == FRAME_CLEARED)
                      ? NULL
-                     : (PyObject*)((char*)gen_addr + offsetof(PyGenObject, gi_iframe));
+                     : reinterpret_cast<PyObject*>(reinterpret_cast<char*>(gen_addr) + offsetof(PyGenObject, gi_iframe));
 #else
     auto frame = (PyObject*)gen.gi_frame;
 #endif
@@ -179,7 +179,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
         return ErrorKind::TaskInfoGeneratorError;
     }
 
-    auto origin = (PyObject*)task_addr;
+    auto origin = reinterpret_cast<PyObject*>(task_addr);
 
     auto maybe_name = string_table.key(task.task_name);
     if (!maybe_name)
@@ -194,7 +194,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
     TaskInfo::Ptr waiter = nullptr;
     if (task.task_fut_waiter)
     {
-        auto maybe_waiter = TaskInfo::create((TaskObj*)task.task_fut_waiter);  // TODO: Make lazy?
+        auto maybe_waiter = TaskInfo::create(reinterpret_cast<TaskObj*>(task.task_fut_waiter));  // TODO: Make lazy?
         if (maybe_waiter)
         {
             waiter = std::move(*maybe_waiter);
@@ -227,7 +227,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         return ErrorKind::TaskInfoError;
     }
 
-    return TaskInfo::create((TaskObj*)task);
+    return TaskInfo::create(reinterpret_cast<TaskObj*>(task));
 }
 
 // ----------------------------------------------------------------------------
@@ -258,7 +258,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         if (copy_type(task_wr_addr, task_wr))
             continue;
 
-        auto maybe_task_info = TaskInfo::create((TaskObj*)task_wr.wr_object);
+        auto maybe_task_info = TaskInfo::create(reinterpret_cast<TaskObj*>(task_wr.wr_object));
         if (maybe_task_info)
         {
             if ((*maybe_task_info)->loop == loop)
@@ -287,7 +287,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         auto eager_tasks = std::move(*maybe_eager_tasks);
         for (auto task_addr : eager_tasks)
         {
-            auto maybe_task_info = TaskInfo::create((TaskObj*)task_addr);
+            auto maybe_task_info = TaskInfo::create(reinterpret_cast<TaskObj*>(task_addr));
             if (maybe_task_info)
             {
                 if ((*maybe_task_info)->loop == loop)

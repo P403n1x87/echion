@@ -126,7 +126,7 @@ private:
         return ErrorKind::MirrorError;
     }
 
-    dict.ma_keys = (PyDictKeysObject*)data.get();
+    dict.ma_keys = reinterpret_cast<PyDictKeysObject*>(data.get());
 
     if (dict.ma_values != NULL)
     {
@@ -137,7 +137,7 @@ private:
             return ErrorKind::MirrorError;
         }
 
-        dict.ma_values = (PyDictValues*)values_addr;
+        dict.ma_values = reinterpret_cast<PyDictValues*>(values_addr);
     }
 
     return MirrorDict(dict, std::move(data));
@@ -182,7 +182,7 @@ private:
         return ErrorKind::MirrorError;
     }
 
-    set.table = (setentry*)data.get();
+    set.table = reinterpret_cast<setentry*>(data.get());
 
     return MirrorSet(size, set, std::move(data));
 }

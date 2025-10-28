@@ -39,7 +39,7 @@ constexpr Py_ssize_t MAX_DIGITS = 128;
 
     if (_PyLong_IsCompact(&long_obj))
     {
-        ret = (long long)_PyLong_CompactValue(&long_obj);
+        ret = static_cast<long long>(_PyLong_CompactValue(&long_obj));
     }
     else
     {

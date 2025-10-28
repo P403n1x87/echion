@@ -65,7 +65,7 @@ Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
         if (previous == nullptr)
             previous = std::make_unique<StackChunk>();
 
-        auto update_success = previous->update((_PyStackChunk*)chunk.previous);
+        auto update_success = previous->update(reinterpret_cast<_PyStackChunk*>(chunk.previous));
         if (!update_success)
         {
             previous = nullptr;
@@ -84,11 +84,11 @@ void* StackChunk::resolve(void* address)
         return address;
     }
 
-    _PyStackChunk* chunk = (_PyStackChunk*)data.data();
+    _PyStackChunk* chunk = reinterpret_cast<_PyStackChunk*>(data.data());
 
     // Check if this chunk contains the address
-    if (address >= origin && address < (char*)origin + chunk->size)
-        return (char*)chunk + ((char*)address - (char*)origin);
+    if (address >= origin && address < reinterpret_cast<char*>(origin) + chunk->size)
+        return reinterpret_cast<char*>(chunk) + (reinterpret_cast<char*>(address) - reinterpret_cast<char*>(origin));
 
     if (previous)
         return previous->resolve(address);
