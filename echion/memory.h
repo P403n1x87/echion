@@ -237,7 +237,7 @@ static inline void general_free(void* address)
 // ----------------------------------------------------------------------------
 static void* echion_malloc(void* ctx, size_t n)
 {
-    auto* alloc = (PyMemAllocatorEx*)ctx;
+    auto* alloc = static_cast<PyMemAllocatorEx*>(ctx);
 
     // Make the actual allocation
     auto address = alloc->malloc(alloc->ctx, n);
@@ -252,7 +252,7 @@ static void* echion_malloc(void* ctx, size_t n)
 // ----------------------------------------------------------------------------
 static void* echion_calloc(void* ctx, size_t nelem, size_t elsize)
 {
-    auto* alloc = (PyMemAllocatorEx*)ctx;
+    auto* alloc = static_cast<PyMemAllocatorEx*>(ctx);
 
     // Make the actual allocation
     auto address = alloc->calloc(alloc->ctx, nelem, elsize);
@@ -267,7 +267,7 @@ static void* echion_calloc(void* ctx, size_t nelem, size_t elsize)
 // ----------------------------------------------------------------------------
 static void* echion_realloc(void* ctx, void* p, size_t n)
 {
-    auto* alloc = (PyMemAllocatorEx*)ctx;
+    auto* alloc = static_cast<PyMemAllocatorEx*>(ctx);
 
     // Model this as a deallocation followed by an allocation
     if (p != NULL)
@@ -284,7 +284,7 @@ static void* echion_realloc(void* ctx, void* p, size_t n)
 // ----------------------------------------------------------------------------
 static void echion_free(void* ctx, void* p)
 {
-    auto* alloc = (PyMemAllocatorEx*)ctx;
+    auto* alloc = static_cast<PyMemAllocatorEx*>(ctx);
 
     // Handle the deallocation event
     if (p != NULL)
@@ -312,7 +312,7 @@ static void setup_memory()
         PyMem_GetAllocator(static_cast<PyMemAllocatorDomain>(i), &original_allocators[i]);
 
         // Install the new allocators
-        echion_allocator.ctx = (void*)&original_allocators[i];
+        echion_allocator.ctx = static_cast<void*>(&original_allocators[i]);
         PyMem_SetAllocator(static_cast<PyMemAllocatorDomain>(i), &echion_allocator);
     }
 }

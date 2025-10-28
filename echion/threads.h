@@ -75,7 +75,7 @@ public:
     {
 #if defined PL_LINUX
         clockid_t cpu_clock_id;
-        if (pthread_getcpuclockid((pthread_t)thread_id, &cpu_clock_id))
+        if (pthread_getcpuclockid(static_cast<pthread_t>(thread_id), &cpu_clock_id))
         {
             return ErrorKind::ThreadInfoError;
         }
@@ -202,7 +202,11 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
         current_tstate = tstate;
 
         // Send a signal to the thread to unwind its native stack.
-        pthread_kill((pthread_t)tstate->thread_id, SIGPROF);
+#if defined PL_DARWIN
+        pthread_kill(reinterpret_cast<pthread_t>(tstate->thread_id), SIGPROF);
+#else
+        pthread_kill(static_cast<pthread_t>(tstate->thread_id), SIGPROF);
+#endif
 
         // Lock to wait for the signal handler to finish unwinding the native
         // stack. Release the lock immediately after so that it is available
@@ -236,7 +240,7 @@ inline Result<void> ThreadInfo::unwind_tasks()
     std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
     std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
 
-    auto maybe_all_tasks = get_all_tasks((PyObject*)asyncio_loop);
+    auto maybe_all_tasks = get_all_tasks(reinterpret_cast<PyObject*>(asyncio_loop));
     if (!maybe_all_tasks)
     {
         return ErrorKind::TaskInfoError;
@@ -565,7 +569,7 @@ static void for_each_thread(InterpreterInfo& interp,
     seen_threads.clear();
 
     // Start from the thread list head
-    threads.insert((PyThreadState*)interp.tstate_head);
+    threads.insert(static_cast<PyThreadState*>(interp.tstate_head));
 
     while (!threads.empty())
     {

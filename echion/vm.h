@@ -27,7 +27,7 @@ ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long liovcnt,
 
 #define copy_type(addr, dest) (copy_memory(pid, addr, sizeof(dest), &dest))
 #define copy_type_p(addr, dest) (copy_memory(pid, addr, sizeof(*dest), dest))
-#define copy_generic(addr, dest, size) (copy_memory(pid, (void*)(addr), size, (void*)(dest)))
+#define copy_generic(addr, dest, size) (copy_memory(pid, reinterpret_cast<const void*>(addr), size, reinterpret_cast<void*>(dest)))
 
 #elif defined PL_DARWIN
 #include <mach/mach.h>
@@ -261,7 +261,7 @@ __attribute__((constructor)) inline void init_safe_copy()
  *
  * @return  zero on success, otherwise non-zero.
  */
-static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
+static inline int copy_memory(proc_ref_t proc_ref, const void* addr, ssize_t len, void* buf)
 {
     ssize_t result = -1;
 
@@ -277,7 +277,7 @@ static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void
 
     local[0].iov_base = buf;
     local[0].iov_len = len;
-    remote[0].iov_base = addr;
+    remote[0].iov_base = const_cast<void*>(addr);
     remote[0].iov_len = len;
 
     result = safe_copy(proc_ref, local, 1, remote, 1, 0);

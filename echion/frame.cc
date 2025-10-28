@@ -453,7 +453,7 @@ Result<std::reference_wrapper<Frame>> Frame::get(unw_cursor_t& cursor)
         return ErrorKind::FrameError;
     }
 
-    uintptr_t frame_key = (uintptr_t)pc;
+    uintptr_t frame_key = static_cast<uintptr_t>(pc);
     auto maybe_frame = frame_cache->lookup(frame_key);
     if (maybe_frame)
     {

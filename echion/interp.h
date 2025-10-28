@@ -33,8 +33,8 @@ static void for_each_interp(std::function<void(InterpreterInfo& interp)> callbac
 {
     InterpreterInfo interpreter_info = {0};
 
-    for (char* interp_addr = (char*)runtime->interpreters.head; interp_addr != NULL;
-         interp_addr = (char*)interpreter_info.next)
+    for (char* interp_addr = reinterpret_cast<char*>(runtime->interpreters.head); interp_addr != NULL;
+         interp_addr = reinterpret_cast<char*>(interpreter_info.next))
     {
         if (copy_type(interp_addr + offsetof(PyInterpreterState, id), interpreter_info.id))
             continue;

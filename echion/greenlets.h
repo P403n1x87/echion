@@ -27,7 +27,7 @@ public:
     PyObject* frame = NULL;
 
     GreenletInfo(ID id, PyObject* frame, StringTable::Key name)
-        : greenlet_id(id), frame(frame), name(name)
+        : greenlet_id(id), name(name), frame(frame)
     {
     }
 
@@ -42,7 +42,7 @@ inline int GreenletInfo::unwind(PyObject* frame, PyThreadState* tstate, FrameSta
 #if PY_VERSION_HEX >= 0x030d0000
     frame_addr =
         frame == Py_None
-            ? (PyObject*)tstate->current_frame
+            ? reinterpret_cast<PyObject*>(tstate->current_frame)
             : reinterpret_cast<PyObject*>(reinterpret_cast<struct _frame*>(frame)->f_frame);
 #elif PY_VERSION_HEX >= 0x030b0000
     if (frame == Py_None)

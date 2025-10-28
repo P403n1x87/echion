@@ -145,7 +145,7 @@ class MojoRenderer : public RendererInterface
 
     void inline event(MojoEvent event)
     {
-        output.put((char)event);
+        output.put(static_cast<char>(event));
     }
     void inline string(const std::string& string)
     {

@@ -370,7 +370,7 @@ static PyObject* track_asyncio_loop(PyObject* Py_UNUSED(m), PyObject* args)
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             thread_info_map.find(thread_id)->second->asyncio_loop =
-                (loop != Py_None) ? (uintptr_t)loop : 0;
+                (loop != Py_None) ? reinterpret_cast<uintptr_t>(loop) : 0;
         }
     }
 

@@ -37,7 +37,7 @@ static std::unique_ptr<unsigned char[]> pybytes_to_bytes_and_size(PyObject* byte
         return nullptr;
 
     auto data = std::make_unique<unsigned char[]>(*size);
-    if (copy_generic(((char*)bytes_addr) + offsetof(PyBytesObject, ob_sval), data.get(), *size))
+    if (copy_generic(reinterpret_cast<char*>(bytes_addr) + offsetof(PyBytesObject, ob_sval), data.get(), *size))
         return nullptr;
 
     return data;
@@ -55,8 +55,8 @@ static Result<std::string> pyunicode_to_utf8(PyObject* str_addr)
     if (ascii.state.kind != 1)
         return ErrorKind::PyUnicodeError;
 
-    const char* data = ascii.state.compact ? (const char*)(((uint8_t*)str_addr) + sizeof(ascii))
-                                           : (const char*)str._base.utf8;
+    const char* data = ascii.state.compact ? reinterpret_cast<const char*>(reinterpret_cast<const uint8_t*>(str_addr) + sizeof(ascii))
+                                           : static_cast<const char*>(str._base.utf8);
     if (data == NULL)
         return ErrorKind::PyUnicodeError;
 
@@ -88,7 +88,7 @@ public:
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
-        auto k = (Key)s;
+        auto k = reinterpret_cast<Key>(s);
 
         if (this->find(k) == this->end())
         {
@@ -132,7 +132,7 @@ public:
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
-        auto k = (Key)s;
+        auto k = reinterpret_cast<Key>(s);
 
         if (this->find(k) == this->end())
         {
@@ -156,12 +156,12 @@ public:
     {
         const std::lock_guard<std::mutex> lock(table_lock);
 
-        auto k = (Key)pc;
+        auto k = static_cast<Key>(pc);
 
         if (this->find(k) == this->end())
         {
             char buffer[32] = {0};
-            std::snprintf(buffer, 32, "native@%p", (void*)k);
+            std::snprintf(buffer, 32, "native@%p", reinterpret_cast<void*>(k));
             this->emplace(k, buffer);
             Renderer::get().string(k, buffer);
         }
@@ -178,7 +178,7 @@ public:
         if ((unw_get_proc_info(&cursor, &pi)))
             return ErrorKind::UnwindError;
 
-        auto k = (Key)pi.start_ip;
+        auto k = reinterpret_cast<Key>(pi.start_ip);
 
         if (this->find(k) == this->end())
         {
