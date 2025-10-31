@@ -63,7 +63,6 @@ inline bool use_alternative_copy_memory() {
     }
 
     if (is_truthy(use_fast_copy_memory)) {
-        fprintf(stderr, "YES\n");
         return true;
     }
 
@@ -236,9 +235,12 @@ __attribute__((constructor)) inline void init_safe_copy()
 {
     if (use_alternative_copy_memory())
     {
-        init_segv_catcher();
-        safe_copy = safe_memcpy_wrapper;
-        return;
+        if (init_segv_catcher() == 0) {
+            safe_copy = safe_memcpy_wrapper;
+            return;
+        }
+
+        std::cerr << "Failed to initialize segv catcher. Using process_vm_readv instead." << std::endl;
     }
 
     char src[128];
@@ -288,9 +290,12 @@ __attribute__((constructor)) inline void init_safe_copy()
 {
     if (use_alternative_copy_memory())
     {
-        init_segv_catcher();
-        safe_copy = safe_memcpy_wrapper;
-        return;
+        if (init_segv_catcher() == 0) {
+            safe_copy = safe_memcpy_wrapper;
+            return;
+        }
+
+        std::cerr << "Failed to initialize segv catcher. Using process_vm_readv instead." << std::endl;
     }
 }
 #endif // if defined PL_DARWIN

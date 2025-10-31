@@ -11,6 +11,8 @@
 #include <string.h>
 #include <unistd.h>
 
+static constexpr const size_t PAGE_SIZE = 4096;
+
 struct sigaction g_old_segv;
 struct sigaction g_old_bus;
 
@@ -47,19 +49,8 @@ static void segv_handler(int signo, siginfo_t*, void*) {
     siglongjmp(t_jmpenv, 1);
 }
 
-static inline void ensure_altstack_for_this_thread() {
-    t_altstack.ensure_installed();
-}
-
 int init_segv_catcher() {
-    ensure_altstack_for_this_thread();
-
-    // Reserve a page of memory just like before (not strictly necessary here,
-    // but kept to preserve behavior/footprint).
-    const size_t sz = 1 << 20;
-    void* mem = mmap(nullptr, sz, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (mem == MAP_FAILED) {
+    if (t_altstack.ensure_installed() != 0) {
         return -1;
     }
 
@@ -87,7 +78,10 @@ using safe_memcpy_return_t = mach_vm_size_t;
 #endif
 
 safe_memcpy_return_t safe_memcpy(void* dst, const void* src, size_t n) {
-    ensure_altstack_for_this_thread();
+    if (t_altstack.ensure_installed() != 0) {
+        errno = EINVAL;
+        return -1;
+    }
 
     t_faulted = 0;
 
@@ -105,9 +99,9 @@ safe_memcpy_return_t safe_memcpy(void* dst, const void* src, size_t n) {
     // Copy in page-bounded chunks (at most one fault per bad page).
     while (rem && !t_faulted) {
         safe_memcpy_return_t to_src_pg =
-            4096 - (static_cast<uintptr_t>(reinterpret_cast<uintptr_t>(s)) & 4095);
+            PAGE_SIZE - (static_cast<uintptr_t>(reinterpret_cast<uintptr_t>(s)) & (PAGE_SIZE - 1));
         safe_memcpy_return_t to_dst_pg =
-            4096 - (static_cast<uintptr_t>(reinterpret_cast<uintptr_t>(d)) & 4095);
+            PAGE_SIZE - (static_cast<uintptr_t>(reinterpret_cast<uintptr_t>(d)) & (PAGE_SIZE - 1));
         safe_memcpy_return_t chunk = std::min(rem, std::min(to_src_pg, to_dst_pg));
 
         // Optional early probe to fault before entering large memcpy
