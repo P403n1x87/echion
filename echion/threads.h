@@ -221,8 +221,10 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
             auto unwind_tasks_success = unwind_tasks();
             if (!unwind_tasks_success)
             {
-                // If we fail, that's OK
+                std::cerr << "Failed to unwind tasks" << std::endl;
             }
+        } else {
+            std::cerr << "No asyncio loop to unwind tasks" << std::endl;
         }
 
         // We make the assumption that gevent and asyncio are not mixed
@@ -243,6 +245,7 @@ inline Result<void> ThreadInfo::unwind_tasks()
     auto maybe_all_tasks = get_all_tasks(reinterpret_cast<PyObject*>(asyncio_loop));
     if (!maybe_all_tasks)
     {
+        std::cerr << "Failed to get all tasks" << std::endl;
         return ErrorKind::TaskInfoError;
     }
 
@@ -272,26 +275,33 @@ inline Result<void> ThreadInfo::unwind_tasks()
                        [](const std::pair<PyObject*, PyObject*>& kv) { return kv.second; });
     }
 
+    std::cerr << "Unwinding tasks, count " << all_tasks.size() << std::endl;
     for (auto& task : all_tasks)
     {
         origin_map.emplace(task->origin, std::ref(*task));
 
-        if (task->waiter != NULL)
+        if (task->waiter != NULL) {
+            std::cerr << "Added one waiter to unwind" << std::endl;
             waitee_map.emplace(task->waiter->origin, std::ref(*task));
+        }
         else if (parent_tasks.find(task->origin) == parent_tasks.end())
         {
+            std::cerr << "Added one parent task to unwind" << std::endl;
             if (cpu && ignore_non_running_threads && !task->coro->is_running)
             {
                 // This task is not running, so we skip it if we are
                 // interested in just CPU time.
+                std::cerr << "Skipping non-running task" << std::endl;
                 continue;
             }
+
             leaf_tasks.push_back(std::ref(*task));
         }
     }
 
     for (auto& task : leaf_tasks)
     {
+        std::cerr << "Unwinding leaf task " << string_table.lookup(task.get().name)->get() << std::endl;
         bool on_cpu = task.get().coro->is_running;
         auto stack_info = std::make_unique<StackInfo>(task.get().name, on_cpu);
         auto& stack = stack_info->stack;

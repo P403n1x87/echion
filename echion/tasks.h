@@ -236,11 +236,15 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
 {
     std::vector<TaskInfo::Ptr> tasks;
     if (loop == NULL)
-        return tasks;
+    {
+        std::cerr << "No loop to get all tasks" << std::endl;
+        return ErrorKind::TaskInfoError;
+    }
 
     auto maybe_scheduled_tasks_set = MirrorSet::create(asyncio_scheduled_tasks);
     if (!maybe_scheduled_tasks_set)
     {
+        std::cerr << "Failed to get scheduled tasks" << std::endl;
         return ErrorKind::TaskInfoError;
     }
 
@@ -248,6 +252,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
     auto maybe_scheduled_tasks = scheduled_tasks_set.as_unordered_set();
     if (!maybe_scheduled_tasks)
     {
+        std::cerr << "Failed to get scheduled tasks" << std::endl;
         return ErrorKind::TaskInfoError;
     }
 
@@ -263,6 +268,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         {
             if ((*maybe_task_info)->loop == loop)
             {
+                std::cerr << "Added one task to unwind" << std::endl;
                 tasks.push_back(std::move(*maybe_task_info));
             }
         }
@@ -273,6 +279,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         auto maybe_eager_tasks_set = MirrorSet::create(asyncio_eager_tasks);
         if (!maybe_eager_tasks_set)
         {
+            std::cerr << "Failed to get eager tasks" << std::endl;
             return ErrorKind::TaskInfoError;
         }
 
@@ -281,6 +288,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         auto maybe_eager_tasks = eager_tasks_set.as_unordered_set();
         if (!maybe_eager_tasks)
         {
+            std::cerr << "Failed to get eager tasks" << std::endl;
             return ErrorKind::TaskInfoError;
         }
 
@@ -292,12 +300,18 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
             {
                 if ((*maybe_task_info)->loop == loop)
                 {
+                    std::cerr << "Added one eager task to unwind" << std::endl;
                     tasks.push_back(std::move(*maybe_task_info));
+                } else {
+                    std::cerr << "Eager task not in loop" << std::endl;
                 }
+            } else {
+                std::cerr << "Failed to get eager task info" << std::endl;
             }
         }
     }
 
+    std::cerr << "Got all tasks, count " << tasks.size() << std::endl;
     return tasks;
 }
 
