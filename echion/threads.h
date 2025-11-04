@@ -224,7 +224,7 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
                 std::cerr << "Failed to unwind tasks" << std::endl;
             }
         } else {
-            std::cerr << "No asyncio loop to unwind tasks" << std::endl;
+            std::cerr << "No asyncio loop to unwind tasks " << tstate->native_thread_id << std::endl;
         }
 
         // We make the assumption that gevent and asyncio are not mixed
