@@ -134,10 +134,13 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 #endif
         if (!maybe_frame)
         {
+            std::cerr << "    Failed to read frame: " << current_frame_addr << std::endl;
             break;
         }
 
-        if (maybe_frame->get().name == StringTable::C_FRAME) {
+        if (maybe_frame->get().name == StringTable::C_FRAME)
+        {
+            std::cerr << "    Found C frame" << std::endl;
             continue;
         }
 
@@ -164,11 +167,13 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         // See the comment in unwind_frame()
         while (current_frame != NULL)
         {
-            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable->ob_type == &PyCode_Type)
+            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable->ob_type ==
+                &PyCode_Type)
             {
                 break;
             }
-            current_frame = reinterpret_cast<PyObject*>(reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
+            current_frame = reinterpret_cast<PyObject*>(
+                reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
         }
 
         if (current_frame == NULL)
@@ -183,7 +188,8 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         stack.push_back(Frame::get(current_frame));
 
 #if PY_VERSION_HEX >= 0x030b0000
-        current_frame = reinterpret_cast<PyObject*>(reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
+        current_frame = reinterpret_cast<PyObject*>(
+            reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
 #else
         current_frame = (PyObject*)((PyFrameObject*)current_frame)->f_back;
 #endif
@@ -221,7 +227,11 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 #else  // Python < 3.11
     PyObject* frame_addr = (PyObject*)tstate->frame;
 #endif
+    std::cerr << "Python stack:" << std::endl;
     unwind_frame(frame_addr, stack);
+    for (size_t i = 0 ; i < stack.size(); i++) {
+        std::cerr << "  stack[" << i << "]: " << string_table.lookup(stack[i].get().name)->get() << std::endl;
+    }
 }
 
 // ----------------------------------------------------------------------------

@@ -317,11 +317,18 @@ public:
     }
 
     void render_message(std::string_view) override{};
-    void render_thread_begin(PyThreadState*, std::string_view, microsecond_t, uintptr_t,
-                             unsigned long) override {};
-    void render_task_begin(std::string, bool) override {};
+    void render_thread_begin(PyThreadState* state, std::string_view, microsecond_t, uintptr_t,
+                             unsigned long) override
+    {
+        std::cerr << "======THREAD(" << state->thread_id << ") BEGIN======" << std::endl;
+    };
+    void render_task_begin(std::string name, bool) override
+    {
+        std::cerr << "======TASK(" << name << ") BEGIN======" << std::endl;
+    };
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {
+        std::cerr << "======STACK(" << pid << " / " << iid << " / " << name << ") BEGIN======" << std::endl;
         stack(pid, iid, name);
     };
     void render_frame(Frame& frame) override;
@@ -339,6 +346,7 @@ public:
         {
             metric_memory(delta);
         }
+        std::cerr << "======STACK END======" << std::endl;
     };
     bool is_valid() override
     {

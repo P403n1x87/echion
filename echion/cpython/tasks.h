@@ -4,6 +4,9 @@
 
 #pragma once
 
+
+#include "echion/strings.h"
+#include "internal/pycore_frame.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -131,8 +134,7 @@ typedef struct
 #if PY_VERSION_HEX >= 0x030d0000
 typedef struct
 {
-    FutureObj_HEAD(task)
-    unsigned task_must_cancel : 1;
+    FutureObj_HEAD(task) unsigned task_must_cancel : 1;
     unsigned task_log_destroy_pending : 1;
     int task_num_cancels_requested;
     PyObject* task_fut_waiter;
@@ -172,18 +174,58 @@ typedef struct
 #endif
 
 #if PY_VERSION_HEX >= 0x030b0000
+
+inline const char* to_string(_framestate f) {
+    switch (f) {
+        case FRAME_CREATED: {
+            return "FRAME_CREATED";
+        }
+        case FRAME_SUSPENDED: {
+            return "FRAME_SUSPENDED";
+        }
+        case FRAME_EXECUTING: {
+            return "FRAME_EXECUTING";
+        }
+        case FRAME_COMPLETED: {
+            return "FRAME_COMPLETED";
+        }
+        case FRAME_CLEARED: {
+            return "FRAME_CLEARED";
+        }
+#if PY_VERSION_HEX >= 0x030d0000
+        case FRAME_SUSPENDED_YIELD_FROM: {
+            return "FRAME_SUSPENDED_YIELD_FROM";
+        }
+#endif
+    }
+
+    throw std::runtime_error("Invalid frame state");
+}
+
+extern thread_local size_t recursion_depth;
+
 inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 {
+
+    std::string indent;
+    for (size_t i = 0; i < recursion_depth; i++) {
+        indent += "  ";
+    }
+
+    std::cerr << indent << "  " << "PyGen_yf for " << gen << " / " << frame_addr << std::endl;
     PyObject* yf = NULL;
 
+    std::cerr << indent << "  " << "current state: " << to_string((_framestate)gen->gi_frame_state) << std::endl;
     if (gen->gi_frame_state < FRAME_CLEARED)
     {
         if (gen->gi_frame_state == FRAME_CREATED)
             return NULL;
 
         _PyInterpreterFrame frame;
-        if (copy_type(frame_addr, frame))
+        if (copy_type(frame_addr, frame)) {
+            std::cerr << "copy failed, cancel" << std::endl;
             return NULL;
+        }
 
         _Py_CODEUNIT next;
 #if PY_VERSION_HEX >= 0x030d0000
@@ -192,12 +234,21 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
         if (copy_type(frame.prev_instr + 1, next))
 #endif
             return NULL;
-        if (!(_Py_OPCODE(next) == RESUME || _Py_OPCODE(next) == RESUME_QUICK) ||
-            _Py_OPARG(next) < 2)
-            return NULL;
 
-        if (frame.stacktop < 1 || frame.stacktop > (1 << 20))
+
+        if (!(_Py_OPCODE(next) == RESUME || _Py_OPCODE(next) == RESUME_QUICK) ||
+            _Py_OPARG(next) < 2) {
+            std::cerr << indent << "  " << "not a resume or resume_quick, or at least 2" << std::endl;
             return NULL;
+        } else {
+            auto opcode = _Py_OPCODE(next) == RESUME ? "RESUME" : "RESUME_QUICK";
+            std::cerr << indent << "  " << "opcode: " << opcode << " (arg=" << _Py_OPARG(next) << ")" << std::endl;
+        }
+
+        if (frame.stacktop < 1 || frame.stacktop > (1 << 20)) {
+            std::cerr << indent << "  " << "stacktop out of range" << std::endl;
+            return NULL;
+        }
 
         auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
         
@@ -208,6 +259,23 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
         }
     
         yf = localsplus[frame.stacktop - 1];
+        // if (yf == (PyObject*)0x2) {
+        //     std::cerr << indent << "  " << "yf is 0x2, cancel" << std::endl;
+        //     return nullptr;
+        // }
+        // // print out localplus
+        // std::cerr << indent << "  " << "stacktop: " << frame.stacktop << std::endl;
+        // for (ssize_t i = 0; i < frame.stacktop; i++) {
+        //     auto addr = localsplus[i];
+
+        //     if ((uintptr_t)addr < 4096) {
+        //         std::cerr << indent << "  " << "localsplus[" << i << "]: " << addr << " (small address)" << std::endl;
+        //         continue;
+        //     }
+
+        //     std::cerr << indent << "  " << "localsplus[" << i << "]: " << addr << std::endl;
+        // }
+        // std::cerr << indent << "  " << "yf: " << yf << std::endl;
     }
 
     return yf;

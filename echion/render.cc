@@ -40,5 +40,31 @@ void WhereRenderer::render_frame(Frame& frame)
 // ------------------------------------------------------------------------
 void MojoRenderer::render_frame(Frame& frame)
 {
+    auto maybe_filename_str = string_table.lookup(frame.filename);
+    if (!maybe_filename_str)
+    {
+        std::cerr << "could not get filename for render_frame" << std::endl;
+        return;
+    }
+
+    auto maybe_name_str = string_table.lookup(frame.name);
+    if (!maybe_name_str)
+    {
+        std::cerr << "could not get name for render_frame" << std::endl;
+        return;
+    }
+
+    const auto& filename_str = maybe_filename_str->get();
+    const auto& name_str = maybe_name_str->get();
+
+    if (frame.location.line > 0)
+    {
+        std::cerr << "    " << filename_str << ":" << frame.location.line << " / " << name_str << std::endl;
+    }
+    else
+    {
+        std::cerr << "    " << "TASK NAME == " << name_str << std::endl;
+    }
+
     frame_ref(frame.cache_key);
 }

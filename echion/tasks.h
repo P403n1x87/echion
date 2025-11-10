@@ -86,13 +86,21 @@ public:
     }
 };
 
+thread_local size_t recursion_depth = 0;
+
 inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 {
-    static thread_local size_t recursion_depth = 0;
     recursion_depth++;
 
+    std::string indent;
+    for (size_t i = 0; i < recursion_depth; i++) {
+        indent += "  ";
+    }
+    auto local_indent = indent + "  ";
+    
     if (recursion_depth > MAX_RECURSION_DEPTH)
     {
+        std::cerr << indent << "GenInfo::create - Recursion depth exceeded" << std::endl;
         recursion_depth--;
         return ErrorKind::GenInfoError;
     }
@@ -100,6 +108,13 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     PyGenObject gen;
     if (copy_type(gen_addr, gen))
     {
+        std::cerr << indent << "GenInfo::create - Failed to copy " << gen_addr << std::endl;
+        recursion_depth--;
+        return ErrorKind::GenInfoError;
+    } else if (!PyCoro_CheckExact(&gen)) {
+        auto is_generator = PyGen_CheckExact(gen_addr);
+        auto is_async_generator = PyAsyncGen_CheckExact(gen_addr);
+        std::cerr << indent << gen_addr << " is not a coroutine is_gen:" << is_generator << " is_async_gen:" << is_async_generator << std::endl;
         recursion_depth--;
         return ErrorKind::GenInfoError;
     }
@@ -130,7 +145,8 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     // The frame follows the generator object
     auto frame = (gen.gi_frame_state == FRAME_CLEARED)
                      ? NULL
-                     : reinterpret_cast<PyObject*>(reinterpret_cast<char*>(gen_addr) + offsetof(PyGenObject, gi_iframe));
+                     : reinterpret_cast<PyObject*>(reinterpret_cast<char*>(gen_addr) +
+                                                   offsetof(PyGenObject, gi_iframe));
 #else
     auto frame = (PyObject*)gen.gi_frame;
 #endif
@@ -143,13 +159,19 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
     }
 
     PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
+    std::cerr << local_indent << "-> Gen currently yielding from: " << yf << std::endl;
     GenInfo::Ptr await = nullptr;
-    if (yf != NULL && yf != gen_addr)
+    if (yf != NULL)
     {
-        auto maybe_await = GenInfo::create(yf);
-        if (maybe_await)
-        {
-            await = std::move(*maybe_await);
+        std::cerr << local_indent << "-> Trying to recurse" << std::endl;
+        if (yf != gen_addr && yf != nullptr) {
+            auto maybe_await = GenInfo::create(yf);
+            if (maybe_await)
+            {
+                await = std::move(*maybe_await);
+            }
+        } else {
+            std::cerr << local_indent << "Skipping GenInfo::create because it's the same coroutine" << std::endl;
         }
     }
 
@@ -160,6 +182,8 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 #else
     auto is_running = gen.gi_running;
 #endif
+
+    std::cerr << local_indent << "is_running: " << is_running << std::endl;
 
     recursion_depth--;
     return std::make_unique<GenInfo>(gen_addr, frame, std::move(await), is_running);
@@ -209,7 +233,7 @@ public:
             }
         }
         
-        is_on_cpu_.emplace(false);
+        is_on_cpu_ = false;
         return false;
     }
 };
@@ -236,14 +260,6 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
         return ErrorKind::TaskInfoError;
     }
 
-    auto maybe_coro = GenInfo::create(task.task_coro);
-    if (!maybe_coro)
-    {
-        recursion_depth--;
-        return ErrorKind::TaskInfoGeneratorError;
-    }
-
-    auto origin = reinterpret_cast<PyObject*>(task_addr);
 
     auto maybe_name = string_table.key(task.task_name);
     if (!maybe_name)
@@ -251,14 +267,22 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
         recursion_depth--;
         return ErrorKind::TaskInfoError;
     }
-
     auto name = *maybe_name;
-    auto loop = task.task_loop;
+    std::cerr << "TaskInfo::create for " << string_table.lookup(name)->get() << std::endl;
+    
+    auto maybe_coro = GenInfo::create(task.task_coro);
+    if (!maybe_coro)
+    {
+        std::cerr << "couldn't get coro, giving up on this task" << std::endl;
+        recursion_depth--;
+        return ErrorKind::TaskInfoGeneratorError;
+    }
 
     TaskInfo::Ptr waiter = nullptr;
     if (task.task_fut_waiter)
     {
-        auto maybe_waiter = TaskInfo::create(reinterpret_cast<TaskObj*>(task.task_fut_waiter));  // TODO: Make lazy?
+        auto maybe_waiter =
+            TaskInfo::create(reinterpret_cast<TaskObj*>(task.task_fut_waiter));  // TODO: Make lazy?
         if (maybe_waiter)
         {
             waiter = std::move(*maybe_waiter);
@@ -266,7 +290,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::create(TaskObj* task_addr)
     }
 
     recursion_depth--;
-    return std::make_unique<TaskInfo>(origin, loop, std::move(*maybe_coro), name,
+    return std::make_unique<TaskInfo>(reinterpret_cast<PyObject*>(task_addr), task.task_loop, std::move(*maybe_coro), name,
                                       std::move(waiter));
 }
 
@@ -362,6 +386,7 @@ inline Result<TaskInfo::Ptr> TaskInfo::current(PyObject* loop)
         }
     }
 
+    std::cerr << "We currently have " << tasks.size() << " tasks" << std::endl;
     return tasks;
 }
 
@@ -373,6 +398,7 @@ inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 inline size_t TaskInfo::unwind(FrameStack& stack)
 {
+    std::cerr << "TaskInfo::unwind for " << string_table.lookup(this->name)->get() << std::endl;
     // TODO: Check for running task.
     std::stack<PyObject*> coro_frames;
 
@@ -392,6 +418,11 @@ inline size_t TaskInfo::unwind(FrameStack& stack)
         coro_frames.pop();
 
         count += unwind_frame(frame, stack);
+    }
+
+    std::cerr << "Async stack:" << std::endl;
+    for (size_t i = 0 ; i < stack.size(); i++) {
+        std::cerr << "    stack[" << i << "]: " << string_table.lookup(stack[i].get().name)->get() << std::endl;
     }
 
     return count;
