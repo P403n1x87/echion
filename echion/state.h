@@ -17,7 +17,9 @@
 #endif
 #define Py_BUILD_CORE
 #include <internal/pycore_pystate.h>
+#if PY_VERSION_HEX >= 0x03090000
 #include <internal/pycore_runtime.h>
+#endif
 
 #include <condition_variable>
 #include <mutex>
