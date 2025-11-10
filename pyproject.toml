@@ -44,7 +44,7 @@ template = "tests"
 dependencies = [
   "pytest>=5.4.2",
   "pytest-cov>=2.8.1",
-  "austin-python~=2.1",
+  "austin-python~=1.7",
   "bytecode",
   "gevent",
 ]
