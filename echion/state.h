@@ -17,6 +17,7 @@
 #endif
 #define Py_BUILD_CORE
 #include <internal/pycore_pystate.h>
+#include <internal/pycore_runtime.h>
 
 #include <condition_variable>
 #include <mutex>

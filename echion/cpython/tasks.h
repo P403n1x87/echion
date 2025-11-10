@@ -131,8 +131,7 @@ typedef struct
 #if PY_VERSION_HEX >= 0x030d0000
 typedef struct
 {
-    FutureObj_HEAD(task)
-    unsigned task_must_cancel : 1;
+    FutureObj_HEAD(task) unsigned task_must_cancel : 1;
     unsigned task_log_destroy_pending : 1;
     int task_num_cancels_requested;
     PyObject* task_fut_waiter;
@@ -171,7 +170,55 @@ typedef struct
 #define RESUME_QUICK INSTRUMENTED_RESUME
 #endif
 
-#if PY_VERSION_HEX >= 0x030b0000
+#if PY_VERSION_HEX >= 0x030e0000
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
+{
+    PyObject* yf = NULL;
+
+    if (gen->gi_frame_state < FRAME_CLEARED)
+    {
+        if (gen->gi_frame_state == FRAME_CREATED)
+            return NULL;
+
+        _PyInterpreterFrame frame;
+        if (copy_type(frame_addr, frame))
+            return NULL;
+
+        _Py_CODEUNIT next;
+
+        if (copy_type(frame.instr_ptr, next))
+            return NULL;
+        if (!(_Py_OPCODE(next) == RESUME || _Py_OPCODE(next) == RESUME_QUICK) ||
+            _Py_OPARG(next) < 2)
+            return NULL;
+
+#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
+        if (frame.stackpointer->index > (1 << 20))
+            return NULL;
+
+        auto localsplus = std::make_unique<_PyStackRef[]>(frame.stackpointer);
+        if (copy_generic(frame.localsplus, localsplus.get(),
+                         frame.stackpointer->index * sizeof(_PyStackRef)))
+            return NULL;
+
+        yf = localsplus[frame.stackpointer - 1];
+#else
+        if (frame.stackpointer->bits > (1 << 20))
+            return NULL;
+
+        auto localsplus = std::make_unique<_PyStackRef[]>(frame.stackpointer->bits);
+        if (copy_generic(frame.localsplus, localsplus.get(),
+                         frame.stackpointer->bits * sizeof(_PyStackRef)))
+            return NULL;
+
+        yf = reinterpret_cast<PyObject*>(&localsplus[frame.stackpointer->bits - 1]);
+#endif
+    }
+
+    return yf;
+}
+
+#elif PY_VERSION_HEX >= 0x030b0000
 inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 {
     PyObject* yf = NULL;
