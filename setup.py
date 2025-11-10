@@ -25,19 +25,19 @@ COLORS = [
 ]
 
 if PLATFORM == "darwin":
-    CFLAGS = ["-mmacosx-version-min=10.15"]
+    CXXFLAGS = ["-mmacosx-version-min=10.15"]
 else:
-    CFLAGS = []
+    CXXFLAGS = []
 
 if DISABLE_NATIVE:
-    CFLAGS += ["-DUNWIND_NATIVE_DISABLE"]
+    CXXFLAGS += ["-DUNWIND_NATIVE_DISABLE"]
 
 echionmodule = Extension(
     "echion.core",
     sources=["echion/coremodule.cc", "echion/frame.cc", "echion/render.cc", "echion/danger.cc"],
     include_dirs=["."],
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
-    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CFLAGS + COLORS,
+    extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CXXFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
 )
 
