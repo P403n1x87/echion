@@ -1,4 +1,5 @@
 import asyncio
+from typing import Union
 from types import TracebackType
 
 
@@ -10,7 +11,7 @@ class AsyncContextManager:
     async def __aenter__(self) -> None:
         await context_manager_dep()
 
-    async def __aexit__(self, exc_type: type | None, exc_value: object | None, traceback: TracebackType | None) -> None:
+    async def __aexit__(self, exc_type: Union[type, None], exc_value: Union[object, None], traceback: Union[TracebackType, None]) -> None:
         await asyncio.sleep(1.0)
 
 
