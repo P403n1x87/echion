@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.13t", "3.14t"]
         mode: ["normal", "alt-vm-force", "fast-memcpy"]
 
     name: Tests with Python ${{ matrix.python-version }}, mode=${{ matrix.mode }} on ubuntu-latest
@@ -26,7 +26,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}-dev
-          freethreaded: true
 
       - name: Install dependencies
         run: |
@@ -89,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.13t", "3.14t"]
         mode: ["normal", "fast-memcpy"]
 
     name: Tests with Python ${{ matrix.python-version }}, mode=${{ matrix.mode }} on macos-latest
@@ -99,7 +98,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}-dev
-          freethreaded: true
 
       - name: Install Hatch
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # install branch
