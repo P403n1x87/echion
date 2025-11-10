@@ -1,12 +1,10 @@
-import json
-
 import pytest
 
 from tests.utils import PY, DataSummary, run_target
 
 
-@pytest.mark.skipif(PY >= (3, 11), reason="Sampling asyncio stacks is broken on >=3.11")
-def test_asyncio_gather_wall_time():
+@pytest.mark.xfail(condition=PY >= (3, 11), reason="Sampling asyncio stacks is broken on >=3.11")
+def test_asyncio_coroutines_wall_time():
     result, data = run_target("target_async_coroutines")
     assert result.returncode == 0, result.stderr.decode()
 
@@ -27,9 +25,6 @@ def test_asyncio_gather_wall_time():
             for key, value in summary.threads[thread].items()
             if key and isinstance(next(iter(key)), str)
         ]
-
-    with open("summary.json", "w") as f:
-        json.dump(summary_json, f, indent=2)
 
     # We expect MainThread and the sampler
     expected_nthreads = 2

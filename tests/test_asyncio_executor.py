@@ -1,9 +1,7 @@
-import json
-
 from tests.utils import PY, DataSummary, run_target
 
 
-def test_asyncio_gather_wall_time():
+def test_asyncio_executor_wall_time():
     result, data = run_target("target_async_executor")
     assert result.returncode == 0, result.stderr.decode()
 
@@ -24,9 +22,6 @@ def test_asyncio_gather_wall_time():
             for key, value in summary.threads[thread].items()
             if key and isinstance(next(iter(key)), str)
         ]
-
-    with open("summary.json", "w") as f:
-        json.dump(summary_json, f, indent=2)
 
     expected_nthreads = 3
     assert summary.nthreads >= expected_nthreads, summary.threads
