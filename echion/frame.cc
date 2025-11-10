@@ -47,7 +47,11 @@ Frame::Frame(PyObject* frame)
 {
 #if PY_VERSION_HEX >= 0x030b0000
 
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
+    const int lasti = _PyInterpreterFrame_LASTI(iframe);
+    PyCodeObject* code = PyFrame_GetCode(iframe->frame_obj);
+#elif PY_VERSION_HEX >= 0x030d0000
     _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject* code = reinterpret_cast<PyCodeObject*>(iframe->f_executable);
@@ -267,7 +271,11 @@ Frame::Key Frame::key(PyCodeObject* code, int lasti)
 // ----------------------------------------------------------------------------
 Frame::Key Frame::key(PyObject* frame)
 {
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
+    const int lasti = _PyInterpreterFrame_LASTI(iframe);
+    PyCodeObject* code = PyFrame_GetCode(iframe->frame_obj);
+#elif PY_VERSION_HEX >= 0x030d0000
     _PyInterpreterFrame* iframe = reinterpret_cast<_PyInterpreterFrame*>(frame);
     const int lasti = _PyInterpreterFrame_LASTI(iframe);
     PyCodeObject* code = reinterpret_cast<PyCodeObject*>(iframe->f_executable);
@@ -329,7 +337,20 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    const int lasti =
+        (static_cast<int>((frame_addr->instr_ptr - 1 -
+                           reinterpret_cast<_Py_CODEUNIT*>(
+                               (reinterpret_cast<PyCodeObject*>(frame_addr->frame_obj)))))) -
+        offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+    auto maybe_frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->frame_obj), lasti);
+    if (!maybe_frame)
+    {
+        return ErrorKind::FrameError;
+    }
+
+    auto& frame = maybe_frame->get();
+#elif PY_VERSION_HEX >= 0x030d0000
     const int lasti =
         (static_cast<int>((frame_addr->instr_ptr - 1 -
                            reinterpret_cast<_Py_CODEUNIT*>(

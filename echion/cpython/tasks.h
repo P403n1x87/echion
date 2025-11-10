@@ -133,8 +133,7 @@ typedef struct
 #if PY_VERSION_HEX >= 0x030d0000
 typedef struct
 {
-    FutureObj_HEAD(task)
-    unsigned task_must_cancel : 1;
+    FutureObj_HEAD(task) unsigned task_must_cancel : 1;
     unsigned task_log_destroy_pending : 1;
     int task_num_cancels_requested;
     PyObject* task_fut_waiter;
