@@ -3,7 +3,7 @@ import json
 from tests.utils import PY, DataSummary, run_target
 
 
-def test_asyncio_gather_wall_time():
+def test_asyncio_executor_wall_time():
     result, data = run_target("target_async_executor")
     assert result.returncode == 0, result.stderr.decode()
 
