@@ -39,6 +39,7 @@ echionmodule = Extension(
     define_macros=[(f"PL_{PLATFORM.upper()}", None)],
     extra_compile_args=["-std=c++17", "-Wall", "-Wextra"] + CXXFLAGS + COLORS,
     extra_link_args=LDADD.get(PLATFORM, []),
+    libraries=["unwind", "lzma"] if (PLATFORM != "darwin" and not DISABLE_NATIVE) else []
 )
 
 setup(
