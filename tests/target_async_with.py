@@ -4,7 +4,11 @@ from types import TracebackType
 
 
 async def context_manager_dep() -> None:
-    await asyncio.sleep(1.0)
+    await asyncio.sleep(0.25)
+
+
+async def some_function() -> None:
+    await asyncio.sleep(0.25)
 
 
 class AsyncContextManager:
@@ -12,12 +16,12 @@ class AsyncContextManager:
         await context_manager_dep()
 
     async def __aexit__(self, exc_type: Union[type, None], exc_value: Union[object, None], traceback: Union[TracebackType, None]) -> None:
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.25)
 
 
 async def asynchronous_function() -> None:
     async with AsyncContextManager():
-        await asyncio.sleep(1.0)
+        await some_function()
 
 
 async def main():

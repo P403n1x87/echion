@@ -3,7 +3,7 @@ import pytest
 from tests.utils import PY, DataSummary, run_target
 
 
-@pytest.mark.xfail(condition=PY >= (3, 11), reason="Sampling asyncio stacks is broken on >=3.11")
+@pytest.mark.xfail(condition=PY >= (3, 13), reason="Sampling async context manager stacks does not work on >=3.13")
 def test_asyncio_context_manager_wall_time():
     result, data = run_target("target_async_with")
     assert result.returncode == 0, result.stderr.decode()
@@ -68,6 +68,19 @@ def test_asyncio_context_manager_wall_time():
                 "asynchronous_function",
                 "__aenter__",
                 "context_manager_dep",
+                "sleep",
+            ),
+            lambda v: v >= 0.0,
+        )
+
+        # Actual function call
+        summary.assert_substack(
+            "0:MainThread",
+            (
+                "Task-1",
+                "main",
+                "asynchronous_function",
+                "some_function",
                 "sleep",
             ),
             lambda v: v >= 0.0,
