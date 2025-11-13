@@ -200,9 +200,13 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
             return NULL;
 
         auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
-        if (copy_generic(frame.localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*)))
+        
+        // Calculate the remote address of the localsplus array
+        auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
+        if (copy_generic(remote_localsplus, localsplus.get(), (frame.stacktop) * sizeof(PyObject*))) {
             return NULL;
-
+        }
+    
         yf = localsplus[frame.stacktop - 1];
     }
 

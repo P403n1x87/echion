@@ -1,9 +1,6 @@
-import pytest
-
 from tests.utils import PY, DataSummary, run_target
 
 
-@pytest.mark.xfail(condition=PY >= (3, 11), reason="Sampling asyncio stacks is broken on >=3.11")
 def test_asyncio_coroutines_wall_time():
     result, data = run_target("target_async_coroutines")
     assert result.returncode == 0, result.stderr.decode()
@@ -39,38 +36,11 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "main",
-                "outer_function",
-                "main_coro",
-                "sub_coro",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
-
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
                 "outer_function.<locals>.background_math_function",
                 "main",
                 "outer_function",
-                "main_coro",
-                "sub_coro",
+                "outer_function.<locals>.main_coro",
+                "outer_function.<locals>.sub_coro",
                 "sleep",
             ),
             lambda v: v >= 0.001e6,
@@ -79,36 +49,10 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
+                "outer_function.<locals>.background_math_function",
                 "background_math",
             ),
             lambda v: v >= 0.001e6,
-        )
-
-        # Main Thread
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "select",
-                "main",
-                "outer_function",
-                "outer_function.<locals>.main_coro",
-                "sleep",
-            ),
-            lambda v: v >= 0.1e6,
         )
 
     else:

@@ -8,6 +8,7 @@ def test_memory():
     result, data = run_target("target_mem", "-m")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "memory"
     assert md["interval"] == "1000"

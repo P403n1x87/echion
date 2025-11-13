@@ -1,9 +1,6 @@
-from tests.utils import PY, DataSummary, run_target
-
-import pytest
+from tests.utils import DataSummary, run_target
 
 
-@pytest.mark.xfail(condition=PY >= (3, 11), reason="Sampling generators stacks is broken on >=3.11")
 def test_generators_stacks():
     result, data = run_target("target_generators")
     assert result.returncode == 0, result.stderr.decode()
