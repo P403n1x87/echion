@@ -63,62 +63,103 @@ public:
 
 inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 {
-    static thread_local size_t recursion_depth = 0;
-    recursion_depth++;
-
-    if (recursion_depth > MAX_RECURSION_DEPTH)
+    struct GenData {
+        PyObject* origin;
+        PyObject* frame;
+        bool is_running;
+        PyObject* yf;
+    };
+    
+    std::vector<GenData> gen_stack;
+    gen_stack.reserve(50);  // Pre-allocate for efficiency
+    PyObject* current_gen_addr = gen_addr;
+    size_t depth = 0;
+    
+    // First pass: collect all generators in the await chain
+    while (current_gen_addr != nullptr)
     {
-        recursion_depth--;
-        return ErrorKind::GenInfoError;
-    }
-
-    PyGenObject gen;
-
-    if (copy_type(gen_addr, gen) || !PyCoro_CheckExact(&gen))
-    {
-        recursion_depth--;
-        return ErrorKind::GenInfoError;
-    }
-
-    auto origin = gen_addr;
-
-#if PY_VERSION_HEX >= 0x030b0000
-    // The frame follows the generator object
-    auto frame = (gen.gi_frame_state == FRAME_CLEARED)
-                     ? NULL
-                     : reinterpret_cast<PyObject*>(reinterpret_cast<char*>(gen_addr) + offsetof(PyGenObject, gi_iframe));
-#else
-    auto frame = (PyObject*)gen.gi_frame;
-#endif
-
-    PyFrameObject f;
-    if (copy_type(frame, f))
-    {
-        recursion_depth--;
-        return ErrorKind::GenInfoError;
-    }
-
-    PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
-    GenInfo::Ptr await = nullptr;
-    if (yf != NULL && yf != gen_addr)
-    {
-        auto maybe_await = GenInfo::create(yf);
-        if (maybe_await)
+        if (depth > MAX_RECURSION_DEPTH)
         {
-            await = std::move(*maybe_await);
+            // Stop chain traversal but continue with what we have
+            break;
+        }
+        
+        PyGenObject gen;
+        if (copy_type(current_gen_addr, gen) || !PyCoro_CheckExact(&gen))
+        {
+            // If this is the first generator, it's an error
+            if (depth == 0)
+            {
+                return ErrorKind::GenInfoError;
+            }
+
+            // Otherwise, stop chain traversal but continue with what we have
+            break;
+        }
+        
+        auto origin = current_gen_addr;
+        
+#if PY_VERSION_HEX >= 0x030b0000
+        // The frame follows the generator object
+        auto frame = (gen.gi_frame_state == FRAME_CLEARED)
+                         ? NULL
+                         : reinterpret_cast<PyObject*>(reinterpret_cast<char*>(current_gen_addr) + offsetof(PyGenObject, gi_iframe));
+#else
+        auto frame = (PyObject*)gen.gi_frame;
+#endif
+        
+        PyFrameObject f;
+        if (copy_type(frame, f))
+        {
+            // If this is the first generator, it's an error
+            if (depth == 0)
+            {
+                return ErrorKind::GenInfoError;
+            }
+
+            // Otherwise, stop chain traversal but continue with what we have
+            break;
+        }
+        
+        PyObject* yf = (frame != NULL ? PyGen_yf(&gen, frame) : NULL);
+        
+#if PY_VERSION_HEX >= 0x030b0000
+        auto is_running = (gen.gi_frame_state == FRAME_EXECUTING);
+#elif PY_VERSION_HEX >= 0x030a0000
+        auto is_running = (frame != NULL) ? _PyFrame_IsExecuting(&f) : false;
+#else
+        auto is_running = gen.gi_running;
+#endif
+        
+        gen_stack.push_back(GenData{origin, frame, static_cast<bool>(is_running), yf});
+        
+        // Move to the next generator in the chain
+        if (yf != NULL && yf != current_gen_addr)
+        {
+            // TODO: Check for cycles by looking at previously-seen frames
+            current_gen_addr = yf;
+            depth++;
+        }
+        else
+        {
+            break;
         }
     }
-
-#if PY_VERSION_HEX >= 0x030b0000
-    auto is_running = (gen.gi_frame_state == FRAME_EXECUTING);
-#elif PY_VERSION_HEX >= 0x030a0000
-    auto is_running = (frame != NULL) ? _PyFrame_IsExecuting(&f) : false;
-#else
-    auto is_running = gen.gi_running;
-#endif
-
-    recursion_depth--;
-    return std::make_unique<GenInfo>(origin, frame, std::move(await), is_running);
+    
+    // If we didn't collect any generators, return error
+    if (gen_stack.empty())
+    {
+        return ErrorKind::GenInfoError;
+    }
+    
+    // Second pass: build GenInfo chain from bottom to top
+    GenInfo::Ptr await = nullptr;
+    for (auto it = gen_stack.rbegin(); it != gen_stack.rend(); ++it)
+    {
+        await = std::make_unique<GenInfo>(it->origin, it->frame, std::move(await), it->is_running);
+    }
+    
+    return await;
 }
 
 // ----------------------------------------------------------------------------
