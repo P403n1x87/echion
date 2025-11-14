@@ -1,10 +1,7 @@
-import pytest
-
 from tests.utils import DataSummary, run_target
 
 
-@pytest.mark.xfail(reason="Sampling async generators is not implemented")
-def test_asyncio_async_generator_wall_time():
+def test_asyncio_async_generator_wall_time() -> None:
     result, data = run_target("target_async_generator")
     assert result.returncode == 0, result.stderr.decode()
 
@@ -30,7 +27,6 @@ def test_asyncio_async_generator_wall_time():
     assert summary.nthreads >= expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
 
-    # Today, we don't see the "async_generator" frame
     summary.assert_substack(
         "0:MainThread",
         (
