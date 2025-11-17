@@ -6,7 +6,7 @@ from tests.utils import run_target
 
 
 def test_asyncio_gather_wall_time():
-    result, data = run_target("target_gather")
+    result, data = run_target("target_gather_tasks")
     assert result.returncode == 0, result.stderr.decode()
 
     assert data is not None
