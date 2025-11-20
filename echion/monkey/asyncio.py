@@ -7,6 +7,7 @@ from asyncio import tasks
 from asyncio.events import BaseDefaultEventLoopPolicy
 from functools import wraps
 from threading import current_thread
+from typing import Iterator
 
 import echion.core as echion
 
@@ -65,17 +66,44 @@ def wait(
 
 # -----------------------------------------------------------------------------
 
+_as_completed = tasks.as_completed
+
+
+@wraps(_as_completed)
+def as_completed(
+    fs: t.Iterable[asyncio.Future[T]], *args: t.Any, **kwargs: t.Any
+) -> Iterator[asyncio.Future[T]]:
+    # Link the parent task to the tasks being waited on
+    loop = kwargs.get("loop")
+    parent = tasks.current_task(loop)
+
+    if parent is not None:
+        futures = {asyncio.ensure_future(f, loop=loop) for f in set(fs)}
+        for child in futures:
+            echion.link_tasks(parent, t.cast(asyncio.Task, child))
+
+    return _as_completed(futures, *args, **kwargs)
+
+
+# -----------------------------------------------------------------------------
+
 
 def patch():
     BaseDefaultEventLoopPolicy.set_event_loop = set_event_loop  # type: ignore[method-assign]
     tasks._GatheringFuture.__init__ = gather  # type: ignore[attr-defined]
     tasks._wait = wait  # type: ignore[attr-defined]
+    tasks.as_completed = as_completed  # type: ignore[attr-defined]
+    if hasattr(asyncio, "as_completed"):
+        asyncio.as_completed = as_completed
 
 
 def unpatch():
     BaseDefaultEventLoopPolicy.set_event_loop = _set_event_loop  # type: ignore[method-assign]
     tasks._GatheringFuture.__init__ = _gather  # type: ignore[attr-defined]
     tasks._wait = _wait  # type: ignore[attr-defined]
+    tasks.as_completed = _as_completed  # type: ignore[attr-defined]
+    if hasattr(asyncio, "as_completed"):
+        asyncio.as_completed = _as_completed
 
 
 def track():
