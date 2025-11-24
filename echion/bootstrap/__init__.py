@@ -16,7 +16,6 @@ do_on_fork = True
 
 
 def restart_on_fork():
-    global do_on_fork
     if not do_on_fork:
         return
 
