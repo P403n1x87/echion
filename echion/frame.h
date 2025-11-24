@@ -14,6 +14,10 @@
 #undef _PyGC_FINALIZED
 #endif
 #include <frameobject.h>
+#if PY_VERSION_HEX >= 0x030e0000
+#define Py_BUILD_CORE
+#include <internal/pycore_interpframe.h>
+#endif  // PY_VERSION_HEX >= 0x030d0000
 #if PY_VERSION_HEX >= 0x030d0000
 #define Py_BUILD_CORE
 #include <internal/pycore_code.h>
