@@ -112,6 +112,37 @@ inline void unwind_native_stack()
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
+// Read a single frame without walking the previous chain.
+// Used for coroutine frames where we handle the chain via await pointers.
+static bool read_single_frame(PyObject* frame_addr, FrameStack& stack)
+{
+    if (frame_addr == NULL || stack.size() >= max_frames)
+        return false;
+
+#if PY_VERSION_HEX >= 0x030b0000
+    PyObject* unused_prev = NULL;
+    auto maybe_frame =
+        Frame::read(reinterpret_cast<_PyInterpreterFrame*>(frame_addr),
+                    reinterpret_cast<_PyInterpreterFrame**>(&unused_prev));
+#else
+    PyObject* unused_prev = NULL;
+    auto maybe_frame = Frame::read(frame_addr, &unused_prev);
+#endif
+    if (!maybe_frame)
+    {
+        return false;
+    }
+
+    if (maybe_frame->get().name == StringTable::C_FRAME)
+    {
+        return false;
+    }
+
+    stack.push_back(*maybe_frame);
+    return true;
+}
+
+// ----------------------------------------------------------------------------
 static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack

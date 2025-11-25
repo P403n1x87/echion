@@ -236,7 +236,11 @@ inline void ThreadInfo::unwind(PyThreadState* tstate)
 inline Result<void> ThreadInfo::unwind_tasks()
 {
     std::vector<TaskInfo::Ref> leaf_tasks;
+    // In parent_tasks, we store what Task have created other Tasks.
+    // A Task is in parent_tasks if it has created another Task through e.g. gather.
     std::unordered_set<PyObject*> parent_tasks;
+    // In waitee_map, keys are Tasks being awaited, values are which Task is awaiting the key.
+    // Note that this means we do not support having more than one Task awaiting the same Task.
     std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
     std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
 
@@ -276,54 +280,76 @@ inline Result<void> ThreadInfo::unwind_tasks()
     {
         origin_map.emplace(task->origin, std::ref(*task));
 
-        if (task->waiter != NULL)
+        if (task->waiter != NULL) {
+            // Our task is awaiting another Task.
             waitee_map.emplace(task->waiter->origin, std::ref(*task));
+        }
         else if (parent_tasks.find(task->origin) == parent_tasks.end())
         {
+            // The task is not currently awaiting another Task, and it is not a parent Task.
+            // This means it is a Leaf Task.
             if (cpu && ignore_non_running_threads && !task->coro->is_running)
             {
                 // This task is not running, so we skip it if we are
                 // interested in just CPU time.
                 continue;
             }
+
             leaf_tasks.push_back(std::ref(*task));
         }
     }
 
     for (auto& task : leaf_tasks)
     {
-        bool on_cpu = task.get().coro->is_running;
+        const auto& task_name = string_table.lookup(task.get().name)->get();
+        
+        // Check if the innermost coroutine in the await chain is actually running.
+        GenInfo* innermost_coro = task.get().coro.get();
+        while (innermost_coro && innermost_coro->await) {
+            innermost_coro = innermost_coro->await.get();
+        }
+        bool on_cpu = innermost_coro && innermost_coro->is_running;
+        
+        std::cerr << "==== Unwinding leaf task " << task_name << " / on_cpu: " << on_cpu << std::endl; 
         auto stack_info = std::make_unique<StackInfo>(task.get().name, on_cpu);
         auto& stack = stack_info->stack;
+        bool is_first_task = true;
         for (auto current_task = task;;)
         {
             auto& task = current_task.get();
 
-            size_t stack_size = task.unwind(stack);
-
-            if (on_cpu)
+            // For the first (leaf) task that's on_cpu, the coroutine chain may be
+            // incomplete because eager execution means frames are EXECUTING, not
+            // SUSPENDED. Use the Python stack to fill in the running frames.
+            if (is_first_task && on_cpu && !python_stack.empty())
             {
-                // Undo the stack unwinding
-                // TODO[perf]: not super-efficient :(
-                for (size_t i = 0; i < stack_size; i++)
-                    stack.pop_back();
-
-                // Instead we get part of the thread stack
-                FrameStack temp_stack;
-                size_t nframes =
-                    (python_stack.size() > stack_size) ? python_stack.size() - stack_size : 0;
-                for (size_t i = 0; i < nframes; i++)
+                // Get the first frame name from the coroutine chain (e.g., f4)
+                // We'll use Python stack frames until we hit this one.
+                StringTable::Key first_coro_frame_name = 0;
+                if (task.coro && task.coro->frame)
                 {
-                    auto python_frame = python_stack.front();
-                    temp_stack.push_front(python_frame);
-                    python_stack.pop_front();
+                    // Read the first coroutine's frame to get its name
+                    FrameStack temp;
+                    if (read_single_frame(task.coro->frame, temp) && !temp.empty())
+                    {
+                        first_coro_frame_name = temp.front().get().name;
+                    }
                 }
-                while (!temp_stack.empty())
+                
+                // Add frames from Python stack until we hit the first coro frame
+                // Python stack is ordered innermost (top) to outermost (bottom)
+                for (const auto& py_frame : python_stack)
                 {
-                    stack.push_front(temp_stack.front());
-                    temp_stack.pop_front();
+                    if (first_coro_frame_name != 0 && py_frame.get().name == first_coro_frame_name)
+                    {
+                        break;
+                    }
+                    stack.push_back(py_frame);
                 }
             }
+
+            is_first_task = false;
+            task.unwind(stack);
 
             // Add the task name frame
             stack.push_back(Frame::get(task.name));
@@ -337,6 +363,7 @@ inline Result<void> ThreadInfo::unwind_tasks()
             }
 
             {
+                // There is not entry in the waitee_map, so we check for other Task Links.
                 // Check for, e.g., gather links
                 std::lock_guard<std::mutex> lock(task_link_map_lock);
 
@@ -348,12 +375,9 @@ inline Result<void> ThreadInfo::unwind_tasks()
                 }
             }
 
+            // We have reached the end of the Task chain.
             break;
         }
-
-        // Finish off with the remaining thread stack
-        for (auto p = python_stack.begin(); p != python_stack.end(); p++)
-            stack.push_back(*p);
 
         current_tasks.push_back(std::move(stack_info));
     }
