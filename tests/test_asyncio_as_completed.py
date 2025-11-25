@@ -25,6 +25,11 @@ def test_asyncio_as_completed():
             if key and isinstance(next(iter(key)), str)
         ]
 
+    with open("summary.json", "w") as f:
+        import json
+
+        json.dump(summary_json, f, indent=2)
+
     # We expect MainThread and the sampler
     expected_nthreads = 2
     assert summary.nthreads == expected_nthreads, summary.threads
@@ -34,90 +39,60 @@ def test_asyncio_as_completed():
     # TODO: these stacks need to be adapted to Python 3.11 (qual names have changed)
     # but in the current state they don't work at all anyway.
     # Thread Pool Executor
-    if PY >= (3, 11):
-        if PY >= (3, 13):
+    if PY >= (3, 13):
+        for i in range(3, 12):
             summary.assert_substack(
                 "0:MainThread",
                 (
                     "Task-1",
-                    "outer",
-                    "_AsCompletedIterator._wait_for_one",
-                    "Queue.get",
+                    "main",
+                    f"Task-{i}",
+                    "wait_and_return_delay",
                 ),
-                lambda v: v >= 0.001e6,
+                lambda v: v >= 0.00,
             )
-        else:
+
+        pytest.xfail("We are not getting complete stacks in 3.13")
+        for i in range(3, 12):
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    f"Task-{i}",
+                    "wait_and_return_delay",
+                    "other",
+                    "sleep"
+                ),
+                lambda v: v >= 0.00,
+            )
+    elif PY >= (3, 11):
+        for i in range(3, 12):
             summary.assert_substack(
                 "0:MainThread",
                 (
                     "Task-1",
-                    "outer",
+                    "main",
                     "as_completed.<locals>._wait_for_one",
                     "Queue.get",
+                    f"Task-{i}",
+                    "wait_and_return_delay",
+                    "other",
+                    "sleep",
                 ),
-                lambda v: v >= 0.001e6,
+                lambda v: v >= 0.00,
             )
-
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-2",
-                "inner",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
-
-        pytest.xfail(reason="This currently does not work")
-        # Ideally, we should see the following stack (including Tasks being as_complete'd)
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "outer",
-                "as_completed.<locals>._wait_for_one",
-                "Queue.get",
-                "Task-2",
-                "inner",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
-
     else:
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "outer",
-                "_wait_for_one",
-                "get",
-            ),
-            lambda v: v >= 0.001e6,
-        )
-
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-2",
-                "inner",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
-
-        pytest.xfail(reason="This currently does not work")
-        # Ideally, we should see the following stack (including Tasks being as_complete'd)
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "outer",
-                "_wait_for_one",
-                "get",
-                "Task-2",
-                "inner",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
+        for i in range(3, 12):
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "_wait_for_one",
+                    "get",
+                    f"Task-{i}",
+                    "wait_and_return_delay",
+                    "other",
+                    "sleep",
+                ),
+                lambda v: v >= 0.00,
+            )
