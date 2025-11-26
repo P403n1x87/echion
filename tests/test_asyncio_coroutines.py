@@ -23,6 +23,11 @@ def test_asyncio_coroutines_wall_time():
             if key and isinstance(next(iter(key)), str)
         ]
 
+    with open("summary_asyncio_coroutines.json", "w") as f:
+        import json
+
+        json.dump(summary_json, f, indent=2)
+
     # We expect MainThread and the sampler
     expected_nthreads = 2
     assert summary.nthreads == expected_nthreads, summary.threads
@@ -36,11 +41,22 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "outer_function.<locals>.background_math_function",
-                "main",
-                "outer_function",
-                "outer_function.<locals>.main_coro",
-                "outer_function.<locals>.sub_coro",
+                "main", # Task name
+                "outer_function", # coroutine
+                "outer_function.<locals>.main_coro", # coroutine
+                "outer_function.<locals>.sub_coro", # coroutine
+                "sleep", # coroutine
+            ),
+            lambda v: v >= 0.001e6,
+        )
+
+        summary.assert_substack(
+            "0:MainThread",
+            (
+                "main", # Task name
+                "outer_function", # coroutine
+                "background_wait", # sub-Task name
+                "outer_function.<locals>.background_task_func", # coroutine
                 "sleep",
             ),
             lambda v: v >= 0.001e6,
@@ -49,8 +65,8 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "outer_function.<locals>.background_math_function",
-                "background_math",
+                "background_math", # Task name
+                "outer_function.<locals>.background_math_function", # coroutine
             ),
             lambda v: v >= 0.001e6,
         )
@@ -60,16 +76,10 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "select",
-                "main",
+                "main", # Task name
                 "outer_function",
                 "main_coro",
+                "sub_coro",
                 "sleep",
             ),
             lambda v: v >= 0.1e6,
@@ -78,18 +88,10 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "main",
-                "outer_function",
-                "main_coro",
-                "sub_coro",
+                "main", # Task name
+                "outer_function", # coroutine
+                "background_wait", # sub-Task name
+                "background_task_func", # coroutine
                 "sleep",
             ),
             lambda v: v >= 0.001e6,
@@ -98,35 +100,9 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "background_math",
+                "background_math", # Task name
+                "background_math_function", # coroutine
             ),
             lambda v: v >= 0.001e6,
         )
-        # Thread Pool Executor
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "main",
-                "outer_function",
-                "main_coro",
-                "sub_coro",
-                "sleep",
-            ),
-            lambda v: v >= 0.001e6,
-        )
+

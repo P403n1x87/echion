@@ -84,7 +84,7 @@ class DataSummary:
                 for i in range(0, len(stack) - len(frames) + 1):
                     substack = stack[i : i + len(frames)]
                     if substack == frames:
-                        assert predicate(stacks[stack]), stacks[stack]
+                        assert predicate(stacks[stack]), f"{predicate} {stacks[stack]}"
                         return
             else:
                 raise AssertionError("No matching substack found")
