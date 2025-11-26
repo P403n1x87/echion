@@ -60,7 +60,7 @@ Frame::Frame(PyObject* frame)
                          &location.column_end);
     location.column++;
     location.column_end++;
-    name = string_table.key_unsafe(code->co_qualname);
+    auto raw_name = string_table.key_unsafe(code->co_qualname);
 #if PY_VERSION_HEX >= 0x030c0000
     is_entry = (iframe->owner == FRAME_OWNED_BY_CSTACK);  // Shim frame
 #else
@@ -72,9 +72,11 @@ Frame::Frame(PyObject* frame)
     PyCodeObject* code = py_frame->f_code;
 
     location.line = PyFrame_GetLineNumber(py_frame);
-    name = string_table.key_unsafe(code->co_name);
+    auto raw_name = string_table.key_unsafe(code->co_name);
 #endif
     filename = string_table.key_unsafe(code->co_filename);
+    // Qualify "<module>" with the module name from filename
+    name = string_table.qualify_module_name(raw_name, filename);
 }
 
 // ------------------------------------------------------------------------
@@ -97,7 +99,10 @@ Result<Frame::Ptr> Frame::create(PyCodeObject* code, int lasti)
         return ErrorKind::FrameError;
     }
 
-    auto frame = std::make_unique<Frame>(*maybe_filename, *maybe_name);
+    // Qualify "<module>" with the module name from filename
+    auto qualified_name = string_table.qualify_module_name(*maybe_name, *maybe_filename);
+
+    auto frame = std::make_unique<Frame>(*maybe_filename, qualified_name);
     auto infer_location_success = frame->infer_location(code, lasti);
     if (!infer_location_success)
     {

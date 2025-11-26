@@ -83,6 +83,22 @@ public:
     static constexpr Key UNKNOWN = 2;
     static constexpr Key C_FRAME = 3;
 
+    // Extract module name from a filename path (e.g., "/path/to/foo.py" -> "foo")
+    static inline std::string extract_module_name(const std::string& filename)
+    {
+        // Find the last path separator
+        size_t last_sep = filename.find_last_of("/\\");
+        std::string basename = (last_sep == std::string::npos) ? filename : filename.substr(last_sep + 1);
+        
+        // Remove .py extension if present
+        if (basename.size() > 3 && basename.substr(basename.size() - 3) == ".py")
+        {
+            basename = basename.substr(0, basename.size() - 3);
+        }
+        
+        return basename;
+    }
+
     // Python string object
     [[nodiscard]] inline Result<Key> key(PyObject* s)
     {
@@ -220,6 +236,49 @@ public:
 
         return std::ref(it->second);
     };
+
+    // Transform "<module>" into "<module:modulename>" using the filename
+    [[nodiscard]] inline Key qualify_module_name(Key name_key, Key filename_key)
+    {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
+        auto name_it = this->find(name_key);
+        if (name_it == this->end() || name_it->second != "<module>")
+        {
+            return name_key;
+        }
+
+        auto filename_it = this->find(filename_key);
+        if (filename_it == this->end())
+        {
+            return name_key;
+        }
+
+        // Create a new qualified name like "<module:foo>"
+        std::string qualified = "<module:" + extract_module_name(filename_it->second) + ">";
+
+        // Check if we already have this string
+        for (const auto& [k, v] : *this)
+        {
+            if (v == qualified)
+            {
+                return k;
+            }
+        }
+
+        // Generate a new unique key (use a hash of the qualified string)
+        Key new_key = std::hash<std::string>{}(qualified);
+        // Ensure no collision
+        while (this->find(new_key) != this->end())
+        {
+            new_key++;
+        }
+
+        this->emplace(new_key, qualified);
+        Renderer::get().string(new_key, qualified);
+
+        return new_key;
+    }
 
     StringTable() : std::unordered_map<uintptr_t, std::string>()
     {
