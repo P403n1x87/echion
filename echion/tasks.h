@@ -179,6 +179,7 @@ public:
     StringTable::Key name;
 
     // Information to reconstruct the async stack as best as we can
+    // The waiter is the Task that the current Task is awaiting.
     TaskInfo::Ptr waiter = nullptr;
 
     [[nodiscard]] static Result<TaskInfo::Ptr> create(TaskObj*);
@@ -351,10 +352,10 @@ inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 inline size_t TaskInfo::unwind(FrameStack& stack)
 {
-    // TODO: Check for running task.
+    // Collect coroutine frames from the await chain.
+    // We use a stack to reverse the order (innermost first -> outermost first).
     std::stack<PyObject*> coro_frames;
 
-    // Unwind the coro chain
     for (auto coro = this->coro.get(); coro != NULL; coro = coro->await.get())
     {
         if (coro->frame != NULL)
@@ -363,13 +364,16 @@ inline size_t TaskInfo::unwind(FrameStack& stack)
 
     int count = 0;
 
-    // Unwind the coro frames
+    // Add one frame per coroutine. Don't walk the previous chain because:
+    // 1. For suspended coroutines, the await chain already gives us the logical order
+    // 2. For the running coroutine, the previous chain includes event loop frames
     while (!coro_frames.empty())
     {
         PyObject* frame = coro_frames.top();
         coro_frames.pop();
 
-        count += unwind_frame(frame, stack);
+        if (read_single_frame(frame, stack))
+            count++;
     }
 
     return count;

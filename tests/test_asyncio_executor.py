@@ -22,6 +22,11 @@ def test_asyncio_executor_wall_time():
             for key, value in summary.threads[thread].items()
             if key and isinstance(next(iter(key)), str)
         ]
+    
+    with open("summary_asyncio_executor.json", "w") as f:
+        import json
+
+        json.dump(summary_json, f, indent=2)
 
     expected_nthreads = 3
     assert summary.nthreads >= expected_nthreads, summary.threads
@@ -32,8 +37,8 @@ def test_asyncio_executor_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "Task-1",
-                "main",
+                "Task-1", # Task name
+                "main", # coroutine
                 "asynchronous_function",
             ),
             lambda v: v >= 0.01e6,

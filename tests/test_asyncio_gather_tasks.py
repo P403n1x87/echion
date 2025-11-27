@@ -34,26 +34,15 @@ def test_asyncio_gather_wall_time():
             summary.assert_substack(
                 "0:MainThread",
                 (
-                    "_run_module_as_main",
-                    "_run_code",
-                    "<module>",
-                    "run",
-                    "Runner.run",
-                    "BaseEventLoop.run_until_complete",
-                    "BaseEventLoop.run_forever",
-                    "BaseEventLoop._run_once",
-                    "KqueueSelector.select"
-                    if sys.platform == "darwin"
-                    else "EpollSelector.select",
-                    "Task-1",
-                    "main",
-                    "F1",
-                    "f1",
+                    "Task-1", # Task name
+                    "main", # coroutine
+                    "F1", # Task name
+                    "f1", # coroutine
                     "f2",
-                    "F3",
-                    "f3",
-                    t,
-                    "f4",
+                    "F3", # Task name
+                    "f3", # coroutine
+                    t, # Task name
+                    "f4", # coroutine
                     "f5",
                     "sleep",
                 ),
@@ -64,22 +53,14 @@ def test_asyncio_gather_wall_time():
             summary.assert_substack(
                 "0:MainThread",
                 (
-                    "_run_module_as_main",
-                    "_run_code",
-                    "<module>",
-                    "run",
-                    "run_until_complete",
-                    "run_forever",
-                    "_run_once",
-                    "select",
-                    "Task-1",
-                    "main",
-                    "F1",
-                    "f1",
+                    "Task-1", # Task name
+                    "main", # coroutine
+                    "F1", # Task name
+                    "f1", # coroutine
                     "f2",
-                    "F3",
-                    "f3",
-                    t,
+                    "F3", # Task name
+                    "f3", # coroutine
+                    t, # Task name
                     "f4",
                     "f5",
                     "sleep",
