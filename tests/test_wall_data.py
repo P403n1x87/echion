@@ -11,6 +11,7 @@ def test_wall_time(stealth):
     result, data = run_target("target", *stealth)
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"
@@ -137,6 +138,7 @@ def test_wall_time_native(stealth):
     result, data = run_target("target", *stealth, "-n")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"

@@ -1,4 +1,4 @@
-from tests.utils import PY, DataSummary, run_target
+from tests.utils import PY, DataSummary, run_target, dump_summary
 
 
 def test_asyncio_coroutines_wall_time():
@@ -11,17 +11,7 @@ def test_asyncio_coroutines_wall_time():
     assert md["interval"] == "1000"
 
     summary = DataSummary(data)
-
-    summary_json = {}
-    for thread in summary.threads:
-        summary_json[thread] = [
-            {
-                "stack": key,
-                "metric": value,
-            }
-            for key, value in summary.threads[thread].items()
-            if key and isinstance(next(iter(key)), str)
-        ]
+    dump_summary(summary, "summary_asyncio_coroutines.json")
 
     # We expect MainThread and the sampler
     expected_nthreads = 2
@@ -30,14 +20,38 @@ def test_asyncio_coroutines_wall_time():
 
     # Test stacks and expected values
     if PY >= (3, 11):
-        # TODO: these stacks need to be adapted to Python 3.11 (qual names have changed)
-        # but in the current state they don't work at all anyway.
-        # Thread Pool Executor
         summary.assert_substack(
             "0:MainThread",
             (
-                "outer_function.<locals>.background_math_function",
-                "main",
+                "Task-main",
+                "outer_function",
+                "Task-background_wait",
+                "outer_function.<locals>.background_wait_function",
+                "sleep",
+            ),
+            lambda v: v >= 0.001e6,
+        )
+
+        summary.assert_substack(
+            "0:MainThread",
+            (
+                "Task-background_wait",
+                "outer_function.<locals>.background_wait_function",
+                "sleep",
+            ),
+            lambda v: v >= 0.001e6,
+        )
+
+        summary.assert_substack(
+            "0:MainThread",
+            ("Task-main", "outer_function"),
+            lambda v: v >= 0.001e6,
+        )
+
+        summary.assert_substack(
+            "0:MainThread",
+            (
+                "Task-main",
                 "outer_function",
                 "outer_function.<locals>.main_coro",
                 "outer_function.<locals>.sub_coro",
@@ -46,50 +60,23 @@ def test_asyncio_coroutines_wall_time():
             lambda v: v >= 0.001e6,
         )
 
-        summary.assert_substack(
+        summary.assert_not_substack(
             "0:MainThread",
             (
                 "outer_function.<locals>.background_math_function",
-                "background_math",
+                "Task-background_wait",
+                "outer_function.<locals>.background_wait_function",
+                "sleep"
             ),
-            lambda v: v >= 0.001e6,
         )
-
-    else:
-        # Main Thread
+    else:  # PY < (3, 11)
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "select",
-                "main",
+                "Task-main",
                 "outer_function",
-                "main_coro",
-                "sleep",
-            ),
-            lambda v: v >= 0.1e6,
-        )
-
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "main",
-                "outer_function",
-                "main_coro",
-                "sub_coro",
+                "Task-background_wait",
+                "background_wait_function",
                 "sleep",
             ),
             lambda v: v >= 0.001e6,
@@ -98,35 +85,37 @@ def test_asyncio_coroutines_wall_time():
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "background_math",
+                "Task-background_wait",
+                "background_wait_function",
+                "sleep",
             ),
             lambda v: v >= 0.001e6,
         )
-        # Thread Pool Executor
+
+        summary.assert_substack(
+            "0:MainThread",
+            ("Task-main", "outer_function"),
+            lambda v: v >= 0.001e6,
+        )
+
         summary.assert_substack(
             "0:MainThread",
             (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "background_math_function",
-                "main",
+                "Task-main",
                 "outer_function",
                 "main_coro",
                 "sub_coro",
                 "sleep",
             ),
             lambda v: v >= 0.001e6,
+        )
+
+        summary.assert_not_substack(
+            "0:MainThread",
+            (
+                "background_math_function",
+                "Task-background_wait",
+                "background_wait_function",
+                "sleep"
+            ),
         )
