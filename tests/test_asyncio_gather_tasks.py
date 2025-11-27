@@ -3,6 +3,7 @@ import sys
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
+from tests.utils import dump_summary
 
 
 def test_asyncio_gather_wall_time():
@@ -15,6 +16,8 @@ def test_asyncio_gather_wall_time():
     assert md["interval"] == "1000"
 
     summary = DataSummary(data)
+
+    dump_summary(summary, "summary_asyncio_gather_tasks.json")
 
     expected_nthreads = 2
     assert summary.nthreads == expected_nthreads, summary.threads
@@ -34,6 +37,23 @@ def test_asyncio_gather_wall_time():
             summary.assert_substack(
                 "0:MainThread",
                 (
+                    "Task-1",
+                    "main",
+                    "F1",
+                    "f1",
+                    "f2",
+                    "F3",
+                    "f3",
+                    t,
+                    "f4",
+                    "f5",
+                    "sleep",
+                ),
+                lambda v: v >= 0.45e6,
+            )
+            summary.assert_substack(
+                "0:MainThread",
+                (
                     "_run_module_as_main",
                     "_run_code",
                     "<module>",
@@ -42,9 +62,9 @@ def test_asyncio_gather_wall_time():
                     "BaseEventLoop.run_until_complete",
                     "BaseEventLoop.run_forever",
                     "BaseEventLoop._run_once",
-                    "KqueueSelector.select"
+                    ("KqueueSelector.select"
                     if sys.platform == "darwin"
-                    else "EpollSelector.select",
+                    else "EpollSelector.select"),
                     "Task-1",
                     "main",
                     "F1",

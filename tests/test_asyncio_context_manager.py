@@ -1,9 +1,9 @@
 import pytest
 
 from tests.utils import PY, DataSummary, run_target
+from tests.utils import dump_summary
 
 
-@pytest.mark.xfail(condition=PY >= (3, 13), reason="Sampling async context manager stacks does not work on >=3.13")
 def test_asyncio_context_manager_wall_time():
     result, data = run_target("target_async_with")
     assert result.returncode == 0, result.stderr.decode()
@@ -25,6 +25,8 @@ def test_asyncio_context_manager_wall_time():
             for key, value in summary.threads[thread].items()
             if key and isinstance(next(iter(key)), str)
         ]
+
+    dump_summary(summary, "summary_asyncio_context_manager_wall_time.json")
 
     expected_nthreads = 2
     assert summary.nthreads >= expected_nthreads, summary.threads

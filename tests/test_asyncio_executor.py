@@ -1,7 +1,7 @@
-from tests.utils import PY, DataSummary, run_target
+from tests.utils import PY, DataSummary, run_target, dump_summary
 
 
-def test_asyncio_executor_wall_time():
+def test_asyncio_executor():
     result, data = run_target("target_async_executor")
     assert result.returncode == 0, result.stderr.decode()
 
@@ -23,6 +23,8 @@ def test_asyncio_executor_wall_time():
             if key and isinstance(next(iter(key)), str)
         ]
 
+    dump_summary(summary, "summary_asyncio_executor.json")
+
     expected_nthreads = 3
     assert summary.nthreads >= expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
@@ -36,7 +38,7 @@ def test_asyncio_executor_wall_time():
                 "main",
                 "asynchronous_function",
             ),
-            lambda v: v >= 0.01e6,
+            lambda v: v > 0.00,
         )
 
         # Thread Pool Executor

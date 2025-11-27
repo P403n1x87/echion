@@ -1,19 +1,15 @@
-from itertools import count
+import json
 import os
 import sys
 import typing as t
+from itertools import count
 from pathlib import Path
 from shutil import which
-from subprocess import PIPE
-from subprocess import CalledProcessError
-from subprocess import CompletedProcess
-from subprocess import Popen
-from subprocess import run
+from subprocess import PIPE, CalledProcessError, CompletedProcess, Popen, run
 from time import sleep
 
 import pytest
 from austin.format.mojo import MojoFile
-
 
 PY = sys.version_info[:2]
 PROFILES = Path("profiles")
@@ -98,6 +94,13 @@ class DataSummary:
                 f"Expected stack {frames}, found {self.threads[thread].keys()}"
             ) from None
 
+    def assert_not_substack(self, thread, frames):
+        try:
+            self.assert_substack(thread, frames, lambda v: v >= 0)
+        except AssertionError:
+            return
+
+        raise AssertionError(f"Unwanted stack {frames} was found in {thread}")
 
 def run_echion(*args: str) -> CompletedProcess:
     try:
@@ -176,3 +179,23 @@ else:
     no_sudo = pytest.mark.skipif(
         os.geteuid() == 0, reason="Must not have superuser privileges"
     )
+
+
+def dump_summary(summary: DataSummary, file: str) -> None:
+    summary_json = {}
+    for thread in summary.threads:
+        summary_json[thread] = sorted(
+            [
+                {
+                    "stack": key,
+                    "metric": value,
+                }
+                for key, value in summary.threads[thread].items()
+                if key and isinstance(next(iter(key)), str)
+            ],
+            key=lambda x: x["metric"],
+            reverse=True,
+        )
+
+    with open(file, "w") as f:
+        json.dump(summary_json, f, indent=2)

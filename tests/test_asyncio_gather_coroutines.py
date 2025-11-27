@@ -1,6 +1,7 @@
 
 from tests.utils import DataSummary
 from tests.utils import run_target
+from tests.utils import dump_summary
 
 
 def test_asyncio_gather_wall_time():
@@ -13,17 +14,7 @@ def test_asyncio_gather_wall_time():
     assert md["interval"] == "1000"
 
     summary = DataSummary(data)
-
-    summary_json = {}
-    for thread in summary.threads:
-        summary_json[thread] = [
-            {
-                "stack": key,
-                "metric": value,
-            }
-            for key, value in summary.threads[thread].items()
-            if key and isinstance(next(iter(key)), str)
-        ]
+    dump_summary(summary, "summary_asyncio_gather_coroutines.json")
 
     # We expect to see one stack for Task-1 / Task-2 / inner_1 and one for Task-1 / Task-3 / inner_2
     try:
