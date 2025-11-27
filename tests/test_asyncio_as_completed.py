@@ -1,5 +1,4 @@
-
-from tests.utils import PY, DataSummary, run_target
+from tests.utils import PY, DataSummary, run_target, dump_summary
 
 
 def test_asyncio_as_completed():
@@ -24,10 +23,7 @@ def test_asyncio_as_completed():
             if key and isinstance(next(iter(key)), str)
         ]
 
-    with open("summary.json", "w") as f:
-        import json
-
-        json.dump(summary_json, f, indent=2)
+    dump_summary(summary, "summary_asyncio_as_completed.json")
 
     # We expect MainThread and the sampler
     expected_nthreads = 2
@@ -54,6 +50,7 @@ def test_asyncio_as_completed():
                 ),
                 lambda v: v >= 0.00,
             )
+
     elif PY >= (3, 11):
         for i in range(3, 12):
             summary.assert_substack(

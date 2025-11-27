@@ -10,7 +10,7 @@ asyncio.set_event_loop(loop)
 
 
 async def outer_function():
-    async def background_task_func() -> None:
+    async def background_wait_function() -> None:
         await asyncio.sleep(2.5)
 
     async def background_math_function() -> None:
@@ -18,8 +18,8 @@ async def outer_function():
         for i in range(100000):
             s += math.sin(i)
 
-    background_task = loop.create_task(background_task_func(), name="background_wait")
-    math_task = loop.create_task(background_math_function(), name="background_math")
+    background_task = loop.create_task(background_wait_function(), name="Task-background_wait")
+    math_task = loop.create_task(background_math_function(), name="Task-background_math")
     assert background_task is not None
 
     sleep_time = 0.2
@@ -41,5 +41,5 @@ async def outer_function():
 
     return result
 
-main_task = loop.create_task(outer_function(), name="main")
+main_task = loop.create_task(outer_function(), name="Task-main")
 loop.run_until_complete(main_task)
