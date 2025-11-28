@@ -1,4 +1,3 @@
-import pytest
 
 from tests.utils import PY, DataSummary, run_target
 
@@ -46,21 +45,12 @@ def test_asyncio_as_completed():
                 (
                     "Task-1",
                     "main",
-                    f"Task-{i}",
-                    "wait_and_return_delay",
-                ),
-                lambda v: v >= 0.00,
-            )
-
-        pytest.xfail("We are not getting complete stacks in 3.13")
-        for i in range(3, 12):
-            summary.assert_substack(
-                "0:MainThread",
-                (
+                    "_AsCompletedIterator._wait_for_one",
+                    "Queue.get",
                     f"Task-{i}",
                     "wait_and_return_delay",
                     "other",
-                    "sleep"
+                    "sleep",
                 ),
                 lambda v: v >= 0.00,
             )
