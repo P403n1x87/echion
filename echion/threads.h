@@ -298,53 +298,60 @@ inline Result<void> ThreadInfo::unwind_tasks()
     }
     std::cerr << std::endl;
 
+    // Make sure the on CPU task is first
+    // TODO: this is probably a performance disaster
+    std::sort(leaf_tasks.begin(), leaf_tasks.end(), [](const TaskInfo::Ref& a, const TaskInfo::Ref& b) {
+        return ((a.get().is_on_cpu() ? 0 : 1) < (b.get().is_on_cpu() ? 0 : 1));
+    });
+
+    size_t upper_python_stack_size = 0;
+    size_t unused;
 
     // Only one Task can be on CPU at a time.
     // Since determining if a task is on CPU is somewhat costly, we
     // stop checking if Tasks are on CPU after seeing the first one.
     bool on_cpu_task_seen = false;
-    for (auto& task : leaf_tasks)
+    for (auto& leaf_task : leaf_tasks)
     {
-        const auto& task_name = string_table.lookup(task.get().name)->get();
+        const auto& task_name = string_table.lookup(leaf_task.get().name)->get();
         bool on_cpu = false;
         if (!on_cpu_task_seen) { 
-            on_cpu = task.get().is_on_cpu();
+            on_cpu = leaf_task.get().is_on_cpu();
             if (on_cpu) {
                 on_cpu_task_seen = true;
             }
         }
 
         std::cerr << "==== Unwinding leaf task " << task_name << " / on_cpu: " << on_cpu << std::endl; 
-        auto stack_info = std::make_unique<StackInfo>(task.get().name, on_cpu);
+        auto stack_info = std::make_unique<StackInfo>(leaf_task.get().name, on_cpu);
         auto& stack = stack_info->stack;
-        for (auto current_task = task;;)
+        for (auto current_task = leaf_task;;)
         {
+            std::cerr << "== Unwinding Task " << string_table.lookup(current_task.get().name)->get() << std::endl;
             auto& task = current_task.get();
 
-            size_t stack_size = task.unwind(stack);
-
-            if (on_cpu)
+            bool current_task_on_cpu = task.is_on_cpu();
+            size_t task_stack_size = current_task.get().unwind(stack, (current_task_on_cpu) ? upper_python_stack_size : unused);
+            if (current_task_on_cpu) // TODO: only leaf tasks can be on CPU
             {
                 std::cerr << "  Doing the CPU thing" << std::endl;
-                // Undo the stack unwinding
-                // TODO[perf]: not super-efficient :(
-                for (size_t i = 0; i < stack_size; i++)
-                    stack.pop_back();
+                std::cerr << "  Stack before adding Python bottom part:" << std::endl;
+                for (size_t i = 0; i < stack.size(); i++) {
+                    std::cerr << "    stack[" << i << "]: " << string_table.lookup(stack[i].get().name)->get() << std::endl;
+                }
 
                 // Instead we get part of the thread stack
-                FrameStack temp_stack;
-                size_t nframes =
-                    (python_stack.size() > stack_size) ? python_stack.size() - stack_size : 0;
-                for (size_t i = 0; i < nframes; i++)
+                size_t python_stack_size = python_stack.size();
+                size_t frames_to_push = (python_stack_size > task_stack_size) ? python_stack_size - task_stack_size : 0;
+                for (size_t i = 0; i < frames_to_push; i++)
                 {
-                    auto python_frame = python_stack.front();
-                    temp_stack.push_front(python_frame);
-                    python_stack.pop_front();
+                    const auto& python_frame = python_stack[frames_to_push - i - 1];
+                    stack.push_front(python_frame);
                 }
-                while (!temp_stack.empty())
-                {
-                    stack.push_front(temp_stack.front());
-                    temp_stack.pop_front();
+
+                std::cerr << "  Stack after adding Python bottom part:" << std::endl;
+                for (size_t i = 0; i < stack.size(); i++) {
+                    std::cerr << "    stack[" << i << "]: " << string_table.lookup(stack[i].get().name)->get() << std::endl;
                 }
             }
 
@@ -387,6 +394,11 @@ inline Result<void> ThreadInfo::unwind_tasks()
         }
 
         // Finish off with the remaining thread stack
+        for (size_t i = python_stack.size() - (on_cpu_task_seen ? upper_python_stack_size : python_stack.size()); i < python_stack.size(); i++) {
+            const auto& python_frame = python_stack[i];
+            stack.push_back(python_frame);
+        }
+
         std::cerr << "  Stack after adding Python top part:" << std::endl;
         for (size_t i = 0; i < stack.size(); i++) {
             std::cerr << "    stack[" << i << "]: " << string_table.lookup(stack[i].get().name)->get() << std::endl;

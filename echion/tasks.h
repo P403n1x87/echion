@@ -238,7 +238,7 @@ public:
     }
 
     [[nodiscard]] static Result<TaskInfo::Ptr> current(PyObject*);
-    inline size_t unwind(FrameStack&);
+    inline size_t unwind(FrameStack&, size_t& upper_python_stack_size);
 
     // Check if any coroutine in the chain is currently running (on CPU)
     inline bool is_on_cpu()
@@ -418,7 +418,7 @@ inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-inline size_t TaskInfo::unwind(FrameStack& stack)
+inline size_t TaskInfo::unwind(FrameStack& stack, size_t& upper_python_stack_size)
 {
     std::cerr << "TaskInfo::unwind for " << string_table.lookup(this->name)->get() << std::endl;
     // TODO: Check for running task.
@@ -439,7 +439,17 @@ inline size_t TaskInfo::unwind(FrameStack& stack)
         PyObject* frame = coro_frames.top();
         coro_frames.pop();
 
-        count += unwind_frame(frame, stack);
+        auto new_frames = unwind_frame(frame, stack);
+        if (count == 0) {
+            upper_python_stack_size = new_frames - 1;
+            for (size_t i = 0; i < upper_python_stack_size; i++) {
+                auto& back = stack.back();
+                std::cerr << "Popping frame: " << string_table.lookup(back.get().name)->get() << std::endl;
+                stack.pop_back();
+            }
+        }
+
+        count += new_frames;
     }
 
     std::cerr << "Async stack:" << std::endl;
