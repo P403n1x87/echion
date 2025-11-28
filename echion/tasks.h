@@ -88,6 +88,33 @@ public:
 
 thread_local size_t recursion_depth = 0;
 
+#include <Python.h>
+
+std::string PyObject_ToString(PyObject* obj) {
+    if (!obj) {
+        return "<null>";
+    }
+
+    // Borrowed reference -> new reference to a PyObject representing the string
+    PyObject* pyStr = PyObject_Str(obj);  // calls __str__()
+    if (!pyStr) {
+        PyErr_Clear();
+        return "<error converting object to string>";
+    }
+
+    // Convert Python string (Unicode) to UTF-8 `char*`
+    const char* cStr = PyUnicode_AsUTF8(pyStr);
+    if (!cStr) {
+        Py_DECREF(pyStr);
+        PyErr_Clear();
+        return "<error encoding string>";
+    }
+
+    std::string result(cStr);
+    Py_DECREF(pyStr);
+    return result;
+}
+
 inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
 {
     recursion_depth++;
@@ -111,13 +138,8 @@ inline Result<GenInfo::Ptr> GenInfo::create(PyObject* gen_addr)
         std::cerr << indent << "GenInfo::create - Failed to copy " << gen_addr << std::endl;
         recursion_depth--;
         return ErrorKind::GenInfoError;
-    } else if (!PyCoro_CheckExact(&gen)) {
-        auto is_generator = PyGen_CheckExact(gen_addr);
-        auto is_async_generator = PyAsyncGen_CheckExact(gen_addr);
-        std::cerr << indent << gen_addr << " is not a coroutine is_gen:" << is_generator << " is_async_gen:" << is_async_generator << std::endl;
-        recursion_depth--;
-        return ErrorKind::GenInfoError;
     }
+
 
     if (PyAsyncGenASend_CheckExact(&gen)) {
         static_assert(

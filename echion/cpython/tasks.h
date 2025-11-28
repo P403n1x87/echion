@@ -169,12 +169,6 @@ typedef struct
 
 // ---- cr_await ----
 
-#if PY_VERSION_HEX >= 0x030c0000
-#define RESUME_QUICK INSTRUMENTED_RESUME
-#endif
-
-#if PY_VERSION_HEX >= 0x030b0000
-
 inline const char* to_string(_framestate f) {
     switch (f) {
         case FRAME_CREATED: {
@@ -201,6 +195,35 @@ inline const char* to_string(_framestate f) {
 
     throw std::runtime_error("Invalid frame state");
 }
+
+#if PY_VERSION_HEX >= 0x030c0000
+#define RESUME_QUICK INSTRUMENTED_RESUME
+#endif
+
+#if PY_VERSION_HEX >= 0x030d0000
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
+    if (gen->gi_frame_state != FRAME_SUSPENDED_YIELD_FROM) {
+        return nullptr;
+    }
+
+    _PyInterpreterFrame frame;
+    if (copy_type(frame_addr, frame)) {
+        return nullptr;
+    }
+
+    auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
+    
+    // Calculate the remote address of the localsplus array
+    auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
+    if (copy_generic(remote_localsplus, localsplus.get(), (frame.stacktop) * sizeof(PyObject*))) {
+        return nullptr;
+    }
+
+    return localsplus[frame.stacktop-1];
+}
+
+
+#elif PY_VERSION_HEX >= 0x030b0000
 
 extern thread_local size_t recursion_depth;
 
