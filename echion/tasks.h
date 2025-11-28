@@ -192,7 +192,7 @@ public:
     }
 
     [[nodiscard]] static Result<TaskInfo::Ptr> current(PyObject*);
-    inline size_t unwind(FrameStack&);
+    inline size_t unwind(FrameStack&, size_t& upper_python_stack_size);
 
     // Check if any coroutine in the chain is currently running (on CPU)
     inline bool is_on_cpu()
@@ -371,27 +371,44 @@ inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-inline size_t TaskInfo::unwind(FrameStack& stack)
+inline size_t TaskInfo::unwind(FrameStack& stack, size_t& upper_python_stack_size)
 {
     // TODO: Check for running task.
     std::stack<PyObject*> coro_frames;
 
-    // Unwind the coro chain
+    // Unwind the coroutine chain
     for (auto coro = this->coro.get(); coro != NULL; coro = coro->await.get())
     {
         if (coro->frame != NULL)
             coro_frames.push(coro->frame);
     }
 
-    int count = 0;
+    // Total number of frames added to the Stack
+    size_t count = 0;
 
-    // Unwind the coro frames
+    // Unwind the coroutine frames
     while (!coro_frames.empty())
     {
         PyObject* frame = coro_frames.top();
         coro_frames.pop();
 
-        count += unwind_frame(frame, stack);
+        auto new_frames = unwind_frame(frame, stack);
+
+        // If this is the first Frame being unwound (we have not added any Frames to the Stack yet),
+        // use the number of Frames added to the Stack to determine the size of the upper Python stack.
+        if (count == 0) {
+            // The first Frame is the coroutine Frame, so the Python stack size is the number of Frames - 1
+            upper_python_stack_size = new_frames - 1;
+
+            // Remove the Python Frames from the Stack (they will be added back later)
+            // We cannot push those Frames now because otherwise they would be added once per Task,
+            // we only want to add them once per Leaf Task, and on top of all non-leaf Tasks.
+            for (size_t i = 0; i < upper_python_stack_size; i++) {
+                stack.pop_back();
+            }
+        }
+
+        count += new_frames;
     }
 
     return count;
