@@ -507,6 +507,25 @@ static PyObject* link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
 }
 
 // ----------------------------------------------------------------------------
+static PyObject* weak_link_tasks(PyObject* Py_UNUSED(m), PyObject* args)
+{
+    PyObject *parent, *child;
+
+    if (!PyArg_ParseTuple(args, "OO", &parent, &child))
+        return NULL;
+
+
+    {
+        std::lock_guard<std::mutex> guard(task_link_map_lock);
+
+        std::cerr << "setting weak link from " << child << " to " << parent << std::endl;
+        weak_task_link_map[child] = parent;
+    }
+
+    Py_RETURN_NONE;
+}
+
+// ----------------------------------------------------------------------------
 static PyMethodDef echion_core_methods[] = {
     {"start", start, METH_NOARGS, "Start the stack sampler"},
     {"start_async", start_async, METH_NOARGS, "Start the stack sampler asynchronously"},
@@ -519,6 +538,7 @@ static PyMethodDef echion_core_methods[] = {
      "Map the name of a task with its identifier"},
     {"init_asyncio", init_asyncio, METH_VARARGS, "Initialise asyncio tracking"},
     {"link_tasks", link_tasks, METH_VARARGS, "Link two tasks"},
+    {"weak_link_tasks", weak_link_tasks, METH_VARARGS, "Weakly link two tasks"},
     // Greenlet support
     {"track_greenlet", track_greenlet, METH_VARARGS, "Map a greenlet with its identifier"},
     {"untrack_greenlet", untrack_greenlet, METH_VARARGS, "Untrack a terminated greenlet"},
