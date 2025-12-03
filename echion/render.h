@@ -16,6 +16,8 @@
 #include <echion/mojo.h>
 #include <echion/timing.h>
 
+#include <Python.h>
+
 // Forward declaration
 class Frame;
 
@@ -32,22 +34,38 @@ public:
     virtual void close() = 0;
     virtual void header() = 0;
     virtual void metadata(const std::string& label, const std::string& value) = 0;
+
     // If a renderer has its own caching mechanism for frames, this can be used
     // to store frame information.
     virtual void frame(mojo_ref_t key, mojo_ref_t filename, mojo_ref_t name, mojo_int_t line,
                        mojo_int_t line_end, mojo_int_t column, mojo_int_t column_end) = 0;
-    // Refers to the frame stored using above function
+
+    // Refers to the frame stored using the renderer's frame function
     virtual void frame_ref(mojo_ref_t key) = 0;
     virtual void frame_kernel(const std::string& scope) = 0;
-    // Simlar to frame/frame_ref functions, helpers for string tables
+
+    // If a renderer has its own caching mechanism for strings, this can be used
+    // to store string information.
     virtual void string(mojo_ref_t key, const std::string& value) = 0;
+
+    // Refers to the string stored using the renderer's string function
     virtual void string_ref(mojo_ref_t key) = 0;
 
+    // Called to render a message from the profiler.
     virtual void render_message(std::string_view msg) = 0;
+
+    // Called once for each Thread being sampled.
+    // Pushes the Thread state but not its current Stack(s).
     virtual void render_thread_begin(PyThreadState* tstate, std::string_view name,
                                      microsecond_t cpu_time, uintptr_t thread_id,
                                      unsigned long native_id) = 0;
+
+    // Called once for each Task being sampled on the Thread.
+    // Called after render_thread_begin and before render_stack_begin.
     virtual void render_task_begin(std::string task_name, bool on_cpu) = 0;
+
+    // Called once for each Stack being sampled on the Task.
+    // Called after render_task_begin and before render_frame.
     virtual void render_stack_begin(long long pid, long long iid,
                                     const std::string& thread_name) = 0;
     virtual void render_frame(Frame& frame) = 0;
