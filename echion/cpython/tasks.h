@@ -26,6 +26,8 @@
 
 #include <echion/vm.h>
 
+constexpr ssize_t MAX_STACK_SIZE = 1 << 20; // 1 MiB
+
 extern "C" {
 
 typedef enum
@@ -183,7 +185,7 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
         return nullptr;
     }
 
-    if (frame.stacktop < 1 || frame.stacktop > (1 << 20)) {
+    if (frame.stacktop < 1 || frame.stacktop > MAX_STACK_SIZE) {
         return nullptr;
     }
 
@@ -191,7 +193,7 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
     
     // Calculate the remote address of the localsplus array
     auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
-    if (copy_generic(remote_localsplus, localsplus.get(), (frame.stacktop) * sizeof(PyObject*))) {
+    if (copy_generic(remote_localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*))) {
         return nullptr;
     }
 
@@ -224,14 +226,14 @@ inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
             _Py_OPARG(next) < 2)
             return NULL;
 
-        if (frame.stacktop < 1 || frame.stacktop > (1 << 20))
+        if (frame.stacktop < 1 || frame.stacktop > MAX_STACK_SIZE)
             return NULL;
 
         auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
         
         // Calculate the remote address of the localsplus array
         auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
-        if (copy_generic(remote_localsplus, localsplus.get(), (frame.stacktop) * sizeof(PyObject*))) {
+        if (copy_generic(remote_localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*))) {
             return NULL;
         }
     
@@ -269,7 +271,7 @@ inline PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
             return NULL;
 
         ssize_t nvalues = frame.f_stackdepth;
-        if (nvalues < 1 || nvalues > (1 << 20))
+        if (nvalues < 1 || nvalues > MAX_STACK_SIZE)
             return NULL;
 
         auto stack = std::make_unique<PyObject*[]>(nvalues);
