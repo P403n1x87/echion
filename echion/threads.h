@@ -301,21 +301,49 @@ inline Result<void> ThreadInfo::unwind_tasks()
     // Unused variable, will be used later by TaskInfo::unwind
     size_t unused;
 
+    // Index in python_stack where event-loop-level frames start.
+    // For off-CPU tasks, we only append frames from this index onwards,
+    // to avoid leaking on-CPU task-specific frames (like _run) into other tasks' stacks.
+    // Computed when we process the on-CPU task based on frames_to_push.
+    size_t event_loop_start_idx = 0;
+
+    // Check if any task's coroutine frame matches the bottom of python_stack.
+    // This detects if a task is running even when is_on_cpu() returns false (race condition).
+    bool task_frame_at_stack_bottom = false;
+    if (python_stack_first_frame_addr != nullptr)
+    {
+        for (auto& task : all_tasks)
+        {
+            for (auto coro = task->coro.get(); coro != nullptr; coro = coro->await.get())
+            {
+                if (coro->frame == python_stack_first_frame_addr)
+                {
+                    task_frame_at_stack_bottom = true;
+                    break;
+                }
+            }
+            if (task_frame_at_stack_bottom)
+                break;
+        }
+    }
+
     // Only one Task can be on CPU at a time.
     // Since determining if a Task is on CPU is somewhat costly, we
     // stop checking if Tasks are on CPU after seeing the first one.
     bool on_cpu_task_seen = false;
     for (auto& leaf_task : leaf_tasks)
     {
-        bool on_cpu = false;
-        if (!on_cpu_task_seen) { 
-            on_cpu = leaf_task.get().is_on_cpu();
-            if (on_cpu) {
+        bool is_this_task_on_cpu = false;
+        if (!on_cpu_task_seen)
+        {
+            is_this_task_on_cpu = leaf_task.get().is_on_cpu();
+            if (is_this_task_on_cpu)
+            {
                 on_cpu_task_seen = true;
             }
         }
 
-        auto stack_info = std::make_unique<StackInfo>(leaf_task.get().name, on_cpu);
+        auto stack_info = std::make_unique<StackInfo>(leaf_task.get().name, is_this_task_on_cpu);
         auto& stack = stack_info->stack;
         for (auto current_task = leaf_task;;)
         {
@@ -335,6 +363,18 @@ inline Result<void> ThreadInfo::unwind_tasks()
                 {
                     const auto& python_frame = python_stack[frames_to_push - i - 1];
                     stack.push_front(python_frame);
+                }
+
+                // Compute event loop boundary for off-CPU tasks.
+                // python_stack layout: [bottom_sync_frames..., coroutine, task_executor(_run), event_loop(_run_once)...]
+                // - frames_to_push = number of bottom sync frames
+                // - +1 skips the coroutine frame
+                // - +1 skips the task executor frame (_run)
+                // So event_loop_start_idx = frames_to_push + 2 points to _run_once
+                event_loop_start_idx = frames_to_push + 2;
+                if (event_loop_start_idx > python_stack.size())
+                {
+                    event_loop_start_idx = python_stack.size();
                 }
             }
 
@@ -364,8 +404,43 @@ inline Result<void> ThreadInfo::unwind_tasks()
             break;
         }
 
-        // Finish off with the remaining thread stack
-        for (size_t i = python_stack.size() - (on_cpu_task_seen ? upper_python_stack_size : python_stack.size()); i < python_stack.size(); i++) {
+        // Finish off with the remaining thread stack.
+        // For the on-CPU task, include task-specific frames (like _run).
+        // For off-CPU tasks, only include event-loop-level frames to avoid
+        // leaking on-CPU task's frames into other tasks' stacks.
+        size_t start_idx;
+        if (is_this_task_on_cpu)
+        {
+            start_idx = python_stack.size() - upper_python_stack_size;
+        }
+        else if (on_cpu_task_seen)
+        {
+            // Use the event loop boundary computed from the on-CPU task
+            start_idx = event_loop_start_idx;
+        }
+        else
+        {
+            // No on-CPU task detected by is_on_cpu(). This could be because:
+            // 1. All tasks are truly sleeping (event loop in select)
+            // 2. Race condition: a task was running when python_stack was captured,
+            //    but finished/yielded before we checked is_on_cpu()
+            //
+            // Use task_frame_at_stack_bottom to distinguish: if a task's coroutine
+            // frame matches python_stack's bottom frame, case 2 applies.
+            if (task_frame_at_stack_bottom)
+            {
+                // Race condition: skip task-specific frames (coroutine + _run)
+                start_idx = (python_stack.size() > 2) ? 2 : 0;
+            }
+            else
+            {
+                // Event loop is truly waiting, include all frames
+                start_idx = 0;
+            }
+        }
+
+        for (size_t i = start_idx; i < python_stack.size(); i++)
+        {
             const auto& python_frame = python_stack[i];
             stack.push_back(python_frame);
         }
