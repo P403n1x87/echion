@@ -86,6 +86,10 @@ inline FrameStack python_stack;
 inline FrameStack native_stack;
 inline FrameStack interleaved_stack;
 
+// The address of the first (innermost) frame in python_stack.
+// Used to detect if a task's coroutine is currently executing.
+inline PyObject* python_stack_first_frame_addr = nullptr;
+
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
 inline void unwind_native_stack()
@@ -221,6 +225,7 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 #else  // Python < 3.11
     PyObject* frame_addr = (PyObject*)tstate->frame;
 #endif
+    python_stack_first_frame_addr = frame_addr;
     unwind_frame(frame_addr, stack);
 }
 
