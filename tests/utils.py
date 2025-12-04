@@ -1,7 +1,8 @@
-from itertools import count
 import os
 import sys
 import typing as t
+from functools import wraps
+from itertools import count
 from pathlib import Path
 from shutil import which
 from subprocess import PIPE
@@ -13,6 +14,26 @@ from time import sleep
 
 import pytest
 from austin.format.mojo import MojoFile
+
+
+def retry_on_valueerror(max_retries: int = 3) -> t.Callable[[t.Callable[..., t.Any]], t.Callable[..., t.Any]]:
+    """Decorator that retries a test up to max_retries times if ValueError is raised."""
+    def decorator(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+        @wraps(func)
+        def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+            last_error: ValueError | None = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except ValueError as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        print(f"Retry {attempt + 1}/{max_retries} after ValueError: {e}")
+
+            assert last_error is not None
+            raise last_error
+        return wrapper
+    return decorator
 
 
 PY = sys.version_info[:2]

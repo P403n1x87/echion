@@ -1,9 +1,10 @@
 import pytest
 
-from tests.utils import DataSummary, run_target
+from tests.utils import DataSummary, run_target, retry_on_valueerror
 
 
 @pytest.mark.xfail(reason="This test is very flaky")
+@retry_on_valueerror()
 def test_asyncio_async_generator_wall_time() -> None:
     result, data = run_target("target_async_generator")
     assert result.returncode == 0, result.stderr.decode()

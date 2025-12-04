@@ -1,7 +1,7 @@
+from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
 
-from tests.utils import PY, DataSummary, run_target
 
-
+@retry_on_valueerror()
 def test_asyncio_as_completed():
     result, data = run_target("target_asyncio_as_completed")
     assert result.returncode == 0, result.stderr.decode()

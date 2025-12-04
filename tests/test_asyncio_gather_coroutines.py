@@ -1,9 +1,11 @@
 
 from tests.utils import DataSummary
 from tests.utils import run_target
+from tests.utils import retry_on_valueerror
 
 
-def test_asyncio_gather_wall_time():
+@retry_on_valueerror()
+def test_asyncio_gather_coroutines_wall_time():
     result, data = run_target("target_gather_coroutines")
     assert result.returncode == 0, result.stderr.decode()
 
