@@ -280,7 +280,7 @@ inline Result<void> ThreadInfo::unwind_tasks()
             waitee_map.emplace(task->waiter->origin, std::ref(*task));
         else if (parent_tasks.find(task->origin) == parent_tasks.end())
         {
-            if (cpu && ignore_non_running_threads && !task->is_on_cpu())
+            if (cpu && ignore_non_running_threads && !task->is_on_cpu)
             {
                 // This task is not running, so we skip it if we are
                 // interested in just CPU time.
@@ -290,29 +290,17 @@ inline Result<void> ThreadInfo::unwind_tasks()
         }
     }
 
-    // Only one Task can be on CPU at a time.
-    // Since determining if a task is on CPU is somewhat costly, we
-    // stop checking if Tasks are on CPU after seeing the first one.
-    bool on_cpu_task_seen = false;
-    for (auto& task : leaf_tasks)
+    for (auto& leaf_task : leaf_tasks)
     {
-        bool on_cpu = false;
-        if (!on_cpu_task_seen) { 
-            on_cpu = task.get().is_on_cpu();
-            if (on_cpu) {
-                on_cpu_task_seen = true;
-            }
-        }
- 
-        auto stack_info = std::make_unique<StackInfo>(task.get().name, on_cpu);
+        auto stack_info = std::make_unique<StackInfo>(leaf_task.get().name, leaf_task.get().is_on_cpu);
         auto& stack = stack_info->stack;
-        for (auto current_task = task;;)
+        for (auto current_task = leaf_task;;)
         {
             auto& task = current_task.get();
 
             size_t stack_size = task.unwind(stack);
 
-            if (on_cpu)
+            if (task.is_on_cpu)
             {
                 // Undo the stack unwinding
                 // TODO[perf]: not super-efficient :(
