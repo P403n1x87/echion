@@ -84,6 +84,22 @@ def as_completed(
 
 # -----------------------------------------------------------------------------
 
+_create_task = tasks.create_task
+
+
+@wraps(_create_task)
+def create_task(coro, *, name: t.Optional[str] = None, **kwargs: t.Any) -> asyncio.Task[t.Any]:
+    # kwargs will typically contain context (Python 3.11+ only) and eager_start (Python 3.14+ only)
+    task = _create_task(coro, name=name, **kwargs)
+    parent: t.Optional[asyncio.Task] = tasks.current_task()
+
+    if parent is not None:
+        echion.weak_link_tasks(parent, task)
+
+    return task
+
+
+# -----------------------------------------------------------------------------
 
 def patch() -> None:
     BaseDefaultEventLoopPolicy.set_event_loop = set_event_loop  # type: ignore[method-assign]
@@ -91,6 +107,8 @@ def patch() -> None:
     tasks._wait = wait  # type: ignore[attr-defined]
     tasks.as_completed = as_completed  # type: ignore[attr-defined,assignment]
     asyncio.as_completed = as_completed  # type: ignore[attr-defined,assignment]
+    tasks.create_task = create_task  # type: ignore[attr-defined,assignment]
+    asyncio.create_task = create_task  # type: ignore[attr-defined,assignment]
 
 
 def unpatch() -> None:
@@ -99,6 +117,8 @@ def unpatch() -> None:
     tasks._wait = _wait  # type: ignore[attr-defined]
     tasks.as_completed = _as_completed  # type: ignore[attr-defined]
     asyncio.as_completed = _as_completed
+    tasks.create_task = _create_task  # type: ignore[attr-defined]
+    asyncio.create_task = _create_task  # type: ignore[attr-defined]
 
 
 def track() -> None:

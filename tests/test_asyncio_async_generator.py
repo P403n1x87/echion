@@ -1,9 +1,7 @@
-import pytest
-
 from tests.utils import DataSummary, run_target
+from tests.utils import dump_summary
 
 
-@pytest.mark.xfail(reason="This test is very flaky")
 def test_asyncio_async_generator_wall_time() -> None:
     result, data = run_target("target_async_generator")
     assert result.returncode == 0, result.stderr.decode()
@@ -14,6 +12,7 @@ def test_asyncio_async_generator_wall_time() -> None:
     assert md["interval"] == "1000"
 
     summary = DataSummary(data)
+    dump_summary(summary, "summary_asyncio_async_generator.json")
 
     summary_json = {}
     for thread in summary.threads:

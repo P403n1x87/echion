@@ -266,10 +266,38 @@ inline Result<void> ThreadInfo::unwind_tasks()
         for (auto key : to_remove)
             task_link_map.erase(key);
 
-        // Determine the parent tasks from the gather links.
-        std::transform(task_link_map.cbegin(), task_link_map.cend(),
-                       std::inserter(parent_tasks, parent_tasks.begin()),
-                       [](const std::pair<PyObject*, PyObject*>& kv) { return kv.second; });
+        // Clean up the weak_task_link_map.
+        // Remove entries associated to tasks that no longer exist.
+        all_task_origins.clear();
+        std::transform(all_tasks.cbegin(), all_tasks.cend(),
+                       std::inserter(all_task_origins, all_task_origins.begin()),
+                       [](const TaskInfo::Ptr& task) { return task->origin; });
+        
+        to_remove.clear();
+        for (auto kv : weak_task_link_map)
+        {
+            if (all_task_origins.find(kv.first) == all_task_origins.end())
+                to_remove.push_back(kv.first);
+        }
+
+        for (auto key : to_remove) {
+            weak_task_link_map.erase(key);
+        }
+
+        // Determine the parent tasks from the gather (strong) links.
+        for (auto& link : task_link_map) 
+        {
+            auto parent = link.second;
+            
+            // Check if the parent is actually the child of another Task
+            auto is_child = weak_task_link_map.find(parent) != weak_task_link_map.end();
+            
+            // Only insert if we do not know of a Task that created the current Task
+            if (!is_child)
+            {
+                parent_tasks.insert(parent);
+            }
+        }   
     }
 
     for (auto& task : all_tasks)
@@ -290,81 +318,110 @@ inline Result<void> ThreadInfo::unwind_tasks()
         }
     }
 
+    // Make sure the on CPU task is first
+    // TODO: this is probably a performance disaster
+    std::sort(leaf_tasks.begin(), leaf_tasks.end(), [](const TaskInfo::Ref& a, const TaskInfo::Ref& b) {
+        return ((a.get().is_on_cpu() ? 0 : 1) < (b.get().is_on_cpu() ? 0 : 1));
+    });
+
+    // The size of the "pure Python" stack (before asyncio Frames), computed later by TaskInfo::unwind
+    size_t upper_python_stack_size = 0;
+    // Unused variable, will be used later by TaskInfo::unwind
+    size_t unused;
+
     // Only one Task can be on CPU at a time.
-    // Since determining if a task is on CPU is somewhat costly, we
+    // Since determining if a Task is on CPU is somewhat costly, we
     // stop checking if Tasks are on CPU after seeing the first one.
     bool on_cpu_task_seen = false;
-    for (auto& task : leaf_tasks)
+    for (auto& leaf_task : leaf_tasks)
     {
+        std::cerr << "== Unwinding leaf task " << string_table.lookup(leaf_task.get().name)->get() << std::endl;
         bool on_cpu = false;
         if (!on_cpu_task_seen) { 
-            on_cpu = task.get().is_on_cpu();
+            on_cpu = leaf_task.get().is_on_cpu();
             if (on_cpu) {
                 on_cpu_task_seen = true;
             }
         }
- 
-        auto stack_info = std::make_unique<StackInfo>(task.get().name, on_cpu);
+
+        auto stack_info = std::make_unique<StackInfo>(leaf_task.get().name, on_cpu);
         auto& stack = stack_info->stack;
-        for (auto current_task = task;;)
+        for (auto current_task = leaf_task;;)
         {
             auto& task = current_task.get();
+            std::cerr << "Unwinding task " << string_table.lookup(task.name)->get() << std::endl;
 
-            size_t stack_size = task.unwind(stack);
+            // Only the leaf Task can be on CPU, we we only compute is_on_cpu() if the current Task is the leaf Task
+            bool current_task_on_cpu = &task == &leaf_task.get() && task.is_on_cpu();
 
-            if (on_cpu)
+            // The task_stack_size includes both the coroutines frames and the "upper" Python synchronous frames
+            size_t task_stack_size = task.unwind(stack, current_task_on_cpu ? upper_python_stack_size : unused);
+            if (current_task_on_cpu)
             {
-                // Undo the stack unwinding
-                // TODO[perf]: not super-efficient :(
-                for (size_t i = 0; i < stack_size; i++)
-                    stack.pop_back();
+                // Get the "bottom" part of the Python synchronous Stack, that is to say the
+                // synchronous functions called by the Task's innermost coroutine.
+                size_t frames_to_push = (python_stack.size() > task_stack_size) ? python_stack.size() - task_stack_size : 0;
+                for (size_t i = 0; i < frames_to_push; i++)
+                {
+                    const auto& python_frame = python_stack[frames_to_push - i - 1];
+                    stack.push_front(python_frame);
+                }
+            }
 
-                // Instead we get part of the thread stack
-                FrameStack temp_stack;
-                size_t nframes =
-                    (python_stack.size() > stack_size) ? python_stack.size() - stack_size : 0;
-                for (size_t i = 0; i < nframes; i++)
-                {
-                    auto python_frame = python_stack.front();
-                    temp_stack.push_front(python_frame);
-                    python_stack.pop_front();
-                }
-                while (!temp_stack.empty())
-                {
-                    stack.push_front(temp_stack.front());
-                    temp_stack.pop_front();
-                }
+            std::cerr << "Stack after unwinding task " << string_table.lookup(task.name)->get() << std::endl;
+            for (auto& frame : stack) {
+                std::cerr << "  " << string_table.lookup(frame.get().name)->get() << std::endl;
             }
 
             // Add the task name frame
             stack.push_back(Frame::get(task.name));
 
+            auto task_name = string_table.lookup(task.name)->get();
+            std::cerr << "Searching for Task Link from " << task_name << std::endl;
+
             // Get the next task in the chain
             PyObject* task_origin = task.origin;
             if (waitee_map.find(task_origin) != waitee_map.end())
             {
+                std::cerr << "found waitee link from " << task_origin << " to " << waitee_map.find(task_origin)->second.get().name << std::endl;
                 current_task = waitee_map.find(task_origin)->second;
                 continue;
             }
 
+            
             {
+
                 // Check for, e.g., gather links
                 std::lock_guard<std::mutex> lock(task_link_map_lock);
 
                 if (task_link_map.find(task_origin) != task_link_map.end() &&
                     origin_map.find(task_link_map[task_origin]) != origin_map.end())
                 {
+                    std::cerr << "found strong link from " << task_origin << " to " << task_link_map[task_origin] << std::endl;
                     current_task = origin_map.find(task_link_map[task_origin])->second;
                     continue;
                 }
-            }
 
+                // Check for weak links
+                if (weak_task_link_map.find(task_origin) != weak_task_link_map.end() &&
+                    origin_map.find(weak_task_link_map[task_origin]) != origin_map.end())
+                {
+                    std::cerr << "found weak link from " << task_origin << " to " << weak_task_link_map[task_origin] << std::endl;
+                    current_task = origin_map.find(weak_task_link_map[task_origin])->second;
+                    std::cerr << "-> current_task = " << string_table.lookup(current_task.get().name)->get() << std::endl;
+                    continue;
+                }
+            }
+            
+            std::cerr << "no link found from " << task_origin << std::endl;
             break;
         }
 
         // Finish off with the remaining thread stack
-        for (auto p = python_stack.begin(); p != python_stack.end(); p++)
-            stack.push_back(*p);
+        for (size_t i = python_stack.size() - (on_cpu_task_seen ? upper_python_stack_size : python_stack.size()); i < python_stack.size(); i++) {
+            const auto& python_frame = python_stack[i];
+            stack.push_back(python_frame);
+        }
 
         current_tasks.push_back(std::move(stack_info));
     }
