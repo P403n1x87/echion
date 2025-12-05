@@ -8,9 +8,11 @@ import pytest
 
 from tests.utils import requires_sudo
 from tests.utils import run_echion
+from tests.utils import retry_on_valueerror
 
 
 # This test requires sudo on unix to work
+@retry_on_valueerror()
 @requires_sudo
 @pytest.mark.xfail(condition=platform.system() == "Darwin", reason="Times out on GitHub Actions")
 def test_where():

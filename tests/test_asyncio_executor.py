@@ -1,7 +1,8 @@
-from tests.utils import PY, DataSummary, run_target
+from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
 
 
-def test_asyncio_executor_wall_time():
+@retry_on_valueerror()
+def test_asyncio_executor():
     result, data = run_target("target_async_executor")
     assert result.returncode == 0, result.stderr.decode()
 

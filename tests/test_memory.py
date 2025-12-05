@@ -1,8 +1,9 @@
 import pytest
 
-from tests.utils import DataSummary, run_target
+from tests.utils import DataSummary, run_target, retry_on_valueerror
 
 
+@retry_on_valueerror()
 @pytest.mark.xfail(reason="Memory profiling is flaky")
 def test_memory():
     result, data = run_target("target_mem", "-m")

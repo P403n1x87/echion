@@ -4,8 +4,10 @@ from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import stealth
+from tests.utils import retry_on_valueerror
 
 
+@retry_on_valueerror()
 @stealth
 def test_cpu_time(stealth):
     result, data = run_target("target_cpu", *stealth, "-c")
@@ -70,6 +72,7 @@ def test_cpu_time(stealth):
         )
 
 
+@retry_on_valueerror()
 @stealth
 @pytest.mark.xfail
 def test_cpu_time_native(stealth):

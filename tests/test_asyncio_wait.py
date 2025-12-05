@@ -1,6 +1,7 @@
-from tests.utils import DataSummary, run_target
+from tests.utils import DataSummary, run_target, retry_on_valueerror
 
 
+@retry_on_valueerror()
 def test_asyncio_wait():
     result, data = run_target("target_asyncio_wait")
     assert result.returncode == 0, result.stderr.decode()

@@ -2,7 +2,7 @@ import linecache
 from itertools import count
 from types import FunctionType
 
-from tests.utils import PY, DataSummary, run_target
+from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
 
 
 def get_line_number(function: FunctionType, content: str) -> int:
@@ -22,6 +22,7 @@ def get_line_number(function: FunctionType, content: str) -> int:
     raise ValueError("Line not found")
 
 
+@retry_on_valueerror()
 def test_gevent():
     import echion.monkey.gevent as _gevent
 

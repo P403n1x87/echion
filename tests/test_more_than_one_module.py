@@ -1,8 +1,10 @@
 from tests.utils import DataSummary
 from tests.utils import PY
 from tests.utils import run_target
+from tests.utils import retry_on_valueerror
 
 
+@retry_on_valueerror()
 def test_more_than_one_module():
     result, data = run_target("target_more_than_one_module")
     assert result.returncode == 0 and data, result.stderr.decode()

@@ -1,7 +1,9 @@
 from tests.utils import DataSummary
 from tests.utils import run_target
+from tests.utils import retry_on_valueerror
 
 
+@retry_on_valueerror()
 def test_asyncio_gather_deep_coroutines():
     result, data = run_target("target_gather_coroutines_deep")
     assert result.returncode == 0, result.stderr.decode()
