@@ -13,17 +13,6 @@ def test_asyncio_coroutines_wall_time():
 
     summary = DataSummary(data)
 
-    summary_json = {}
-    for thread in summary.threads:
-        summary_json[thread] = [
-            {
-                "stack": key,
-                "metric": value,
-            }
-            for key, value in summary.threads[thread].items()
-            if key and isinstance(next(iter(key)), str)
-        ]
-
     # We expect MainThread and the sampler
     expected_nthreads = 2
     assert summary.nthreads == expected_nthreads, summary.threads
