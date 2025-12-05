@@ -23,6 +23,7 @@
 #if PY_VERSION_HEX >= 0x030b0000
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
+#include <echion/cfunction.h>
 #include <echion/errors.h>
 
 // ----------------------------------------------------------------------------
@@ -116,6 +117,7 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
+    bool is_first_frame = true;
 
     PyObject* current_frame_addr = frame_addr;
     while (current_frame_addr != NULL && stack.size() < max_frames)
@@ -126,8 +128,34 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         seen_frames.insert(current_frame_addr);
 
 #if PY_VERSION_HEX >= 0x030b0000
+        _PyInterpreterFrame* iframe_addr = reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr);
+
+        // For the leaf frame (first frame), try to detect if we're in a C function call
+        if (is_first_frame)
+        {
+            is_first_frame = false;
+
+            // Read the frame to get the code object
+            _PyInterpreterFrame iframe;
+            if (!copy_type(iframe_addr, iframe))
+            {
+#if PY_VERSION_HEX >= 0x030d0000
+                PyCodeObject* code_addr = reinterpret_cast<PyCodeObject*>(iframe.f_executable);
+#else
+                PyCodeObject* code_addr = iframe.f_code;
+#endif
+                // Try to detect C function call
+                auto maybe_cfunction = detect_cfunction_call(iframe_addr, code_addr);
+                if (maybe_cfunction)
+                {
+                    stack.push_back(*maybe_cfunction);
+                    count++;
+                }
+            }
+        }
+
         auto maybe_frame =
-            Frame::read(reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr),
+            Frame::read(iframe_addr,
                         reinterpret_cast<_PyInterpreterFrame**>(&current_frame_addr));
 #else
         auto maybe_frame = Frame::read(current_frame_addr, &current_frame_addr);
@@ -137,6 +165,8 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
+        // Skip anonymous C frames (those we couldn't identify)
+        // but keep C function frames that have actual names
         if (maybe_frame->get().name == StringTable::C_FRAME) {
             continue;
         }
