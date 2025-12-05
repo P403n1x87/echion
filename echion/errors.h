@@ -26,6 +26,7 @@ enum class ErrorKind
     CpuTimeError,
     LocationError,
     RendererError,
+    CFunctionError,
 };
 
 template <typename T>

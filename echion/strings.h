@@ -222,11 +222,24 @@ public:
         return std::ref(it->second);
     };
 
+    // Register a string with a specific key (used for C function names)
+    inline void register_string(Key key, const std::string& str)
+    {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
+        if (this->find(key) == this->end())
+        {
+            this->emplace(key, str);
+            Renderer::get().string(key, str);
+        }
+    }
+
     StringTable() : std::unordered_map<uintptr_t, std::string>()
     {
         this->emplace(0, "");
         this->emplace(INVALID, "<invalid>");
         this->emplace(UNKNOWN, "<unknown>");
+        this->emplace(C_FRAME, "<c_frame>");
     };
 
 private:

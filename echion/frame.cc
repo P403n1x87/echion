@@ -1,5 +1,6 @@
 #include <echion/frame.h>
 
+#include <echion/cfunction.h>
 #include <echion/errors.h>
 #include <echion/render.h>
 
@@ -317,7 +318,31 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
     {
         *prev_addr = frame_addr->previous;
-        // This is a C frame, we just need to ignore it
+
+#if PY_VERSION_HEX >= 0x030d0000
+        // In Python 3.13+, try to get the C function name from f_executable
+        PyObject* executable = frame_addr->f_executable;
+        if (executable != nullptr)
+        {
+            // Check if f_executable is NOT a code object (i.e., it's a callable)
+            PyObject executable_base;
+            if (!copy_type(executable, executable_base))
+            {
+                PyTypeObject* type_addr = Py_TYPE(&executable_base);
+                if (type_addr != &PyCode_Type)
+                {
+                    // It's a callable - try to get its name
+                    auto maybe_name_key = get_cfunction_name(executable);
+                    if (maybe_name_key)
+                    {
+                        return std::ref(Frame::get(*maybe_name_key));
+                    }
+                }
+            }
+        }
+#endif  // PY_VERSION_HEX >= 0x030d0000
+
+        // Fall back to generic C_FRAME if we couldn't get the name
         return std::ref(C_FRAME);
     }
 
