@@ -1,3 +1,4 @@
+import json
 import sys
 
 from tests.utils import PY
@@ -41,119 +42,123 @@ def test_asyncio_within_function():
     assert summary.nthreads == expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
 
-    # sync_main / async_starter / (Task-1) / async_main / outer / inner / synchronous_code / synchronous_code_dep (/ time.sleep)
-    if PY >= (3, 11):
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "sync_main",
-                "async_starter",
-                "run",
-                "Runner.run",
-                "BaseEventLoop.run_until_complete",
-                "BaseEventLoop.run_forever",
-                "BaseEventLoop._run_once",
-                "Handle._run",
-                "Task-1",
-                "async_main",
-                "outer",
-                "inner",
-                "synchronous_code",
-                "synchronous_code_dep"
-                # We don't have time.sleep because it's a C function.
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
+    try:
+        # sync_main / async_starter / (Task-1) / async_main / outer / inner / synchronous_code / synchronous_code_dep (/ time.sleep)
+        if PY >= (3, 11):
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "_run_module_as_main",
+                    "_run_code",
+                    "<module>",
+                    "sync_main",
+                    "async_starter",
+                    "run",
+                    "Runner.run",
+                    "BaseEventLoop.run_until_complete",
+                    "BaseEventLoop.run_forever",
+                    "BaseEventLoop._run_once",
+                    "Handle._run",
+                    "Task-1",
+                    "async_main",
+                    "outer",
+                    "inner",
+                    "synchronous_code",
+                    "synchronous_code_dep"
+                    # We don't have time.sleep because it's a C function.
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
 
-        # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "<module>",
-                "sync_main",
-                "async_starter",
-                "run",
-                "Runner.run",
-                "BaseEventLoop.run_until_complete",
-                "BaseEventLoop.run_forever",
-                "BaseEventLoop._run_once",
-                f'{"KqueueSelector" if sys.platform == "darwin" else "EpollSelector"}.select',
-                "Task-1",
-                "async_main",
-                "outer",
-                "sleep",  # asyncio.sleep
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
+            # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "<module>",
+                    "sync_main",
+                    "async_starter",
+                    "run",
+                    "Runner.run",
+                    "BaseEventLoop.run_until_complete",
+                    "BaseEventLoop.run_forever",
+                    "BaseEventLoop._run_once",
+                    f'{"KqueueSelector" if sys.platform == "darwin" else "EpollSelector"}.select',
+                    "Task-1",
+                    "async_main",
+                    "outer",
+                    "sleep",  # asyncio.sleep
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
 
-        # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
-        summary.assert_stack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "sync_main",
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
-    else:
+            # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
+            summary.assert_stack(
+                "0:MainThread",
+                (
+                    "_run_module_as_main",
+                    "_run_code",
+                    "<module>",
+                    "sync_main",
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
+        else:
 
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "sync_main",
-                "async_starter",
-                "run",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "_run",
-                "Task-1",
-                "async_main",
-                "outer",
-                "inner",
-                "synchronous_code",
-                "synchronous_code_dep"
-                # We don't have time.sleep because it's a C function.
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "_run_module_as_main",
+                    "_run_code",
+                    "<module>",
+                    "sync_main",
+                    "async_starter",
+                    "run",
+                    "run_until_complete",
+                    "run_forever",
+                    "_run_once",
+                    "_run",
+                    "Task-1",
+                    "async_main",
+                    "outer",
+                    "inner",
+                    "synchronous_code",
+                    "synchronous_code_dep"
+                    # We don't have time.sleep because it's a C function.
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
 
-        # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "<module>",
-                "sync_main",
-                "async_starter",
-                "run",
-                "run_until_complete",
-                "run_forever",
-                "_run_once",
-                "select",
-                "Task-1",
-                "async_main",
-                "outer",
-                "sleep",  # asyncio.sleep
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
+            # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "<module>",
+                    "sync_main",
+                    "async_starter",
+                    "run",
+                    "run_until_complete",
+                    "run_forever",
+                    "_run_once",
+                    "select",
+                    "Task-1",
+                    "async_main",
+                    "outer",
+                    "sleep",  # asyncio.sleep
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
 
-        # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
-        summary.assert_stack(
-            "0:MainThread",
-            (
-                "_run_module_as_main",
-                "_run_code",
-                "<module>",
-                "sync_main",
-            ),
-            lambda v: v >= (0.25 * 0.9) * 1e6,
-        )
+            # sync_main / async_starter / (Task-1) / async_main / outer / asyncio.sleep
+            summary.assert_stack(
+                "0:MainThread",
+                (
+                    "_run_module_as_main",
+                    "_run_code",
+                    "<module>",
+                    "sync_main",
+                ),
+                lambda v: v >= (0.25 * 0.9) * 1e6,
+            )
+    except AssertionError:
+        print(json.dumps(summary_json, indent=4))
+        raise

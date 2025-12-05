@@ -1,10 +1,10 @@
+import json
 
 from tests.utils import DataSummary
 from tests.utils import run_target
-from tests.utils import retry_on_valueerror
 from tests.utils import dump_summary
 from tests.utils import retry_on_valueerror
-
+from tests.utils import summary_to_json
 
 @retry_on_valueerror()
 def test_asyncio_gather_coroutines_wall_time():
@@ -19,51 +19,55 @@ def test_asyncio_gather_coroutines_wall_time():
     summary = DataSummary(data)
     dump_summary(summary, "summary_asyncio_gather_coroutines.json")
 
-    # We expect to see one stack for Task-1 / Task-2 / inner_1 and one for Task-1 / Task-3 / inner_2
     try:
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "main",
-                "Task-2",
-                "inner_1",
-                "sleep",
-            ),
-            lambda v: v >= 0.0,
-        )
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "main",
-                "Task-3",
-                "inner_2",
-                "sleep",
-            ),
-            lambda v: v >= 0.0,
-        )
+        # We expect to see one stack for Task-1 / Task-2 / inner_1 and one for Task-1 / Task-3 / inner_2
+        try:
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "Task-2",
+                    "inner_1",
+                    "sleep",
+                ),
+                lambda v: v >= 0.0,
+            )
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "Task-3",
+                    "inner_2",
+                    "sleep",
+                ),
+                lambda v: v >= 0.0,
+            )
+        except AssertionError:
+            # Search the other way around - Task 1 / Task 3 / inner_1 and Task 1 / Task 2 / inner_2
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "Task-2",
+                    "inner_2",
+                    "sleep",
+                ),
+                lambda v: v >= 0.0,
+            )
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "Task-3",
+                    "inner_1",
+                    "sleep",
+                ),
+                lambda v: v >= 0.0,
+            )
     except AssertionError:
-        # Search the other way around - Task 1 / Task 3 / inner_1 and Task 1 / Task 2 / inner_2
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "main",
-                "Task-2",
-                "inner_2",
-                "sleep",
-            ),
-            lambda v: v >= 0.0,
-        )
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "main",
-                "Task-3",
-                "inner_1",
-                "sleep",
-            ),
-            lambda v: v >= 0.0,
-        )
+        print(json.dumps(summary_to_json(summary), indent=4))
+        raise
