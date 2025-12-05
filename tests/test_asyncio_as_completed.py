@@ -1,4 +1,5 @@
-from tests.utils import PY, DataSummary, run_target, retry_on_valueerror, dump_summary
+import json
+from tests.utils import PY, DataSummary, run_target, retry_on_valueerror, dump_summary, summary_to_json
 
 
 @retry_on_valueerror()
@@ -13,17 +14,6 @@ def test_asyncio_as_completed():
 
     summary = DataSummary(data)
 
-    summary_json = {}
-    for thread in summary.threads:
-        summary_json[thread] = [
-            {
-                "stack": key,
-                "metric": value,
-            }
-            for key, value in summary.threads[thread].items()
-            if key and isinstance(next(iter(key)), str)
-        ]
-
     dump_summary(summary, "summary_asyncio_as_completed.json")
 
     # We expect MainThread and the sampler
@@ -31,56 +21,56 @@ def test_asyncio_as_completed():
     assert summary.nthreads == expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
 
-    # Test stacks and expected values
-    # TODO: these stacks need to be adapted to Python 3.11 (qual names have changed)
-    # but in the current state they don't work at all anyway.
-    # Thread Pool Executor
-    if PY >= (3, 13):
-        for i in range(3, 12):
-            summary.assert_substack(
-                "0:MainThread",
-                (
-                    "Task-1",
-                    "main",
-                    "_AsCompletedIterator._wait_for_one",
-                    "Queue.get",
-                    f"Task-{i}",
-                    "wait_and_return_delay",
-                    "other",
-                    "sleep",
-                ),
-                lambda v: v >= 0.00,
-            )
+    try:
+        if PY >= (3, 13):
+            for i in range(3, 12):
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "Task-1",
+                        "main",
+                        "_AsCompletedIterator._wait_for_one",
+                        "Queue.get",
+                        f"Task-{i}",
+                        "wait_and_return_delay",
+                        "other",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.00,
+                )
 
-    elif PY >= (3, 11):
-        for i in range(3, 12):
-            summary.assert_substack(
-                "0:MainThread",
-                (
-                    "Task-1",
-                    "main",
-                    "as_completed.<locals>._wait_for_one",
-                    "Queue.get",
-                    f"Task-{i}",
-                    "wait_and_return_delay",
-                    "other",
-                    "sleep",
-                ),
-                lambda v: v >= 0.00,
-            )
-    else:
-        for i in range(3, 12):
-            summary.assert_substack(
-                "0:MainThread",
-                (
-                    "Task-1",
-                    "main",
-                    "_wait_for_one",
-                    "get",
-                    f"Task-{i}",
-                    "wait_and_return_delay",
-                    "other",
-                    "sleep",
-                ),
-                lambda v: v >= 0.00,
-            )
+        elif PY >= (3, 11):
+            for i in range(3, 12):
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "Task-1",
+                        "main",
+                        "as_completed.<locals>._wait_for_one",
+                        "Queue.get",
+                        f"Task-{i}",
+                        "wait_and_return_delay",
+                        "other",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.00,
+                )
+        else:
+            for i in range(3, 12):
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "Task-1",
+                        "main",
+                        "_wait_for_one",
+                        "get",
+                        f"Task-{i}",
+                        "wait_and_return_delay",
+                        "other",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.00,
+                )
+    except AssertionError:
+        print(json.dumps(summary_to_json(summary), indent=4))
+        raise

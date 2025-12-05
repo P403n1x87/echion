@@ -1,3 +1,4 @@
+import json
 from tests.utils import DataSummary, run_target, retry_on_valueerror
 
 
@@ -24,19 +25,23 @@ def test_asyncio_wait():
             if key and isinstance(next(iter(key)), str)
         ]
 
-    # Test that we see the stitched stacks (Task-1 / outer / wait / _wait / inner-<index> / inner / sleep)
-    for i in range(10):
-        summary.assert_substack(
-            "0:MainThread",
-            (
-                "Task-1",
-                "main",
-                "outer",
-                "wait",
-                "_wait",
-                f"inner-{i}",
-                "inner",
-                "sleep",
-            ),
-            lambda v: v >= 0.0,
-        )
+    try:
+        # Test that we see the stitched stacks (Task-1 / outer / wait / _wait / inner-<index> / inner / sleep)
+        for i in range(10):
+            summary.assert_substack(
+                "0:MainThread",
+                (
+                    "Task-1",
+                    "main",
+                    "outer",
+                    "wait",
+                    "_wait",
+                    f"inner-{i}",
+                    "inner",
+                    "sleep",
+                ),
+                lambda v: v >= 0.0,
+            )
+    except AssertionError:
+        print(json.dumps(summary_json, indent=2))
+        raise
