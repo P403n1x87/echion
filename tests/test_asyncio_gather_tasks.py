@@ -1,9 +1,12 @@
+import json
 import sys
 
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import retry_on_valueerror
+from tests.utils import dump_summary
+from tests.utils import summary_to_json
 
 
 @retry_on_valueerror()
@@ -18,6 +21,8 @@ def test_asyncio_gather_tasks_wall_time():
 
     summary = DataSummary(data)
 
+    dump_summary(summary, "summary_asyncio_gather_tasks.json")
+
     expected_nthreads = 2
     assert summary.nthreads == expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
@@ -30,61 +35,85 @@ def test_asyncio_gather_tasks_wall_time():
         summary.query("0:MainThread", (("F4_1", 0), ("f4", 22), ("f5", 26))) is not None
     )
 
-    # Test stacks and expected values
-    if PY >= (3, 11):
-        for t in ("F4_0", "F4_1"):
-            summary.assert_substack(
-                "0:MainThread",
-                (
-                    "_run_module_as_main",
-                    "_run_code",
-                    "<module>",
-                    "run",
-                    "Runner.run",
-                    "BaseEventLoop.run_until_complete",
-                    "BaseEventLoop.run_forever",
-                    "BaseEventLoop._run_once",
-                    "KqueueSelector.select"
-                    if sys.platform == "darwin"
-                    else "EpollSelector.select",
-                    "Task-1",
-                    "main",
-                    "F1",
-                    "f1",
-                    "f2",
-                    "F3",
-                    "f3",
-                    t,
-                    "f4",
-                    "f5",
-                    "sleep",
-                ),
-                lambda v: v >= 0.45e6,
-            )
-    else:
-        for t in ("F4_0", "F4_1"):
-            summary.assert_substack(
-                "0:MainThread",
-                (
-                    "_run_module_as_main",
-                    "_run_code",
-                    "<module>",
-                    "run",
-                    "run_until_complete",
-                    "run_forever",
-                    "_run_once",
-                    "select",
-                    "Task-1",
-                    "main",
-                    "F1",
-                    "f1",
-                    "f2",
-                    "F3",
-                    "f3",
-                    t,
-                    "f4",
-                    "f5",
-                    "sleep",
-                ),
-                lambda v: v >= 0.45e6,
-            )
+    try:
+        # Test stacks and expected values
+        if PY >= (3, 11):
+            for t in ("F4_0", "F4_1"):
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "Task-1",
+                        "main",
+                        "F1",
+                        "f1",
+                        "f2",
+                        "F3",
+                        "f3",
+                        t,
+                        "f4",
+                        "f5",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.45e6,
+                )
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "_run_module_as_main",
+                        "_run_code",
+                        "<module>",
+                        "run",
+                        "Runner.run",
+                        "BaseEventLoop.run_until_complete",
+                        "BaseEventLoop.run_forever",
+                        "BaseEventLoop._run_once",
+                        (
+                            "KqueueSelector.select"
+                            if sys.platform == "darwin"
+                            else "EpollSelector.select"
+                        ),
+                        "Task-1",
+                        "main",
+                        "F1",
+                        "f1",
+                        "f2",
+                        "F3",
+                        "f3",
+                        t,
+                        "f4",
+                        "f5",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.45e6,
+                )
+        else:
+            for t in ("F4_0", "F4_1"):
+                summary.assert_substack(
+                    "0:MainThread",
+                    (
+                        "_run_module_as_main",
+                        "_run_code",
+                        "<module>",
+                        "run",
+                        "run_until_complete",
+                        "run_forever",
+                        "_run_once",
+                        "select",
+                        "Task-1",
+                        "main",
+                        "F1",
+                        "f1",
+                        "f2",
+                        "F3",
+                        "f3",
+                        t,
+                        "f4",
+                        "f5",
+                        "sleep",
+                    ),
+                    lambda v: v >= 0.45e6,
+                )
+    except AssertionError:
+        print("stderr", result.stderr.decode())
+        print(json.dumps(summary_to_json(summary), indent=4))
+        raise
