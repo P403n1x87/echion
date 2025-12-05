@@ -29,6 +29,7 @@ def test_gevent():
     result, data = run_target("target_gevent")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"

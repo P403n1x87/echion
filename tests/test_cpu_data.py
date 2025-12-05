@@ -22,7 +22,7 @@ def test_cpu_time(stealth):
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
     assert summary.total_metric >= 0.5 * 1e6
-    assert summary.nsamples
+    assert summary.n_samples
 
     # Test line numbers
     assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is None
