@@ -315,8 +315,8 @@ static inline int copy_memory(proc_ref_t proc_ref, const void* addr, ssize_t len
 {
     ssize_t result = -1;
 
-    // Early exit on zero page
-    if (reinterpret_cast<uintptr_t>(addr) < 4096)
+    // Early exit on zero page or zero length
+    if (reinterpret_cast<uintptr_t>(addr) < 4096 || len == 0)
     {
         return result;
     }
