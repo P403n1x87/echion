@@ -2,6 +2,7 @@
 
 #include <echion/errors.h>
 #include <echion/render.h>
+#include <python3.15/internal/pycore_interpframe_structs.h>
 
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
@@ -65,7 +66,9 @@ Frame::Frame(PyObject* frame)
     location.column++;
     location.column_end++;
     name = string_table.key_unsafe(code->co_qualname);
-#if PY_VERSION_HEX >= 0x030c0000
+#if PY_VERSION_HEX >= 0x030f0000
+    is_entry = (iframe->owner == FRAME_OWNED_BY_INTERPRETER);  // Shim frame
+#elif PY_VERSION_HEX >= 0x030c0000
     is_entry = (iframe->owner == FRAME_OWNED_BY_CSTACK);  // Shim frame
 #else
     is_entry = iframe->is_entry;
@@ -321,7 +324,19 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
         return ErrorKind::FrameError;
     }
 
-#if PY_VERSION_HEX >= 0x030c0000
+#if PY_VERSION_HEX >= 0x030f0000
+    if (frame_addr->owner == FRAME_OWNED_BY_INTERPRETER)
+    {
+        *prev_addr = frame_addr->previous;
+        // This is a C frame, we just need to ignore it
+        return std::ref(C_FRAME);
+    }
+
+    if (frame_addr->owner != FRAME_OWNED_BY_THREAD && frame_addr->owner != FRAME_OWNED_BY_GENERATOR)
+    {
+        return ErrorKind::FrameError;
+    }
+#elif PY_VERSION_HEX >= 0x030c0000
     if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
     {
         *prev_addr = frame_addr->previous;
@@ -377,7 +392,9 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 #endif  // PY_VERSION_HEX >= 0x030d0000
     if (&frame != &INVALID_FRAME)
     {
-#if PY_VERSION_HEX >= 0x030c0000
+#if PY_VERSION_HEX >= 0x030f0000
+        frame.is_entry = (frame_addr->owner == FRAME_OWNED_BY_INTERPRETER);  // Shim frame
+#elif PY_VERSION_HEX >= 0x030c0000
         frame.is_entry = (frame_addr->owner == FRAME_OWNED_BY_CSTACK);  // Shim frame
 #else   // PY_VERSION_HEX < 0x030c0000
         frame.is_entry = frame_addr->is_entry;

@@ -172,7 +172,36 @@ typedef struct
 #define RESUME_QUICK INSTRUMENTED_RESUME
 #endif
 
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
+    if (gen->gi_frame_state != FRAME_SUSPENDED_YIELD_FROM) {
+        return nullptr;
+    }
+
+    _PyInterpreterFrame frame;
+    if (copy_type(frame_addr, frame)) {
+        return nullptr;
+    }
+
+    int stacktop = frame.localsplus - frame.stackpointer;
+
+    if (stacktop < 1 || stacktop > MAX_STACK_SIZE) {
+        return nullptr;
+    }
+
+    auto localsplus = std::make_unique<PyObject*[]>(stacktop);
+    
+    // Calculate the remote address of the localsplus array
+    auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
+    if (copy_generic(remote_localsplus, localsplus.get(), stacktop * sizeof(PyObject*))) {
+        return nullptr;
+    }
+
+    return localsplus[stacktop-1];
+}
+
+#elif PY_VERSION_HEX >= 0x030d0000
 
 inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
     if (gen->gi_frame_state != FRAME_SUSPENDED_YIELD_FROM) {
