@@ -186,10 +186,10 @@ public:
     PyObject* origin = NULL;
     PyObject* loop = NULL;
 
+    bool is_on_cpu = false;
     GenInfo::Ptr coro = nullptr;
 
     StringTable::Key name;
-    bool is_on_cpu = false;
 
     // Information to reconstruct the async stack as best as we can
     TaskInfo::Ptr waiter = nullptr;
@@ -197,12 +197,12 @@ public:
     [[nodiscard]] static Result<TaskInfo::Ptr> create(TaskObj*);
     TaskInfo(PyObject* origin, PyObject* loop, GenInfo::Ptr coro, StringTable::Key name,
              TaskInfo::Ptr waiter)
-        : origin(origin), loop(loop), coro(std::move(coro)), name(name), is_on_cpu(coro ? coro->is_running : false), waiter(std::move(waiter))
+        : origin(origin), loop(loop), is_on_cpu(coro ? coro->is_running : false), coro(std::move(coro)), name(name), waiter(std::move(waiter))
     {
     }
 
     [[nodiscard]] static Result<TaskInfo::Ptr> current(PyObject*);
-    inline size_t unwind(FrameStack&);
+    inline size_t unwind(FrameStack&, size_t& upper_python_stack_size);
 };
 
 inline std::unordered_map<PyObject*, PyObject*> task_link_map;
