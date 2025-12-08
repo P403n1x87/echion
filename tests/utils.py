@@ -250,25 +250,28 @@ else:
     )
 
 
-def summary_to_json(summary: DataSummary) -> t.Dict[str, t.Any]:
+def summary_to_json(summary: DataSummary, line_numbers: bool = False) -> t.Dict[str, t.Any]:
     summary_json = {}
     for thread in summary.threads:
         summary_json[thread] = sorted(
             [
                 {
-                    "stack": key,
+                    "stack": (
+                        list(key) if isinstance(next(iter(key)), str)
+                        else [f"{item[0]}:{item[1]}" for item in key]
+                    ),
                     "metric": value,
                     "count": summary.sample_counts[thread][key],
                 }
                 for key, value in summary.threads[thread].items()
-                if key and isinstance(next(iter(key)), str)
+                if key and ((line_numbers and isinstance(next(iter(key)), tuple)) or (not line_numbers and isinstance(next(iter(key)), str)))
             ],
-            key=lambda x: x["metric"],
+            key=lambda x: t.cast(float, x["metric"]),
             reverse=True,
         )
     return summary_json
 
 
-def dump_summary(summary: DataSummary, file: str) -> None:
+def dump_summary(summary: DataSummary, file: str, line_numbers: bool = False) -> None:
     with open(file, "w") as f:
-        json.dump(summary_to_json(summary), f, indent=2)
+        json.dump(summary_to_json(summary, line_numbers), f, indent=2)
