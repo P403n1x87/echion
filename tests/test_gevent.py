@@ -6,10 +6,12 @@ import pytest
 
 from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
 
+
 try:
     import gevent  # noqa: F401
 except ImportError:
     pytest.skip("gevent not installed", allow_module_level=True)
+
 
 def get_line_number(function: FunctionType, content: str) -> int:
     code = function.__code__

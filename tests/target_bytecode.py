@@ -23,7 +23,7 @@ def replace_bytecode():
 if __name__ == "__main__":
     Thread(target=replace_bytecode, daemon=True).start()
 
-    end = time() + 5
+    end = time() + 2
 
     while time() < end:
         foo(12)

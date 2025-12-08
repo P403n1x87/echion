@@ -1,9 +1,8 @@
-import pytest
+import json
 
-from tests.utils import DataSummary, run_target, retry_on_valueerror, dump_summary
+from tests.utils import DataSummary, run_target, retry_on_valueerror, dump_summary, summary_to_json
 
 
-@pytest.mark.xfail(reason="This test is very flaky")
 @retry_on_valueerror()
 def test_asyncio_async_generator_wall_time() -> None:
     result, data = run_target("target_async_generator")
@@ -32,16 +31,21 @@ def test_asyncio_async_generator_wall_time() -> None:
     assert summary.nthreads >= expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
 
-    summary.assert_substack(
-        "0:MainThread",
-        (
-            "Task-1",
-            "main",
-            "asynchronous_function",
-            "async_generator",
-            "async_generator_dep",
-            "deep_dependency",
-            "sleep",
-        ),
-        lambda v: v >= 0.0
-    )
+    try:
+        summary.assert_substack(
+            "0:MainThread",
+            (
+                "Task-1",
+                "main",
+                "asynchronous_function",
+                "async_generator",
+                "async_generator_dep",
+                "deep_dependency",
+                "sleep",
+            ),
+            lambda v: v >= 0.0,
+        )
+    except AssertionError:
+        print("stderr", result.stderr.decode())
+        print(json.dumps(summary_to_json(summary), indent=2))
+        raise

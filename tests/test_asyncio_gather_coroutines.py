@@ -6,6 +6,7 @@ from tests.utils import dump_summary
 from tests.utils import retry_on_valueerror
 from tests.utils import summary_to_json
 
+
 @retry_on_valueerror()
 def test_asyncio_gather_coroutines_wall_time():
     result, data = run_target("target_gather_coroutines")
@@ -69,5 +70,6 @@ def test_asyncio_gather_coroutines_wall_time():
                 lambda v: v >= 0.0,
             )
     except AssertionError:
+        print("stderr", result.stderr.decode())
         print(json.dumps(summary_to_json(summary), indent=4))
         raise

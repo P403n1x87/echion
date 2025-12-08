@@ -74,6 +74,7 @@ def test_asyncio_coroutines_wall_time():
                 ),
             )
         except AssertionError:
+            print("stderr", result.stderr.decode())
             print(json.dumps(summary_to_json(summary), indent=4))
             raise
     else:  # PY < (3, 11)
@@ -128,5 +129,6 @@ def test_asyncio_coroutines_wall_time():
                 ),
             )
         except AssertionError:
+            print("stderr", result.stderr.decode())
             print(json.dumps(summary_to_json(summary), indent=4))
             raise

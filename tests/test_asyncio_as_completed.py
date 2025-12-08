@@ -73,5 +73,6 @@ def test_asyncio_as_completed():
                     lambda v: v >= 0.00,
                 )
     except AssertionError:
+        print("stderr", result.stderr.decode())
         print(json.dumps(summary_to_json(summary), indent=4))
         raise
