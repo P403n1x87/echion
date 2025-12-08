@@ -11,7 +11,11 @@
 #include <cpython/genobject.h>
 
 #define Py_BUILD_CORE
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030f0000
+#include <opcode.h>
+#include <internal/pycore_interpframe_structs.h>
+#include <internal/pycore_frame.h>
+#elif PY_VERSION_HEX >= 0x030d0000
 #include <opcode.h>
 #else
 #include <internal/pycore_frame.h>

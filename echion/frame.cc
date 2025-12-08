@@ -1,8 +1,6 @@
 #include <echion/frame.h>
-
 #include <echion/errors.h>
 #include <echion/render.h>
-#include <python3.15/internal/pycore_interpframe_structs.h>
 
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
