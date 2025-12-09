@@ -223,8 +223,8 @@ ThreadInfo::unwind_tasks(ThreadStateType* tstate_ptr)
 {
     std::vector<TaskInfo::Ref> leaf_tasks;
     std::unordered_set<PyObject*> parent_tasks;
-    std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map; // Indexed by task origin
-    std::unordered_map<PyObject*, TaskInfo::Ref> origin_map; // Indexed by task origin
+    std::unordered_map<PyObject*, TaskInfo::Ref> waitee_map;  // Indexed by task origin
+    std::unordered_map<PyObject*, TaskInfo::Ref> origin_map;  // Indexed by task origin
     static std::unordered_set<PyObject*> previous_task_objects;
 
     auto maybe_all_tasks = get_all_tasks(reinterpret_cast<PyObject*>(asyncio_loop), tstate_ptr);

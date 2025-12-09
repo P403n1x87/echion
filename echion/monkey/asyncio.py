@@ -74,8 +74,9 @@ def as_completed(
     loop = t.cast(t.Optional[asyncio.AbstractEventLoop], kwargs.get("loop"))
     parent: t.Optional[asyncio.Task] = tasks.current_task(loop)
 
+    futures: set[asyncio.Future] = set(fs)
     if parent is not None:
-        futures: set[asyncio.Future] = {asyncio.ensure_future(f, loop=loop) for f in set(fs)}
+        futures = {asyncio.ensure_future(f, loop=loop) for f in set(fs)}
         for child in futures:
             echion.link_tasks(parent, child)
 
