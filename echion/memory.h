@@ -212,7 +212,7 @@ static inline void general_alloc(void* address, size_t size)
     // Therefore, we expect these structures to remain valid and essentially
     // immutable for the duration of the unwinding process, which happens
     // in-line with the allocation within the calling thread.
-    unwind_python_stack_unsafe(tstate, *stack);
+    unwind_python_stack(tstate, *stack);
 
     // Store the stack and get its key for reference
     // TODO: Handle collision exception
