@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
+#include "echion/render.h"
+#include "pytypedefs.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #if PY_VERSION_HEX >= 0x030c0000
@@ -43,11 +45,18 @@ static void do_where(std::ostream& stream)
     WhereRenderer::get().render_message("\r🐴 Echion reporting for duty");
     WhereRenderer::get().render_message("");
 
-    for_each_interp([](InterpreterInfo& interp) -> void {
-        for_each_thread(interp, [](PyThreadState* tstate, ThreadInfo& thread) -> void {
+    microsecond_t delta = 0;
+
+    for_each_interp([delta](InterpreterInfo& interp) -> void {
+        for_each_thread(interp, delta, [](ThreadStateType* tstate, microsecond_t delta, ThreadInfo& thread) -> void {
             thread.unwind(tstate);
-            WhereRenderer::get().render_thread_begin(tstate, thread.name, /*cpu_time*/ 0,
+#if PY_VERSION_HEX >= 0x030e0000
+            WhereRenderer::get().render_thread_begin(reinterpret_cast<PyThreadState*>(tstate), thread.name, delta,
+                                                     tstate->base.thread_id, thread.native_id);
+#else
+            WhereRenderer::get().render_thread_begin(tstate, thread.name, delta,
                                                      tstate->thread_id, thread.native_id);
+#endif
 
             if (native)
             {
@@ -218,7 +227,7 @@ static inline void _sampler()
             microsecond_t wall_time = now - last_time;
 
             for_each_interp([=](InterpreterInfo& interp) -> void {
-                for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
+                for_each_thread(interp, wall_time, [=](ThreadStateType* tstate, microsecond_t wall_time, ThreadInfo& thread) {
                     auto sample_success = thread.sample(interp.id, tstate, wall_time);
                     if (!sample_success)
                     {

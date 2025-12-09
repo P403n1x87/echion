@@ -17,13 +17,14 @@
 #endif
 #define Py_BUILD_CORE
 #include <internal/pycore_pystate.h>
-#if PY_VERSION_HEX >= 0x03090000
+#if PY_VERSION_HEX >= 0x030e0000
+// Python 3.14+: _PyRuntime is declared in pycore_runtime.h
 #include <internal/pycore_runtime.h>
 #endif
 
-#include <condition_variable>
-#include <mutex>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 inline _PyRuntimeState* runtime = &_PyRuntime;
 inline PyThreadState* current_tstate = NULL;
@@ -37,5 +38,5 @@ inline std::condition_variable where_cv;
 inline std::mutex where_lock;
 
 inline PyObject* asyncio_current_tasks = NULL;
-inline PyObject* asyncio_scheduled_tasks = NULL;  // WeakSet
-inline PyObject* asyncio_eager_tasks = NULL;      // set
+inline PyObject* asyncio_scheduled_tasks = NULL; // WeakSet
+inline PyObject* asyncio_eager_tasks = NULL;     // set

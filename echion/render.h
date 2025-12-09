@@ -10,6 +10,7 @@
 #include <mutex>
 #include <ostream>
 #include <string_view>
+#include "pytypedefs.h"
 
 #include <echion/config.h>
 #include <echion/errors.h>
@@ -17,6 +18,22 @@
 #include <echion/timing.h>
 
 #include <Python.h>
+
+#define Py_BUILD_CORE
+
+#if PY_VERSION_HEX >= 0x030e0000
+#include <internal/pycore_tstate.h> // For _PyThreadStateImpl
+#endif
+
+#if PY_VERSION_HEX >= 0x030e0000
+// Note: _PythreadStateImpl was introduced in Python 3.13. Every PyThreadState
+// is actually allocated as a _PyThreadStateImpl.
+// Python 3.14+: Use _PyThreadStateImpl to access asyncio_tasks_head directly
+using ThreadStateType = _PyThreadStateImpl;
+#else
+// Pre-Python 3.14: Use PyThreadState (no asyncio_tasks_head field)
+using ThreadStateType = PyThreadState;
+#endif
 
 // Forward declaration
 class Frame;
