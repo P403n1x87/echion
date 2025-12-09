@@ -10,7 +10,6 @@
 #include <mutex>
 #include <ostream>
 #include <string_view>
-#include "pytypedefs.h"
 
 #include <echion/config.h>
 #include <echion/errors.h>
