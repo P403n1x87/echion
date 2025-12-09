@@ -20,6 +20,7 @@
 #include <internal/pycore_llist.h> // For llist_node structure
 #include <internal/pycore_stackref.h>
 #include <opcode.h>
+#undef BITS_TO_PTR_MASKED
 
 inline PyObject* BITS_TO_PTR_MASKED(_PyStackRef REF) {
     return  reinterpret_cast<PyObject *>((((REF).bits) & (~Py_TAG_REFCNT)));
