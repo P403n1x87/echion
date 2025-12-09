@@ -202,7 +202,7 @@ public:
     }
 
     [[nodiscard]] static Result<TaskInfo::Ptr> current(PyObject*);
-    inline size_t unwind(FrameStack&, size_t& upper_python_stack_size);
+    inline Result<size_t> unwind(FrameStack&, size_t& upper_python_stack_size);
 };
 
 inline std::unordered_map<PyObject*, PyObject*> task_link_map;
@@ -360,7 +360,7 @@ inline std::vector<std::unique_ptr<StackInfo>> current_tasks;
 
 // ----------------------------------------------------------------------------
 
-inline size_t TaskInfo::unwind(FrameStack& stack, size_t& upper_python_stack_size)
+inline Result<size_t> TaskInfo::unwind(FrameStack& stack, size_t& upper_python_stack_size)
 {
     // TODO: Check for running task.
     std::stack<PyObject*> coro_frames;
@@ -394,6 +394,10 @@ inline size_t TaskInfo::unwind(FrameStack& stack, size_t& upper_python_stack_siz
         if (count == 0) {
             // The first Frame is the coroutine Frame, so the Python stack size is the number of Frames - 1
             upper_python_stack_size = new_frames - 1;
+
+            if (this->is_on_cpu && upper_python_stack_size == 0) {
+                return ErrorKind::TaskInfoError;
+            }
 
             // Remove the Python Frames from the Stack (they will be added back later)
             // We cannot push those Frames now because otherwise they would be added once per Task,
