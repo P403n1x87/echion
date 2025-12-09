@@ -53,7 +53,7 @@ dependencies = [
 tests = "pytest --cov=echion --cov-report=term-missing --cov-report=xml {args}"
 
 [[tool.hatch.envs.tests.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.13t", "3.14t"]
 
 [tool.hatch.envs.checks]
 detached = true
