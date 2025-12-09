@@ -74,6 +74,30 @@ inline FrameStack python_stack;
 inline FrameStack native_stack;
 inline FrameStack interleaved_stack;
 
+#ifndef UNWIND_NATIVE_DISABLE
+inline void unwind_native_stack()
+{
+    unw_cursor_t cursor;
+    unw_context_t context;
+
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    native_stack.clear();
+
+    while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
+    {
+        auto maybe_frame = Frame::get(cursor);
+        if (!maybe_frame)
+        {
+            break;
+        }
+
+        native_stack.push_back(*maybe_frame);
+    }
+}
+#endif  // UNWIND_NATIVE_DISABLE
+
 // ----------------------------------------------------------------------------
 static size_t
 unwind_frame(PyObject* frame_addr, FrameStack& stack)

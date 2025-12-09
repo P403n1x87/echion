@@ -2,8 +2,6 @@
 //
 // Copyright (c) 2023 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 
-#include "echion/render.h"
-#include "pytypedefs.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #if PY_VERSION_HEX >= 0x030c0000
@@ -32,6 +30,7 @@
 #include <echion/interp.h>
 #include <echion/memory.h>
 #include <echion/mojo.h>
+#include <echion/render.h>
 #include <echion/signals.h>
 #include <echion/stacks.h>
 #include <echion/state.h>
