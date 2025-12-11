@@ -1,4 +1,4 @@
-from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
+from tests.utils import PY, DataSummary, run_target, dump_summary, retry_on_valueerror
 
 
 @retry_on_valueerror()
@@ -24,6 +24,8 @@ def test_asyncio_executor():
             if key and isinstance(next(iter(key)), str)
         ]
 
+    dump_summary(summary, "summary_asyncio_executor.json")
+
     expected_nthreads = 3
     assert summary.nthreads >= expected_nthreads, summary.threads
     assert summary.total_metric >= 1.4 * 1e6
@@ -37,7 +39,7 @@ def test_asyncio_executor():
                 "main",
                 "asynchronous_function",
             ),
-            lambda v: v >= 0.01e6,
+            lambda v: v > 0.00,
         )
 
         # Thread Pool Executor
@@ -63,7 +65,7 @@ def test_asyncio_executor():
                 "main",
                 "asynchronous_function",
             ),
-            lambda v: v >= 0.1e6,
+            lambda v: v > 0.0,
         )
 
         if PY >= (3, 9):

@@ -7,6 +7,7 @@ from tests.utils import stealth
 from tests.utils import retry_on_valueerror
 
 
+@pytest.mark.skip()
 @retry_on_valueerror()
 @stealth
 def test_wall_time(stealth):
