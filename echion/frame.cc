@@ -1,5 +1,6 @@
 #include <echion/frame.h>
 
+#include <echion/errors.h>
 #include <echion/render.h>
 
 // ----------------------------------------------------------------------------
@@ -77,43 +78,53 @@ Frame::Frame(PyObject* frame)
 }
 
 // ------------------------------------------------------------------------
-Frame::Frame(PyCodeObject* code, int lasti)
+Result<Frame::Ptr> Frame::create(PyCodeObject* code, int lasti)
 {
-    try
+    auto maybe_filename = string_table.key(code->co_filename);
+    if (!maybe_filename)
     {
-        filename = string_table.key(code->co_filename);
-#if PY_VERSION_HEX >= 0x030b0000
-        name = string_table.key(code->co_qualname);
-#else
-        name = string_table.key(code->co_name);
-#endif
-    }
-    catch (StringTable::Error&)
-    {
-        throw Error();
+        return ErrorKind::FrameError;
     }
 
-    infer_location(code, lasti);
+#if PY_VERSION_HEX >= 0x030b0000
+    auto maybe_name = string_table.key(code->co_qualname);
+#else
+    auto maybe_name = string_table.key(code->co_name);
+#endif
+
+    if (!maybe_name)
+    {
+        return ErrorKind::FrameError;
+    }
+
+    auto frame = std::make_unique<Frame>(*maybe_filename, *maybe_name);
+    auto infer_location_success = frame->infer_location(code, lasti);
+    if (!infer_location_success)
+    {
+        return ErrorKind::LocationError;
+    }
+
+    return frame;
 }
 
 // ------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-Frame::Frame(unw_cursor_t& cursor, unw_word_t pc)
+Result<Frame::Ptr> Frame::create(unw_cursor_t& cursor, unw_word_t pc)
 {
-    try
+    auto filename = string_table.key(pc);
+
+    auto maybe_name = string_table.key(cursor);
+    if (!maybe_name)
     {
-        filename = string_table.key(pc);
-        name = string_table.key(cursor);
+        return ErrorKind::FrameError;
     }
-    catch (StringTable::Error&)
-    {
-        throw Error();
-    }
+
+    return std::make_unique<Frame>(filename, *maybe_name);
 }
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-void Frame::infer_location(PyCodeObject* code_obj, int lasti)
+Result<void> Frame::infer_location(PyCodeObject* code_obj, int lasti)
 {
     unsigned int lineno = code_obj->co_firstlineno;
     Py_ssize_t len = 0;
@@ -121,7 +132,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 #if PY_VERSION_HEX >= 0x030b0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
     if (table == nullptr)
-        throw LocationError();
+    {
+        return ErrorKind::LocationError;
+    }
 
     auto table_data = table.get();
 
@@ -158,7 +171,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
             case 11:
             case 10:
                 if (i >= len - 2)
-                    throw LocationError();
+                {
+                    return ErrorKind::LocationError;
+                }
 
                 lineno += code - 10;
 
@@ -171,7 +186,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
             default:
                 if (i >= len - 1)
-                    throw LocationError();
+                {
+                    return ErrorKind::LocationError;
+                }
 
                 next_byte = table[++i];
 
@@ -188,7 +205,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 #elif PY_VERSION_HEX >= 0x030a0000
     auto table = pybytes_to_bytes_and_size(code_obj->co_linetable, &len);
     if (table == nullptr)
-        throw LocationError();
+    {
+        return ErrorKind::LocationError;
+    }
 
     lasti <<= 1;
     for (int i = 0, bc = 0; i < len; i++)
@@ -213,7 +232,9 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
 #else
     auto table = pybytes_to_bytes_and_size(code_obj->co_lnotab, &len);
     if (table == nullptr)
-        throw LocationError();
+    {
+        return ErrorKind::LocationError;
+    }
 
     for (int i = 0, bc = 0; i < len; i++)
     {
@@ -233,6 +254,8 @@ void Frame::infer_location(PyCodeObject* code_obj, int lasti)
     this->location.line_end = lineno;
     this->location.column = 0;
     this->location.column_end = 0;
+
+    return Result<void>::ok();
 }
 
 // ------------------------------------------------------------------------
@@ -262,53 +285,14 @@ Frame::Key Frame::key(PyObject* frame)
 
 // ------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
-Frame& Frame::read(_PyInterpreterFrame* frame_addr, _PyInterpreterFrame** prev_addr)
+Result<std::reference_wrapper<Frame>> Frame::read(_PyInterpreterFrame* frame_addr,
+                                                  _PyInterpreterFrame** prev_addr)
 #else
-Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
+Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject** prev_addr)
 #endif
 {
 #if PY_VERSION_HEX >= 0x030b0000
     _PyInterpreterFrame iframe;
-#if PY_VERSION_HEX >= 0x030d0000
-    // From Python versions 3.13, f_executable can have objects other than
-    // code objects for an internal frame. We need to skip some frames if
-    // its f_executable is not code as suggested here:
-    // https://github.com/python/cpython/issues/100987#issuecomment-1485556487
-    PyObject f_executable;
-
-    for (; frame_addr; frame_addr = frame_addr->previous)
-    {
-        auto resolved_addr =
-            stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
-                        : frame_addr;
-        if (resolved_addr != frame_addr)
-        {
-            frame_addr = resolved_addr;
-        }
-        else
-        {
-            if (copy_type(frame_addr, iframe))
-            {
-                throw Frame::Error();
-            }
-            frame_addr = &iframe;
-        }
-        if (copy_type(frame_addr->f_executable, f_executable))
-        {
-            throw Frame::Error();
-        }
-        if (f_executable.ob_type == &PyCode_Type)
-        {
-            break;
-        }
-    }
-
-    if (frame_addr == NULL)
-    {
-        throw Frame::Error();
-    }
-#else   // PY_VERSION_HEX < 0x030d0000
-    // Code Specific to Python < 3.13 and >= 3.11
     auto resolved_addr =
         stack_chunk ? reinterpret_cast<_PyInterpreterFrame*>(stack_chunk->resolve(frame_addr))
                     : frame_addr;
@@ -320,11 +304,28 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     {
         if (copy_type(frame_addr, iframe))
         {
-            throw Frame::Error();
+            return ErrorKind::FrameError;
         }
         frame_addr = &iframe;
     }
-#endif  // PY_VERSION_HEX >= 0x030d0000
+    if (frame_addr == NULL)
+    {
+        return ErrorKind::FrameError;
+    }
+
+#if PY_VERSION_HEX >= 0x030c0000
+    if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
+    {
+        *prev_addr = frame_addr->previous;
+        // This is a C frame, we just need to ignore it
+        return std::ref(C_FRAME);
+    }
+
+    if (frame_addr->owner != FRAME_OWNED_BY_THREAD && frame_addr->owner != FRAME_OWNED_BY_GENERATOR)
+    {
+        return ErrorKind::FrameError;
+    }
+#endif  // PY_VERSION_HEX >= 0x030c0000
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
@@ -334,12 +335,24 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
                            reinterpret_cast<_Py_CODEUNIT*>(
                                (reinterpret_cast<PyCodeObject*>(frame_addr->f_executable)))))) -
         offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto& frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable), lasti);
+    auto maybe_frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable), lasti);
+    if (!maybe_frame)
+    {
+        return ErrorKind::FrameError;
+    }
+
+    auto& frame = maybe_frame->get();
 #else
     const int lasti = (static_cast<int>((frame_addr->prev_instr -
                                          reinterpret_cast<_Py_CODEUNIT*>((frame_addr->f_code))))) -
                       offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
-    auto& frame = Frame::get(frame_addr->f_code, lasti);
+    auto maybe_frame = Frame::get(frame_addr->f_code, lasti);
+    if (!maybe_frame)
+    {
+        return ErrorKind::FrameError;
+    }
+
+    auto& frame = maybe_frame->get();
 #endif  // PY_VERSION_HEX >= 0x030d0000
     if (&frame != &INVALID_FRAME)
     {
@@ -358,47 +371,54 @@ Frame& Frame::read(PyObject* frame_addr, PyObject** prev_addr)
     PyFrameObject py_frame;
 
     if (copy_type(frame_addr, py_frame))
-        throw Error();
+    {
+        return ErrorKind::FrameError;
+    }
 
-    auto& frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
+    auto maybe_frame = Frame::get(py_frame.f_code, py_frame.f_lasti);
+    if (!maybe_frame)
+    {
+        return ErrorKind::FrameError;
+    }
 
+    auto& frame = maybe_frame->get();
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
 #endif  // PY_VERSION_HEX >= 0x030b0000
 
-    return frame;
+    return std::ref(frame);
 }
 
 // ----------------------------------------------------------------------------
-Frame& Frame::get(PyCodeObject* code_addr, int lasti)
+Result<std::reference_wrapper<Frame>> Frame::get(PyCodeObject* code_addr, int lasti)
 {
     auto frame_key = Frame::key(code_addr, lasti);
 
-    try
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame)
     {
-        return frame_cache->lookup(frame_key);
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        try
-        {
-            PyCodeObject code;
-            if (copy_type(code_addr, code))
-                return INVALID_FRAME;
 
-            auto new_frame = std::make_unique<Frame>(&code, lasti);
-            new_frame->cache_key = frame_key;
-            auto& f = *new_frame;
-            Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
-                                  new_frame->location.line, new_frame->location.line_end,
-                                  new_frame->location.column, new_frame->location.column_end);
-            frame_cache->store(frame_key, std::move(new_frame));
-            return f;
-        }
-        catch (Frame::Error&)
-        {
-            return INVALID_FRAME;
-        }
+    PyCodeObject code;
+    if (copy_type(code_addr, code))
+    {
+        return std::ref(INVALID_FRAME);
     }
+
+    auto maybe_new_frame = Frame::create(&code, lasti);
+    if (!maybe_new_frame)
+    {
+        return std::ref(INVALID_FRAME);
+    }
+
+    auto new_frame = std::move(*maybe_new_frame);
+    new_frame->cache_key = frame_key;
+    auto& f = *new_frame;
+    Renderer::get().frame(frame_key, new_frame->filename, new_frame->name, new_frame->location.line,
+                          new_frame->location.line_end, new_frame->location.column,
+                          new_frame->location.column_end);
+    frame_cache->store(frame_key, std::move(new_frame));
+    return std::ref(f);
 }
 
 // ----------------------------------------------------------------------------
@@ -406,55 +426,54 @@ Frame& Frame::get(PyObject* frame)
 {
     auto frame_key = Frame::key(frame);
 
-    try
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame)
     {
-        return frame_cache->lookup(frame_key);
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        auto new_frame = std::make_unique<Frame>(frame);
-        new_frame->cache_key = frame_key;
-        auto& f = *new_frame;
-        Renderer::get().frame(frame_key, new_frame->filename, new_frame->name,
-                              new_frame->location.line, new_frame->location.line_end,
-                              new_frame->location.column, new_frame->location.column_end);
-        frame_cache->store(frame_key, std::move(new_frame));
-        return f;
-    }
+
+    auto new_frame = std::make_unique<Frame>(frame);
+    new_frame->cache_key = frame_key;
+    auto& f = *new_frame;
+    Renderer::get().frame(frame_key, new_frame->filename, new_frame->name, new_frame->location.line,
+                          new_frame->location.line_end, new_frame->location.column,
+                          new_frame->location.column_end);
+    frame_cache->store(frame_key, std::move(new_frame));
+    return f;
 }
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-Frame& Frame::get(unw_cursor_t& cursor)
+Result<std::reference_wrapper<Frame>> Frame::get(unw_cursor_t& cursor)
 {
     unw_word_t pc;
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
     if (pc == 0)
-        throw Error();
+    {
+        return ErrorKind::FrameError;
+    }
 
-    uintptr_t frame_key = (uintptr_t)pc;
-    try
+    uintptr_t frame_key = static_cast<uintptr_t>(pc);
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame)
     {
-        return frame_cache->lookup(frame_key);
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
+
+    auto maybe_new_frame = Frame::create(cursor, pc);
+    if (!maybe_new_frame)
     {
-        try
-        {
-            auto frame = std::make_unique<Frame>(cursor, pc);
-            frame->cache_key = frame_key;
-            auto& f = *frame;
-            Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
-                                  frame->location.line_end, frame->location.column,
-                                  frame->location.column_end);
-            frame_cache->store(frame_key, std::move(frame));
-            return f;
-        }
-        catch (Frame::Error&)
-        {
-            return UNKNOWN_FRAME;
-        }
+        return std::ref(UNKNOWN_FRAME);
     }
+
+    auto frame = std::move(*maybe_new_frame);
+    frame->cache_key = frame_key;
+    auto& f = *frame;
+    Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
+                          frame->location.line_end, frame->location.column,
+                          frame->location.column_end);
+    frame_cache->store(frame_key, std::move(frame));
+    return std::ref(f);
 }
 #endif  // UNWIND_NATIVE_DISABLE
 
@@ -462,19 +481,19 @@ Frame& Frame::get(unw_cursor_t& cursor)
 Frame& Frame::get(StringTable::Key name)
 {
     uintptr_t frame_key = static_cast<uintptr_t>(name);
-    try
+
+    auto maybe_frame = frame_cache->lookup(frame_key);
+    if (maybe_frame)
     {
-        return frame_cache->lookup(frame_key);
+        return *maybe_frame;
     }
-    catch (LRUCache<uintptr_t, Frame>::LookupError&)
-    {
-        auto frame = std::make_unique<Frame>(name);
-        frame->cache_key = frame_key;
-        auto& f = *frame;
-        Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
-                              frame->location.line_end, frame->location.column,
-                              frame->location.column_end);
-        frame_cache->store(frame_key, std::move(frame));
-        return f;
-    }
+
+    auto frame = std::make_unique<Frame>(name);
+    frame->cache_key = frame_key;
+    auto& f = *frame;
+    Renderer::get().frame(frame_key, frame->filename, frame->name, frame->location.line,
+                          frame->location.line_end, frame->location.column,
+                          frame->location.column_end);
+    frame_cache->store(frame_key, std::move(frame));
+    return f;
 }

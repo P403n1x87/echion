@@ -6,9 +6,11 @@
 
 #include <array>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
-#include <stdexcept>
 #include <string>
+
+#include <echion/danger.h>
 
 #if defined PL_LINUX
 #include <fcntl.h>
@@ -18,7 +20,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <algorithm>
-#include <memory>
 
 typedef pid_t proc_ref_t;
 
@@ -28,7 +29,7 @@ ssize_t process_vm_readv(pid_t, const struct iovec*, unsigned long liovcnt,
 
 #define copy_type(addr, dest) (copy_memory(pid, addr, sizeof(dest), &dest))
 #define copy_type_p(addr, dest) (copy_memory(pid, addr, sizeof(*dest), dest))
-#define copy_generic(addr, dest, size) (copy_memory(pid, (void*)(addr), size, (void*)(dest)))
+#define copy_generic(addr, dest, size) (copy_memory(pid, reinterpret_cast<const void*>(addr), size, reinterpret_cast<void*>(dest)))
 
 #elif defined PL_DARWIN
 #include <mach/mach.h>
@@ -43,12 +44,35 @@ typedef mach_port_t proc_ref_t;
 #define copy_type_p(addr, dest) (copy_memory(mach_task_self(), addr, sizeof(*dest), dest))
 #define copy_generic(addr, dest, size) \
     (copy_memory(mach_task_self(), (void*)(addr), size, (void*)(dest)))
+
+inline kern_return_t (*safe_copy)(vm_map_read_t, mach_vm_address_t, mach_vm_size_t, mach_vm_address_t, mach_vm_size_t*) = mach_vm_read_overwrite;
+
 #endif
 
+inline bool is_truthy(const char* s) {
+    const static std::array<std::string, 6> truthy_values = {"1",  "true",   "yes", "on", "enable", "enabled"};
+    
+    return std::find(truthy_values.begin(), truthy_values.end(), s) != truthy_values.end();
+
+}
+
+inline bool use_alternative_copy_memory() {
+    const char* use_fast_copy_memory = std::getenv("ECHION_USE_FAST_COPY_MEMORY");
+    if (!use_fast_copy_memory) {
+        return false;
+    }
+
+    if (is_truthy(use_fast_copy_memory)) {
+        return true;
+    }
+
+    return false;
+}
+
+#if defined PL_LINUX
 // Some checks are done at static initialization, so use this to read them at runtime
 inline bool failed_safe_copy = false;
 
-#if defined PL_LINUX
 inline ssize_t (*safe_copy)(pid_t, const struct iovec*, unsigned long, const struct iovec*,
                             unsigned long, unsigned long) = process_vm_readv;
 
@@ -59,11 +83,15 @@ class VmReader
     int fd{-1};
     inline static VmReader* instance{nullptr};  // Prevents having to set this in implementation
 
-    void* init(size_t new_sz)
+    VmReader(size_t _sz, void* _buffer, int _fd) : buffer(_buffer), sz{_sz}, fd{_fd} {}
+
+    static VmReader* create(size_t sz)
     {
         // Makes a temporary file and ftruncates it to the specified size
         std::array<std::string, 3> tmp_dirs = {"/dev/shm", "/tmp", "/var/tmp"};
         std::string tmp_suffix = "/echion-XXXXXX";
+
+        int fd = -1;
         void* ret = nullptr;
 
         for (auto& tmp_dir : tmp_dirs)
@@ -82,13 +110,13 @@ class VmReader
             unlink(tmpfile.data());
 
             // Make sure we have enough size
-            if (ftruncate(fd, new_sz) == -1)
+            if (ftruncate(fd, sz) == -1)
             {
                 continue;
             }
 
             // Map the file
-            ret = mmap(NULL, new_sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+            ret = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
             if (ret == MAP_FAILED)
             {
                 ret = nullptr;
@@ -96,21 +124,15 @@ class VmReader
             }
 
             // Successful.  Break.
-            sz = new_sz;
             break;
         }
 
-        return ret;
+        return new VmReader(sz, ret, fd);
     }
 
-    VmReader(size_t _sz) : sz{_sz}
+    bool is_valid() const
     {
-        buffer = init(sz);
-        if (!buffer)
-        {
-            throw std::runtime_error("Failed to initialize buffer with size " + std::to_string(sz));
-        }
-        instance = this;
+        return buffer != nullptr;
     }
 
 public:
@@ -118,15 +140,15 @@ public:
     {
         if (instance == nullptr)
         {
-            try
+            instance = VmReader::create(1024 * 1024);  // A megabyte?
+            if (!instance)
             {
-                instance = new VmReader(1024 * 1024);  // A megabyte?
-            }
-            catch (std::exception& e)
-            {
-                std::cerr << "Failed to initialize VmReader: " << e.what() << std::endl;
+                std::cerr << "Failed to initialize VmReader with buffer size " << instance->sz
+                          << std::endl;
+                return nullptr;
             }
         }
+
         return instance;
     }
 
@@ -167,7 +189,7 @@ public:
         }
 
         // Copy the data from the buffer to the remote process
-        memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
+        std::memcpy(local_iov[0].iov_base, buffer, local_iov[0].iov_len);
         return ret;
     }
 
@@ -211,6 +233,16 @@ inline ssize_t vmreader_safe_copy(pid_t pid, const struct iovec* local_iov, unsi
  */
 __attribute__((constructor)) inline void init_safe_copy()
 {
+    if (use_alternative_copy_memory())
+    {
+        if (init_segv_catcher() == 0) {
+            safe_copy = safe_memcpy_wrapper;
+            return;
+        }
+
+        std::cerr << "Failed to initialize segv catcher. Using process_vm_readv instead." << std::endl;
+    }
+
     char src[128];
     char dst[128];
     for (size_t i = 0; i < 128; i++)
@@ -221,11 +253,8 @@ __attribute__((constructor)) inline void init_safe_copy()
 
     // Check to see that process_vm_readv works, unless it's overridden
     const char force_override_str[] = "ECHION_ALT_VM_READ_FORCE";
-    const std::array<std::string, 6> truthy_values = {"1",  "true",   "yes",
-                                                      "on", "enable", "enabled"};
     const char* force_override = std::getenv(force_override_str);
-    if (!force_override || std::find(truthy_values.begin(), truthy_values.end(), force_override) ==
-                               truthy_values.end())
+    if (!force_override || !is_truthy(force_override))
     {
         struct iovec iov_dst = {dst, sizeof(dst)};
         struct iovec iov_src = {src, sizeof(src)};
@@ -251,7 +280,25 @@ __attribute__((constructor)) inline void init_safe_copy()
 
     safe_copy = vmreader_safe_copy;
 }
-#endif
+#elif defined PL_DARWIN
+/**
+ * Initialize the safe copy operation on Linux
+ *
+ * This occurs at static init
+ */
+__attribute__((constructor)) inline void init_safe_copy()
+{
+    if (use_alternative_copy_memory())
+    {
+        if (init_segv_catcher() == 0) {
+            safe_copy = safe_memcpy_wrapper;
+            return;
+        }
+
+        std::cerr << "Failed to initialize segv catcher. Using process_vm_readv instead." << std::endl;
+    }
+}
+#endif // if defined PL_DARWIN
 
 /**
  * Copy a chunk of memory from a portion of the virtual memory of another
@@ -264,7 +311,7 @@ __attribute__((constructor)) inline void init_safe_copy()
  *
  * @return  zero on success, otherwise non-zero.
  */
-static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void* buf)
+static inline int copy_memory(proc_ref_t proc_ref, const void* addr, ssize_t len, void* buf)
 {
     ssize_t result = -1;
 
@@ -280,13 +327,13 @@ static inline int copy_memory(proc_ref_t proc_ref, void* addr, ssize_t len, void
 
     local[0].iov_base = buf;
     local[0].iov_len = len;
-    remote[0].iov_base = addr;
+    remote[0].iov_base = const_cast<void*>(addr);
     remote[0].iov_len = len;
 
     result = safe_copy(proc_ref, local, 1, remote, 1, 0);
 
 #elif defined PL_DARWIN
-    kern_return_t kr = mach_vm_read_overwrite(proc_ref, (mach_vm_address_t)addr, len,
+    kern_return_t kr = safe_copy(proc_ref, (mach_vm_address_t)addr, len,
                                               (mach_vm_address_t)buf, (mach_vm_size_t*)&result);
 
     if (kr != KERN_SUCCESS)

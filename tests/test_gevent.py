@@ -2,7 +2,15 @@ import linecache
 from itertools import count
 from types import FunctionType
 
-from tests.utils import PY, DataSummary, run_target
+import pytest
+
+from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
+
+
+try:
+    import gevent  # noqa: F401
+except ImportError:
+    pytest.skip("gevent not installed", allow_module_level=True)
 
 
 def get_line_number(function: FunctionType, content: str) -> int:
@@ -22,12 +30,14 @@ def get_line_number(function: FunctionType, content: str) -> int:
     raise ValueError("Line not found")
 
 
+@retry_on_valueerror()
 def test_gevent():
     import echion.monkey.gevent as _gevent
 
     result, data = run_target("target_gevent")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"

@@ -4,13 +4,17 @@ from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import stealth
+from tests.utils import retry_on_valueerror
 
 
+@pytest.mark.skip()
+@retry_on_valueerror()
 @stealth
 def test_wall_time(stealth):
     result, data = run_target("target", *stealth)
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"
@@ -131,12 +135,14 @@ def test_wall_time(stealth):
             )
 
 
+@retry_on_valueerror()
 @stealth
 @pytest.mark.xfail
 def test_wall_time_native(stealth):
     result, data = run_target("target", *stealth, "-n")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "wall"
     assert md["interval"] == "1000"

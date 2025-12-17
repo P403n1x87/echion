@@ -7,6 +7,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include <csignal>
 #include <mutex>
 
 #include <echion/stacks.h>
@@ -17,7 +18,7 @@
 inline std::mutex sigprof_handler_lock;
 
 // ----------------------------------------------------------------------------
-void sigprof_handler([[maybe_unused]] int signum)
+inline void sigprof_handler([[maybe_unused]] int signum)
 {
 #ifndef UNWIND_NATIVE_DISABLE
     unwind_native_stack();
@@ -29,7 +30,7 @@ void sigprof_handler([[maybe_unused]] int signum)
 }
 
 // ----------------------------------------------------------------------------
-void sigquit_handler([[maybe_unused]] int signum)
+inline void sigquit_handler([[maybe_unused]] int signum)
 {
     // Wake up the where thread
     std::lock_guard<std::mutex> lock(where_lock);
@@ -37,7 +38,7 @@ void sigquit_handler([[maybe_unused]] int signum)
 }
 
 // ----------------------------------------------------------------------------
-void install_signals()
+inline void install_signals()
 {
     signal(SIGQUIT, sigquit_handler);
 
@@ -46,7 +47,7 @@ void install_signals()
 }
 
 // ----------------------------------------------------------------------------
-void restore_signals()
+inline void restore_signals()
 {
     signal(SIGQUIT, SIG_DFL);
 

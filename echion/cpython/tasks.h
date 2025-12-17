@@ -14,6 +14,7 @@
 #if PY_VERSION_HEX >= 0x030d0000
 #include <opcode.h>
 #else
+#include <internal/pycore_frame.h>
 #include <internal/pycore_opcode.h>
 #endif  // PY_VERSION_HEX >= 0x030d0000
 #else
@@ -21,9 +22,11 @@
 #include <opcode.h>
 #endif
 
-#include <utility>
+#include <memory>
 
 #include <echion/vm.h>
+
+constexpr ssize_t MAX_STACK_SIZE = 1 << 20; // 1 MiB
 
 extern "C" {
 
@@ -124,13 +127,13 @@ typedef enum
 
 typedef struct
 {
-    FutureObj_HEAD(fut)
+    FutureObj_HEAD(future)
 } FutureObj;
 
 #if PY_VERSION_HEX >= 0x030d0000
 typedef struct
 {
-    FutureObj_HEAD(task);
+    FutureObj_HEAD(task)
     unsigned task_must_cancel : 1;
     unsigned task_log_destroy_pending : 1;
     int task_num_cancels_requested;
@@ -170,8 +173,36 @@ typedef struct
 #define RESUME_QUICK INSTRUMENTED_RESUME
 #endif
 
-#if PY_VERSION_HEX >= 0x030b0000
-PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
+#if PY_VERSION_HEX >= 0x030d0000
+
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr) {
+    if (gen->gi_frame_state != FRAME_SUSPENDED_YIELD_FROM) {
+        return nullptr;
+    }
+
+    _PyInterpreterFrame frame;
+    if (copy_type(frame_addr, frame)) {
+        return nullptr;
+    }
+
+    if (frame.stacktop < 1 || frame.stacktop > MAX_STACK_SIZE) {
+        return nullptr;
+    }
+
+    auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
+    
+    // Calculate the remote address of the localsplus array
+    auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
+    if (copy_generic(remote_localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*))) {
+        return nullptr;
+    }
+
+    return localsplus[frame.stacktop-1];
+}
+
+#elif PY_VERSION_HEX >= 0x030b0000
+
+inline PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 {
     PyObject* yf = NULL;
 
@@ -195,13 +226,17 @@ PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
             _Py_OPARG(next) < 2)
             return NULL;
 
-        if (frame.stacktop < 1 || frame.stacktop > (1 << 20))
+        if (frame.stacktop < 1 || frame.stacktop > MAX_STACK_SIZE)
             return NULL;
 
         auto localsplus = std::make_unique<PyObject*[]>(frame.stacktop);
-        if (copy_generic(frame.localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*)))
+        
+        // Calculate the remote address of the localsplus array
+        auto remote_localsplus = reinterpret_cast<PyObject**>(reinterpret_cast<uintptr_t>(frame_addr) + offsetof(_PyInterpreterFrame, localsplus));
+        if (copy_generic(remote_localsplus, localsplus.get(), frame.stacktop * sizeof(PyObject*))) {
             return NULL;
-
+        }
+    
         yf = localsplus[frame.stacktop - 1];
     }
 
@@ -209,7 +244,7 @@ PyObject* PyGen_yf(PyGenObject* gen, PyObject* frame_addr)
 }
 
 #elif PY_VERSION_HEX >= 0x030a0000
-PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
+inline PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 {
     PyObject* yf = NULL;
     PyFrameObject* f = (PyFrameObject*)frame_addr;
@@ -236,7 +271,7 @@ PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
             return NULL;
 
         ssize_t nvalues = frame.f_stackdepth;
-        if (nvalues < 1 || nvalues > (1 << 20))
+        if (nvalues < 1 || nvalues > MAX_STACK_SIZE)
             return NULL;
 
         auto stack = std::make_unique<PyObject*[]>(nvalues);
@@ -251,7 +286,7 @@ PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 }
 
 #else
-PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
+inline PyObject* PyGen_yf(PyGenObject* Py_UNUSED(gen), PyObject* frame_addr)
 {
     PyObject* yf = NULL;
     PyFrameObject* f = (PyFrameObject*)frame_addr;

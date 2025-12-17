@@ -20,6 +20,10 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
+#if PY_VERSION_HEX >= 0x030b0000
+#include "echion/stack_chunk.h"
+#endif  // PY_VERSION_HEX >= 0x030b0000
+#include <echion/errors.h>
 
 // ----------------------------------------------------------------------------
 
@@ -84,7 +88,7 @@ inline FrameStack interleaved_stack;
 
 // ----------------------------------------------------------------------------
 #ifndef UNWIND_NATIVE_DISABLE
-void unwind_native_stack()
+inline void unwind_native_stack()
 {
     unw_cursor_t cursor;
     unw_context_t context;
@@ -96,14 +100,13 @@ void unwind_native_stack()
 
     while (unw_step(&cursor) > 0 && native_stack.size() < max_frames)
     {
-        try
-        {
-            native_stack.push_back(Frame::get(cursor));
-        }
-        catch (Frame::Error&)
+        auto maybe_frame = Frame::get(cursor);
+        if (!maybe_frame)
         {
             break;
         }
+
+        native_stack.push_back(*maybe_frame);
     }
 }
 #endif  // UNWIND_NATIVE_DISABLE
@@ -122,22 +125,23 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 
         seen_frames.insert(current_frame_addr);
 
-        try
-        {
 #if PY_VERSION_HEX >= 0x030b0000
-            Frame& frame =
-                Frame::read(reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr),
-                            reinterpret_cast<_PyInterpreterFrame**>(&current_frame_addr));
+        auto maybe_frame =
+            Frame::read(reinterpret_cast<_PyInterpreterFrame*>(current_frame_addr),
+                        reinterpret_cast<_PyInterpreterFrame**>(&current_frame_addr));
 #else
-            Frame& frame = Frame::read(current_frame_addr, &current_frame_addr);
+        auto maybe_frame = Frame::read(current_frame_addr, &current_frame_addr);
 #endif
-            stack.push_back(frame);
-        }
-        catch (Frame::Error& e)
+        if (!maybe_frame)
         {
             break;
         }
 
+        if (maybe_frame->get().name == StringTable::C_FRAME) {
+            continue;
+        }
+
+        stack.push_back(*maybe_frame);
         count++;
     }
 
@@ -160,11 +164,11 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         // See the comment in unwind_frame()
         while (current_frame != NULL)
         {
-            if (((_PyInterpreterFrame*)current_frame)->f_executable->ob_type == &PyCode_Type)
+            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable->ob_type == &PyCode_Type)
             {
                 break;
             }
-            current_frame = (PyObject*)((_PyInterpreterFrame*)current_frame)->previous;
+            current_frame = reinterpret_cast<PyObject*>(reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
         }
 
         if (current_frame == NULL)
@@ -179,7 +183,7 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         stack.push_back(Frame::get(current_frame));
 
 #if PY_VERSION_HEX >= 0x030b0000
-        current_frame = (PyObject*)((_PyInterpreterFrame*)current_frame)->previous;
+        current_frame = reinterpret_cast<PyObject*>(reinterpret_cast<_PyInterpreterFrame*>(current_frame)->previous);
 #else
         current_frame = (PyObject*)((PyFrameObject*)current_frame)->f_back;
 #endif
@@ -193,22 +197,19 @@ static void unwind_python_stack(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
+    if (stack_chunk == nullptr)
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk = std::make_unique<StackChunk>();
     }
-    catch (StackChunkError& e)
+
+    if (!stack_chunk->update(reinterpret_cast<_PyStackChunk*>(tstate->datastack_chunk)))
     {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+    PyObject* frame_addr = reinterpret_cast<PyObject*>(tstate->current_frame);
 #elif PY_VERSION_HEX >= 0x030b0000
     _PyCFrame cframe;
     _PyCFrame* cframe_addr = tstate->cframe;
@@ -228,26 +229,23 @@ static void unwind_python_stack_unsafe(PyThreadState* tstate, FrameStack& stack)
 {
     stack.clear();
 #if PY_VERSION_HEX >= 0x030b0000
-    try
+    if (stack_chunk == nullptr)
     {
-        if (stack_chunk == nullptr)
-        {
-            stack_chunk = std::make_unique<StackChunk>();
-        }
-        stack_chunk->update((_PyStackChunk*)tstate->datastack_chunk);
+        stack_chunk = std::make_unique<StackChunk>();
     }
-    catch (StackChunkError& e)
+
+    if (!stack_chunk->update(reinterpret_cast<_PyStackChunk*>(tstate->datastack_chunk)))
     {
         stack_chunk = nullptr;
     }
 #endif
 
 #if PY_VERSION_HEX >= 0x030d0000
-    PyObject* frame_addr = (PyObject*)tstate->current_frame;
+    PyObject* frame_addr = reinterpret_cast<PyObject*>(tstate->current_frame);
 #elif PY_VERSION_HEX >= 0x030b0000
-    PyObject* frame_addr = (PyObject*)tstate->cframe->current_frame;
+    PyObject* frame_addr = reinterpret_cast<PyObject*>(tstate->cframe->current_frame);
 #else  // Python < 3.11
-    PyObject* frame_addr = (PyObject*)tstate->frame;
+    PyObject* frame_addr = reinterpret_cast<PyObject*>(tstate->frame);
 #endif
     unwind_frame_unsafe(frame_addr, stack);
 }
@@ -259,7 +257,7 @@ static void unwind_python_stack(PyThreadState* tstate)
 }
 
 // ----------------------------------------------------------------------------
-static void interleave_stacks(FrameStack& python_stack)
+static Result<void> interleave_stacks(FrameStack& python_stack)
 {
     interleaved_stack.clear();
 
@@ -270,8 +268,14 @@ static void interleave_stacks(FrameStack& python_stack)
     {
         auto native_frame = *n;
 
-        if (string_table.lookup(native_frame.get().name).find("PyEval_EvalFrameDefault") !=
-            std::string::npos)
+        auto maybe_name = string_table.lookup(native_frame.get().name);
+        if (!maybe_name)
+        {
+            return ErrorKind::LookupError;
+        }
+
+        const auto& name = maybe_name->get();
+        if (name.find("PyEval_EvalFrameDefault") != std::string::npos)
         {
             if (p == python_stack.rend())
             {
@@ -311,12 +315,14 @@ static void interleave_stacks(FrameStack& python_stack)
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
     }
+
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
-static void interleave_stacks()
+static Result<void> interleave_stacks()
 {
-    interleave_stacks(python_stack);
+    return interleave_stacks(python_stack);
 }
 
 // ----------------------------------------------------------------------------

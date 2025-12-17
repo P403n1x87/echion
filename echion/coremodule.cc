@@ -10,7 +10,6 @@
 #endif
 
 #include <condition_variable>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -18,9 +17,9 @@
 
 #include <fcntl.h>
 #include <sched.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #if defined PL_DARWIN
 #include <pthread.h>
@@ -52,7 +51,13 @@ static void do_where(std::ostream& stream)
 
             if (native)
             {
-                interleave_stacks();
+                auto interleave_success = interleave_stacks();
+                if (!interleave_success)
+                {
+                    std::cerr << "could not interleave stacks" << std::endl;
+                    return;
+                }
+
                 interleaved_stack.render_where();
             }
             else
@@ -104,12 +109,10 @@ static inline void _start()
 {
     init_frame_cache(CACHE_MAX_ENTRIES * (1 + native));
 
-    try
+    auto open_success = Renderer::get().open();
+    if (!open_success)
     {
-        Renderer::get().open();
-    }
-    catch (std::exception& e)
-    {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to open renderer");
         return;
     }
 
@@ -216,14 +219,16 @@ static inline void _sampler()
 
             for_each_interp([=](InterpreterInfo& interp) -> void {
                 for_each_thread(interp, [=](PyThreadState* tstate, ThreadInfo& thread) {
-                    thread.sample(interp.id, tstate, wall_time);
+                    auto sample_success = thread.sample(interp.id, tstate, wall_time);
+                    if (!sample_success)
+                    {
+                        // Silently skip sampling this thread
+                    }
                 });
             });
         }
 
-        while (gettime() < end_time && running)
-            sched_yield();
-
+        std::this_thread::sleep_for(std::chrono::microseconds(end_time - now));
         last_time = now;
     }
 }
@@ -304,13 +309,23 @@ static PyObject* track_thread(PyObject* Py_UNUSED(m), PyObject* args)
     {
         const std::lock_guard<std::mutex> guard(thread_info_map_lock);
 
+        auto maybe_thread_info = ThreadInfo::create(thread_id, native_id, thread_name);
+        if (!maybe_thread_info)
+        {
+            PyErr_SetString(PyExc_RuntimeError, "Failed to track thread");
+            return nullptr;
+        }
+
         auto entry = thread_info_map.find(thread_id);
         if (entry != thread_info_map.end())
+        {
             // Thread is already tracked so we update its info
-            entry->second = std::make_unique<ThreadInfo>(thread_id, native_id, thread_name);
+            entry->second = std::move(*maybe_thread_info);
+        }
         else
-            thread_info_map.emplace(
-                thread_id, std::make_unique<ThreadInfo>(thread_id, native_id, thread_name));
+        {
+            thread_info_map.emplace(thread_id, std::move(*maybe_thread_info));
+        }
     }
 
     Py_RETURN_NONE;
@@ -355,7 +370,7 @@ static PyObject* track_asyncio_loop(PyObject* Py_UNUSED(m), PyObject* args)
         if (thread_info_map.find(thread_id) != thread_info_map.end())
         {
             thread_info_map.find(thread_id)->second->asyncio_loop =
-                (loop != Py_None) ? (uintptr_t)loop : 0;
+                (loop != Py_None) ? reinterpret_cast<uintptr_t>(loop) : 0;
         }
     }
 
@@ -387,16 +402,15 @@ static PyObject* track_greenlet(PyObject* Py_UNUSED(m), PyObject* args)
 
     StringTable::Key greenlet_name;
 
-    try
-    {
-        greenlet_name = string_table.key(name);
-    }
-    catch (StringTable::Error&)
+    auto maybe_greenlet_name = string_table.key(name);
+    if (!maybe_greenlet_name)
     {
         // We failed to get this task but we keep going
         PyErr_SetString(PyExc_RuntimeError, "Failed to get greenlet name from the string table");
         return NULL;
     }
+    greenlet_name = *maybe_greenlet_name;
+
     {
         const std::lock_guard<std::mutex> guard(greenlet_info_map_lock);
 
@@ -518,8 +532,9 @@ static PyMethodDef echion_core_methods[] = {
     {"set_native", set_native, METH_VARARGS, "Set whether to sample the native stacks"},
     {"set_where", set_where, METH_VARARGS, "Set whether to use where mode"},
     {"set_pipe_name", set_pipe_name, METH_VARARGS, "Set the pipe name"},
-    {NULL, NULL, 0, NULL} /* Sentinel */
-};
+    {"set_max_frames", set_max_frames, METH_VARARGS, "Set the max number of frames to unwind"},
+    // Sentinel
+    {NULL, NULL, 0, NULL}};
 
 // ----------------------------------------------------------------------------
 static struct PyModuleDef coremodule = {
@@ -529,6 +544,10 @@ static struct PyModuleDef coremodule = {
     -1,     /* size of per-interpreter state of the module,
                or -1 if the module keeps state in global variables. */
     echion_core_methods,
+    nullptr, /* m_traverse */
+    nullptr, /* m_clear */
+    nullptr, /* m_free */
+    nullptr, /* m_is_preinitialised */
 };
 
 // ----------------------------------------------------------------------------

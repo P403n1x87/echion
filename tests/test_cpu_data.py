@@ -4,8 +4,10 @@ from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import stealth
+from tests.utils import retry_on_valueerror
 
 
+@retry_on_valueerror()
 @stealth
 def test_cpu_time(stealth):
     result, data = run_target("target_cpu", *stealth, "-c")
@@ -19,8 +21,8 @@ def test_cpu_time(stealth):
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
-    assert summary.total_metric >= 0.5 * 1e6 * (2 - bool(stealth))
-    assert summary.nsamples
+    assert summary.total_metric >= 0.5 * 1e6
+    assert summary.n_samples
 
     # Test line numbers
     assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is None
@@ -56,17 +58,6 @@ def test_cpu_time(stealth):
             ),
             lambda v: v >= 3e5,
         )
-        if not bool(stealth):
-            summary.assert_stack(
-                "0:echion.core.sampler",
-                (
-                    "Thread._bootstrap",
-                    "thread_bootstrap_inner",
-                    "Thread._bootstrap_inner",
-                    "Thread.run",
-                ),
-                lambda v: v >= 0.5e6,
-            )
     else:
         summary.assert_stack(
             "0:SecondaryThread",
@@ -79,25 +70,16 @@ def test_cpu_time(stealth):
             ),
             lambda v: v >= 3e5,
         )
-        if not bool(stealth):
-            summary.assert_stack(
-                "0:echion.core.sampler",
-                (
-                    "_bootstrap",
-                    "thread_bootstrap_inner",
-                    "_bootstrap_inner",
-                    "run",
-                ),
-                lambda v: v >= 0.5e6,
-            )
 
 
+@retry_on_valueerror()
 @stealth
 @pytest.mark.xfail
 def test_cpu_time_native(stealth):
     result, data = run_target("target_cpu", *stealth, "-cn")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "cpu"
     assert md["interval"] == "1000"

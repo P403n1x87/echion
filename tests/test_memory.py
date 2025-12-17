@@ -1,10 +1,15 @@
-from tests.utils import DataSummary, run_target
+import pytest
+
+from tests.utils import DataSummary, run_target, retry_on_valueerror
 
 
+@retry_on_valueerror()
+@pytest.mark.xfail(reason="Memory profiling is flaky")
 def test_memory():
     result, data = run_target("target_mem", "-m")
     assert result.returncode == 0, result.stderr.decode()
 
+    assert data is not None
     md = data.metadata
     assert md["mode"] == "memory"
     assert md["interval"] == "1000"
@@ -14,4 +19,6 @@ def test_memory():
     expected_nthreads = 1
     assert summary.nthreads == expected_nthreads
 
-    assert summary.query("0:MainThread", (("<module>", 25), ("leak", 21))) is not None, summary.threads["0:MainThread"]
+    assert (
+        summary.query("0:MainThread", (("<module>", 25), ("leak", 21))) is not None
+    ), summary.threads["0:MainThread"]

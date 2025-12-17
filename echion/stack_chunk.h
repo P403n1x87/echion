@@ -6,23 +6,20 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#if defined __GNUC__ && defined HAVE_STD_ATOMIC
+#undef HAVE_STD_ATOMIC
+#endif
+#define Py_BUILD_CORE
+#include <internal/pycore_pystate.h>
 
-#include <exception>
 #include <memory>
 #include <vector>
 
+#include <echion/errors.h>
 #include <echion/vm.h>
 
-// ----------------------------------------------------------------------------
+const constexpr size_t MAX_CHUNK_SIZE = 256 * 1024; // 256KB
 
-class StackChunkError : public std::exception
-{
-public:
-    const char* what() const noexcept override
-    {
-        return "Cannot create stack chunk object";
-    }
-};
 
 // ----------------------------------------------------------------------------
 class StackChunk
@@ -30,7 +27,7 @@ class StackChunk
 public:
     StackChunk() {}
 
-    inline void update(_PyStackChunk* chunk_addr);
+    [[nodiscard]] inline Result<void> update(_PyStackChunk* chunk_addr);
     inline void* resolve(void* frame_addr);
     inline bool is_valid() const;
 
@@ -42,12 +39,22 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-void StackChunk::update(_PyStackChunk* chunk_addr)
+Result<void> StackChunk::update(_PyStackChunk* chunk_addr)
 {
     _PyStackChunk chunk;
 
     if (copy_type(chunk_addr, chunk))
-        throw StackChunkError();
+    {
+        return ErrorKind::StackChunkError;
+    }
+
+    // It's possible that the memory we read is corrupted/not valid anymore and the
+    // chunk.size is not meaningful. Weed out those cases here to make sure we don't
+    // try to allocate absurd amounts of memory.
+    if (chunk.size > MAX_CHUNK_SIZE)
+    {
+        return ErrorKind::StackChunkError;
+    }
 
     origin = chunk_addr;
     // if data_capacity is not enough, reallocate.
@@ -59,21 +66,23 @@ void StackChunk::update(_PyStackChunk* chunk_addr)
 
     // Copy the data up until the size of the chunk
     if (copy_generic(chunk_addr, data.data(), chunk.size))
-        throw StackChunkError();
+    {
+        return ErrorKind::StackChunkError;
+    }
 
     if (chunk.previous != NULL)
     {
-        try
-        {
-            if (previous == nullptr)
-                previous = std::make_unique<StackChunk>();
-            previous->update((_PyStackChunk*)chunk.previous);
-        }
-        catch (StackChunkError& e)
+        if (previous == nullptr)
+            previous = std::make_unique<StackChunk>();
+
+        auto update_success = previous->update(reinterpret_cast<_PyStackChunk*>(chunk.previous));
+        if (!update_success)
         {
             previous = nullptr;
         }
     }
+
+    return Result<void>::ok();
 }
 
 // ----------------------------------------------------------------------------
@@ -85,11 +94,11 @@ void* StackChunk::resolve(void* address)
         return address;
     }
 
-    _PyStackChunk* chunk = (_PyStackChunk*)data.data();
+    _PyStackChunk* chunk = reinterpret_cast<_PyStackChunk*>(data.data());
 
     // Check if this chunk contains the address
-    if (address >= origin && address < (char*)origin + chunk->size)
-        return (char*)chunk + ((char*)address - (char*)origin);
+    if (address >= origin && address < reinterpret_cast<char*>(origin) + chunk->size)
+        return reinterpret_cast<char*>(chunk) + (reinterpret_cast<char*>(address) - reinterpret_cast<char*>(origin));
 
     if (previous)
         return previous->resolve(address);
@@ -100,11 +109,8 @@ void* StackChunk::resolve(void* address)
 // ----------------------------------------------------------------------------
 bool StackChunk::is_valid() const
 {
-    return data_capacity > 0 &&
-           data.size() > 0 &&
-           data.size() >= sizeof(_PyStackChunk) &&
-           data.data() != nullptr &&
-           origin != nullptr;
+    return data_capacity > 0 && data.size() > 0 && data.size() >= sizeof(_PyStackChunk) &&
+           data.data() != nullptr && origin != nullptr;
 }
 
 // ----------------------------------------------------------------------------
