@@ -4,6 +4,11 @@
 
 #pragma once
 
+#if PY_VERSION_HEX >= 0x030c0000
+// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#undef _PyGC_FINALIZED
+#endif
+
 #include <map>
 #include "echion/strings.h"
 #define PY_SSIZE_T_CLEAN
@@ -114,7 +119,8 @@ inline void unwind_native_stack()
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
+// ----------------------------------------------------------------------------
+size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
     std::cerr << "== UNWIND == " << std::endl;
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
@@ -140,36 +146,39 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
-        if (maybe_frame->get().name == StringTable::C_FRAME) {
-            std::cerr << "-- C frame" << std::endl;
+        const auto& frame = maybe_frame->get();
 
-            const auto& f = stack.back().get();
-            const auto& c_frame_name = string_table.key("c frame");
-
-            static std::map<std::tuple<uintptr_t, uintptr_t, int, int>, Frame> special_frames;
-            if (special_frames.find(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column)) == special_frames.end()) {
-                special_frames.emplace(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column), Frame(f.filename, c_frame_name, f.location));
-            }
-
-            auto& special_frame = special_frames.find(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column))->second;
-
-            // Add the same frame as before
-            stack.push_back(std::ref(special_frame));
-            count++;
+        if (frame.name == StringTable::C_FRAME) {
             continue;
-        } else {
-            std::cerr << "-- Python frame" << std::endl;
-            std::cerr << "  " << string_table.lookup(maybe_frame->get().name)->get() ;
-            std::cerr << "  " << maybe_frame->get().location.line;
-            std::cerr << "  " << maybe_frame->get().location.column;
-            std::cerr << "  " << maybe_frame->get().location.line_end;
-            std::cerr << "  " << maybe_frame->get().location.column_end;
-            std::cerr << "  in_c_call=" << maybe_frame->get().in_c_call;
-            // std::cerr << "  " << string_table.lookup(maybe_frame->get().filename)->get();
-            std::cerr << std::endl;
         }
 
-        stack.push_back(*maybe_frame);
+        if (frame.in_c_call) {
+            const auto& c_frame_name = string_table.key("(C function)");
+
+            const auto& c_frame_filename = frame.filename;
+            const auto& c_frame_location = frame.location;
+
+            auto* c_frame=new Frame(c_frame_filename, c_frame_name, c_frame_location);
+            auto c_frame_ref = std::ref(*c_frame);
+
+            // const auto key = std::make_tuple(c_frame_filename, c_frame_name, c_frame_location.line, c_frame_location.column);
+
+            // static std::map<std::tuple<uintptr_t, uintptr_t, int, int>, std::unique_ptr<Frame>> special_frames;
+            // if (special_frames.find(key) == special_frames.end()) {
+            //     std::cerr << "Inserting!\n";
+            //     special_frames.emplace(key, c_frame);
+            // }
+
+            // assert(special_frames.find(key) != special_frames.end());
+            // const auto& special_frame = special_frames.find(key)->second;
+
+            // Add the same frame as before
+            stack.push_back(c_frame_ref);
+            // std::cerr << "Added C frame to stack: " << string_table.lookup(stack.back().get().name)->get() << " " << string_table.lookup(stack.back().get().filename)->get() << " " << stack.back().get().location.line << " " << stack.back().get().location.column << std::endl;
+            count++;
+        }
+
+        stack.push_back(maybe_frame->get());
         count++;
     }
 
