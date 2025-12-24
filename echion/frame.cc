@@ -252,8 +252,8 @@ Result<void> Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
     this->location.line = lineno;
     this->location.line_end = lineno;
-    this->location.column = 0;
-    this->location.column_end = 0;
+    // this->location.column = 0;
+    // this->location.column_end = 0;
 
     return Result<void>::ok();
 }

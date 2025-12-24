@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <map>
+#include "echion/strings.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -114,6 +116,7 @@ inline void unwind_native_stack()
 // ----------------------------------------------------------------------------
 static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
+    std::cerr << "== UNWIND == " << std::endl;
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
 
@@ -138,7 +141,32 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         }
 
         if (maybe_frame->get().name == StringTable::C_FRAME) {
+            std::cerr << "-- C frame" << std::endl;
+
+            const auto& f = stack.back().get();
+            const auto& c_frame_name = string_table.key("c frame");
+
+            static std::map<std::tuple<uintptr_t, uintptr_t, int, int>, Frame> special_frames;
+            if (special_frames.find(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column)) == special_frames.end()) {
+                special_frames.emplace(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column), Frame(f.filename, c_frame_name, f.location));
+            }
+
+            auto& special_frame = special_frames.find(std::make_tuple(f.filename, c_frame_name, f.location.line, f.location.column))->second;
+
+            // Add the same frame as before
+            stack.push_back(std::ref(special_frame));
+            count++;
             continue;
+        } else {
+            std::cerr << "-- Python frame" << std::endl;
+            std::cerr << "  " << string_table.lookup(maybe_frame->get().name)->get() ;
+            std::cerr << "  " << maybe_frame->get().location.line;
+            std::cerr << "  " << maybe_frame->get().location.column;
+            std::cerr << "  " << maybe_frame->get().location.line_end;
+            std::cerr << "  " << maybe_frame->get().location.column_end;
+            std::cerr << "  opcode=" << maybe_frame->get().opcode;
+            // std::cerr << "  " << string_table.lookup(maybe_frame->get().filename)->get();
+            std::cerr << std::endl;
         }
 
         stack.push_back(*maybe_frame);

@@ -69,6 +69,7 @@ public:
 
     // ------------------------------------------------------------------------
     Frame(StringTable::Key filename, StringTable::Key name) : filename(filename), name(name) {}
+    Frame(StringTable::Key filename, StringTable::Key name, _location location) : filename(filename), name(name), location(location) {}
     Frame(StringTable::Key name) : name(name) {};
     Frame(PyObject* frame);
     [[nodiscard]] static Result<Frame::Ptr> create(PyCodeObject* code, int lasti);
