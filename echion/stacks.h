@@ -164,7 +164,7 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             std::cerr << "  " << maybe_frame->get().location.column;
             std::cerr << "  " << maybe_frame->get().location.line_end;
             std::cerr << "  " << maybe_frame->get().location.column_end;
-            std::cerr << "  opcode=" << maybe_frame->get().opcode;
+            std::cerr << "  in_c_call=" << maybe_frame->get().in_c_call;
             // std::cerr << "  " << string_table.lookup(maybe_frame->get().filename)->get();
             std::cerr << std::endl;
         }

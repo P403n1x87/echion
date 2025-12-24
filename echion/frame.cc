@@ -3,6 +3,62 @@
 #include <echion/errors.h>
 #include <echion/render.h>
 
+#if PY_VERSION_HEX >= 0x030b0000
+#define Py_BUILD_CORE
+#if PY_VERSION_HEX >= 0x030d0000
+#include <opcode.h>
+#else
+#include <internal/pycore_opcode.h>
+#endif
+#else
+// Python < 3.11
+#include <opcode.h>
+#endif
+
+// ----------------------------------------------------------------------------
+// Check if an opcode is a CALL to a C/builtin function
+// In Python 3.11+, opcodes are specialized at runtime, so we check for
+// specialized PRECALL_BUILTIN_* variants that indicate a C function call
+static inline bool is_call_opcode([[maybe_unused]] uint8_t opcode)
+{
+#if PY_VERSION_HEX >= 0x030d0000
+    // Python 3.13+: CALL, CALL_KW, CALL_FUNCTION_EX
+    return opcode == CALL || opcode == CALL_KW || opcode == CALL_FUNCTION_EX;
+#elif PY_VERSION_HEX >= 0x030c0000
+    // Python 3.12: CALL is specialized but no PRECALL
+    // Check for CALL and specialized CALL_BUILTIN_* variants
+    return opcode == CALL || opcode == CALL_FUNCTION_EX ||
+           opcode == CALL_BUILTIN_CLASS ||
+           opcode == CALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == CALL_NO_KW_BUILTIN_FAST ||
+           opcode == CALL_NO_KW_BUILTIN_O ||
+           opcode == CALL_NO_KW_ISINSTANCE ||
+           opcode == CALL_NO_KW_LEN ||
+           opcode == CALL_NO_KW_LIST_APPEND ||
+           opcode == CALL_NO_KW_STR_1 ||
+           opcode == CALL_NO_KW_TUPLE_1 ||
+           opcode == CALL_NO_KW_TYPE_1;
+#elif PY_VERSION_HEX >= 0x030b0000
+    // Python 3.11: Check specialized PRECALL_BUILTIN_* variants
+    // When in a C call, prev_instr points to the specialized PRECALL
+    return opcode == PRECALL_BUILTIN_CLASS ||
+           opcode == PRECALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == PRECALL_NO_KW_BUILTIN_FAST ||
+           opcode == PRECALL_NO_KW_BUILTIN_O ||
+           opcode == PRECALL_NO_KW_ISINSTANCE ||
+           opcode == PRECALL_NO_KW_LEN ||
+           opcode == PRECALL_NO_KW_LIST_APPEND ||
+           opcode == PRECALL_NO_KW_STR_1 ||
+           opcode == PRECALL_NO_KW_TUPLE_1 ||
+           opcode == PRECALL_NO_KW_TYPE_1 ||
+           opcode == CALL_FUNCTION_EX;
+#else
+    // Python 3.10 and earlier: CALL_FUNCTION, CALL_FUNCTION_KW, CALL_FUNCTION_EX, CALL_METHOD
+    return opcode == CALL_FUNCTION || opcode == CALL_FUNCTION_KW ||
+           opcode == CALL_FUNCTION_EX || opcode == CALL_METHOD;
+#endif
+}
+
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
@@ -361,6 +417,24 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 #else   // PY_VERSION_HEX < 0x030c0000
         frame.is_entry = frame_addr->is_entry;
 #endif  // PY_VERSION_HEX >= 0x030c0000
+
+        // Detect if we're paused at a CALL instruction (likely in C code)
+        // Read only the opcode byte to minimize memory copying
+        _Py_CODEUNIT instr;
+#if PY_VERSION_HEX >= 0x030d0000
+        // In 3.13+, instr_ptr points to the current instruction
+        if (!copy_type(frame_addr->instr_ptr, instr))
+        {
+            frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+        }
+#else
+        // In 3.11-3.12, prev_instr points to the last executed instruction
+        // When in a C call, prev_instr points to the specialized PRECALL_BUILTIN_* instruction
+        if (!copy_type(frame_addr->prev_instr, instr))
+        {
+            frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+        }
+#endif
     }
 
     *prev_addr = &frame == &INVALID_FRAME ? NULL : frame_addr->previous;
@@ -382,6 +456,28 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     }
 
     auto& frame = maybe_frame->get();
+
+    // Detect if we're paused at a CALL instruction (likely in C code)
+    // For Python < 3.11, we need to read the bytecode from the code object
+    if (&frame != &INVALID_FRAME && py_frame.f_lasti >= 0)
+    {
+        // py_frame.f_code is a remote pointer, so we need to copy the code object first
+        PyCodeObject code;
+        if (!copy_type(py_frame.f_code, code))
+        {
+            // Now code.co_code is also a remote pointer to the bytecode bytes object
+            // Read just the opcode byte at f_lasti from the bytecode
+            uint8_t opcode;
+            auto bytecode_ptr = reinterpret_cast<uint8_t*>(
+                reinterpret_cast<uintptr_t>(code.co_code) +
+                offsetof(PyBytesObject, ob_sval) + py_frame.f_lasti);
+            if (!copy_type(bytecode_ptr, opcode))
+            {
+                frame.in_c_call = is_call_opcode(opcode);
+            }
+        }
+    }
+
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
 #endif  // PY_VERSION_HEX >= 0x030b0000
 

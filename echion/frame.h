@@ -67,6 +67,9 @@ public:
     bool is_entry = false;
 #endif
 
+    // True if the frame is paused at a CALL instruction (likely executing C code)
+    bool in_c_call = false;
+
     // ------------------------------------------------------------------------
     Frame(StringTable::Key filename, StringTable::Key name) : filename(filename), name(name) {}
     Frame(StringTable::Key filename, StringTable::Key name, _location location) : filename(filename), name(name), location(location) {}

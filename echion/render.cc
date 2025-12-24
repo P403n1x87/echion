@@ -40,6 +40,6 @@ void WhereRenderer::render_frame(Frame& frame)
 // ------------------------------------------------------------------------
 void MojoRenderer::render_frame(Frame& frame)
 {
-    std::cerr << "Frame: " << " " << string_table.lookup(frame.filename)->get() << " " << string_table.lookup(frame.name)->get() << " " << frame.location.line << " " << frame.location.line_end << " " << frame.location.column << " " << frame.location.column_end << " opcode=" << frame.opcode << std::endl;
+    std::cerr << "Frame: " << " " << string_table.lookup(frame.filename)->get() << " " << string_table.lookup(frame.name)->get() << " " << frame.location.line << " " << frame.location.line_end << " " << frame.location.column << " " << frame.location.column_end << " in_c_call=" << frame.in_c_call << std::endl;
     frame_ref(frame.cache_key);
 }
