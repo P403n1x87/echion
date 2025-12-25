@@ -153,7 +153,13 @@ size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
         }
 
         if (frame.in_c_call) {
-            const auto& c_frame_name = string_table.key("(C function)");
+            // Use the extracted callable name if available, otherwise fall back to "(C function)"
+            StringTable::Key c_frame_name;
+            if (frame.c_call_name != 0) {
+                c_frame_name = frame.c_call_name;
+            } else {
+                c_frame_name = string_table.key("(C function)");
+            }
 
             const auto& c_frame_filename = frame.filename;
             const auto& c_frame_location = frame.location;

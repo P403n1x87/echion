@@ -60,6 +60,150 @@ static inline bool is_call_opcode([[maybe_unused]] uint8_t opcode)
 }
 
 // ----------------------------------------------------------------------------
+// Check if an opcode is a LOAD_ATTR/LOAD_METHOD (preferred for method names)
+// Includes specialized variants that Python 3.11+ uses at runtime
+static inline bool is_load_attr_opcode(uint8_t opcode)
+{
+    if (opcode == LOAD_ATTR)
+        return true;
+#if PY_VERSION_HEX >= 0x030b0000 && PY_VERSION_HEX < 0x030c0000
+    // Python 3.11 specialized LOAD_ATTR variants
+    if (opcode == LOAD_ATTR_ADAPTIVE ||
+        opcode == LOAD_ATTR_INSTANCE_VALUE ||
+        opcode == LOAD_ATTR_MODULE ||
+        opcode == LOAD_ATTR_SLOT ||
+        opcode == LOAD_ATTR_WITH_HINT ||
+        opcode == LOAD_METHOD ||
+        opcode == LOAD_METHOD_ADAPTIVE ||
+        opcode == LOAD_METHOD_CLASS ||
+        opcode == LOAD_METHOD_MODULE ||
+        opcode == LOAD_METHOD_NO_DICT ||
+        opcode == LOAD_METHOD_WITH_DICT ||
+        opcode == LOAD_METHOD_WITH_VALUES)
+        return true;
+#elif PY_VERSION_HEX >= 0x030c0000
+    // Python 3.12+ specialized LOAD_ATTR variants (LOAD_METHOD merged into LOAD_ATTR)
+    if (opcode == LOAD_ATTR_CLASS ||
+        opcode == LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN ||
+        opcode == LOAD_ATTR_INSTANCE_VALUE ||
+        opcode == LOAD_ATTR_MODULE ||
+        opcode == LOAD_ATTR_PROPERTY ||
+        opcode == LOAD_ATTR_SLOT ||
+        opcode == LOAD_ATTR_WITH_HINT ||
+        opcode == LOAD_ATTR_METHOD_LAZY_DICT ||
+        opcode == LOAD_ATTR_METHOD_NO_DICT ||
+        opcode == LOAD_ATTR_METHOD_WITH_VALUES)
+        return true;
+#endif
+    return false;
+}
+
+// Check if an opcode is a LOAD_GLOBAL/LOAD_NAME (fallback for function names)
+static inline bool is_load_global_opcode(uint8_t opcode)
+{
+    return opcode == LOAD_GLOBAL || opcode == LOAD_NAME;
+}
+
+// ----------------------------------------------------------------------------
+// Helper to look up a name from co_names by index
+static inline StringTable::Key lookup_name_from_code(PyCodeObject* code_addr, int name_idx)
+{
+    // TODO: Cache this!
+
+    // Copy the code object to get co_names
+    PyCodeObject code;
+    if (copy_type(code_addr, code))
+        return 0;
+
+    // Get the name from co_names[name_idx]
+    PyTupleObject names_tuple;
+    if (copy_type(code.co_names, names_tuple))
+        return 0;
+
+    if (name_idx < 0 || name_idx >= static_cast<int>(names_tuple.ob_base.ob_size))
+        return 0;
+
+    // Read the pointer to the name object from the tuple's ob_item array
+    PyObject* name_obj_ptr;
+    auto item_addr = reinterpret_cast<PyObject**>(
+        reinterpret_cast<uintptr_t>(code.co_names) +
+        offsetof(PyTupleObject, ob_item) +
+        name_idx * sizeof(PyObject*));
+    if (copy_type(item_addr, name_obj_ptr))
+        return 0;
+
+    // Get the string key for this name
+    auto maybe_name = string_table.key(name_obj_ptr);
+    return maybe_name ? *maybe_name : 0;
+}
+
+// ----------------------------------------------------------------------------
+// Extract the callable name from bytecode by scanning backwards from the current instruction
+// Prioritizes LOAD_ATTR/LOAD_METHOD (for method calls) over LOAD_GLOBAL (for direct calls)
+// Returns the name key, or 0 if not found
+static inline StringTable::Key extract_callable_name(
+    [[maybe_unused]] _Py_CODEUNIT* instr_ptr,
+    [[maybe_unused]] PyCodeObject* code_addr)
+{
+#if PY_VERSION_HEX >= 0x030b0000
+    // Scan backwards up to 32 code units looking for LOAD instructions
+    constexpr int MAX_SCAN = 32;
+    _Py_CODEUNIT bytecode[MAX_SCAN];
+
+    // code_addr is a REMOTE pointer, so we calculate the remote code_start address
+    auto code_start = reinterpret_cast<_Py_CODEUNIT*>(
+        reinterpret_cast<uintptr_t>(code_addr) + offsetof(PyCodeObject, co_code_adaptive));
+
+    // Calculate how many instructions we can scan (don't go before the start of bytecode)
+    // Note: both instr_ptr and code_start are remote addresses, so the arithmetic is valid
+    if (instr_ptr <= code_start)
+        return 0;
+
+    int available = static_cast<int>(instr_ptr - code_start);
+    int to_scan = std::min(available, MAX_SCAN);
+
+    if (to_scan <= 0)
+        return 0;
+
+    // Copy the bytecode chunk from remote memory
+    auto scan_start = instr_ptr - to_scan;
+    if (copy_generic(scan_start, bytecode, to_scan * sizeof(_Py_CODEUNIT)))
+        return 0;
+
+    // First pass: look for LOAD_ATTR/LOAD_METHOD (the method/attribute being called)
+    for (int i = to_scan - 1; i >= 0; --i)
+    {
+        uint8_t opcode = _Py_OPCODE(bytecode[i]);
+        if (is_load_attr_opcode(opcode))
+        {
+            int arg = _Py_OPARG(bytecode[i]);
+#if PY_VERSION_HEX >= 0x030c0000
+            // In Python 3.12+, LOAD_ATTR arg = (name_index << 1) | is_method_flag
+            int name_idx = arg >> 1;
+#else
+            // In Python 3.11, LOAD_ATTR arg is just the name index
+            int name_idx = arg;
+#endif
+            return lookup_name_from_code(code_addr, name_idx);
+        }
+    }
+
+    // Second pass: fall back to LOAD_GLOBAL/LOAD_NAME (for direct function calls)
+    for (int i = to_scan - 1; i >= 0; --i)
+    {
+        uint8_t opcode = _Py_OPCODE(bytecode[i]);
+        if (is_load_global_opcode(opcode))
+        {
+            // In Python 3.11+, LOAD_GLOBAL arg = (name_index << 1) | push_null_flag
+            int name_idx = _Py_OPARG(bytecode[i]) >> 1;
+            return lookup_name_from_code(code_addr, name_idx);
+        }
+    }
+#endif
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
 {
@@ -426,6 +570,12 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
         if (!copy_type(frame_addr->instr_ptr, instr))
         {
             frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+            if (frame.in_c_call)
+            {
+                frame.c_call_name = extract_callable_name(
+                    frame_addr->instr_ptr,
+                    reinterpret_cast<PyCodeObject*>(frame_addr->f_executable));
+            }
         }
 #else
         // In 3.11-3.12, prev_instr points to the last executed instruction
@@ -433,6 +583,12 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
         if (!copy_type(frame_addr->prev_instr, instr))
         {
             frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+            if (frame.in_c_call)
+            {
+                frame.c_call_name = extract_callable_name(
+                    frame_addr->prev_instr,
+                    frame_addr->f_code);
+            }
         }
 #endif
     }

@@ -70,6 +70,9 @@ public:
     // True if the frame is paused at a CALL instruction (likely executing C code)
     bool in_c_call = false;
 
+    // Name of the callable being invoked (from bytecode, e.g., "sha256" for hashlib.sha256())
+    StringTable::Key c_call_name = 0;
+
     // ------------------------------------------------------------------------
     Frame(StringTable::Key filename, StringTable::Key name) : filename(filename), name(name) {}
     Frame(StringTable::Key filename, StringTable::Key name, _location location) : filename(filename), name(name), location(location) {}
