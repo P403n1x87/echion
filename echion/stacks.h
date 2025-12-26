@@ -9,8 +9,6 @@
 #undef _PyGC_FINALIZED
 #endif
 
-#include <map>
-#include "echion/strings.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -27,6 +25,7 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
+#include "echion/strings.h"
 #if PY_VERSION_HEX >= 0x030b0000
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
