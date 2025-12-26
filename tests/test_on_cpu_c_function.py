@@ -28,12 +28,22 @@ def test_on_cpu_c_function():
         ),
         lambda v: v >= 0.0,
     )
+
     summary.assert_substack(
         "0:MainThread",
         (
             "main",
             "complex_computation",
-            "sin",
+            "monotonic",
+        ),
+        lambda v: v >= 0.0,
+    )
+    summary.assert_substack(
+        "0:MainThread",
+        (
+            "main",
+            "complex_computation",
+            "pow",
         ),
         lambda v: v >= 0.0,
     )

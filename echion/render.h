@@ -68,7 +68,7 @@ public:
     // Called after render_task_begin and before render_frame.
     virtual void render_stack_begin(long long pid, long long iid,
                                     const std::string& thread_name) = 0;
-    virtual void render_frame(Frame& frame) = 0;
+    virtual void render_frame(const Frame& frame) = 0;
     virtual void render_cpu_time(uint64_t cpu_time) = 0;
     virtual void render_stack_end(MetricType metric_type, uint64_t delta) = 0;
 
@@ -145,7 +145,7 @@ public:
     {
         *output << msg << std::endl;
     }
-    void render_frame(Frame&) override;
+    void render_frame(const Frame&) override;
     void render_stack_end(MetricType, uint64_t) override {}
     void render_cpu_time(uint64_t) override {}
 
@@ -343,7 +343,7 @@ public:
         std::cerr << "------" << std::endl;
         stack(pid, iid, name);
     };
-    void render_frame(Frame& frame) override;
+    void render_frame(const Frame& frame) override;
     void render_cpu_time(uint64_t cpu_time) override
     {
         metric = cpu_time;
@@ -473,7 +473,7 @@ public:
         getActiveRenderer()->render_stack_begin(pid, iid, thread_name);
     }
 
-    void render_frame(Frame& frame)
+    void render_frame(const Frame& frame)
     {
         getActiveRenderer()->render_frame(frame);
     }

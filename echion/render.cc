@@ -2,7 +2,7 @@
 #include <echion/render.h>
 
 // ------------------------------------------------------------------------
-void WhereRenderer::render_frame(Frame& frame)
+void WhereRenderer::render_frame(const Frame& frame)
 {
     auto maybe_name_str = string_table.lookup(frame.name);
     if (!maybe_name_str)
@@ -38,29 +38,7 @@ void WhereRenderer::render_frame(Frame& frame)
 }
 
 // ------------------------------------------------------------------------
-void MojoRenderer::render_frame(Frame& frame)
+void MojoRenderer::render_frame(const Frame& frame)
 {
-    // run $(which echion) python3 
-
-
-    // const auto& file_name = string_table.lookup(frame.filename)->get();
-    // const auto& name = string_table.lookup(frame.name)->get();  
-
-    // std::cerr
-    //     << "Frame: " << " " << file_name 
-    //     << " " << name 
-    //     << " " << frame.location.line 
-    //     << " " << frame.location.line_end 
-    //     << " " << frame.location.column 
-    //     << " " << frame.location.column_end 
-    //     << " in_c_call=" << frame.in_c_call;
-    // if (frame.c_call_name != 0) {
-    //     auto maybe_name = string_table.lookup(frame.c_call_name);
-    //     if (maybe_name) {
-    //         std::cerr << " c_call_name=" << maybe_name->get();
-    //     }
-    // }
-    // std::cerr << " cache_key=" << frame.cache_key
-    // << std::endl;
     frame_ref(frame.cache_key);
 }

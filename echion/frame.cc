@@ -643,6 +643,34 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
 #endif  // PY_VERSION_HEX >= 0x030b0000
 
+    if (frame.in_c_call) {
+        StringTable::Key c_frame_name;
+        if (frame.c_call_name != 0) {
+            c_frame_name = frame.c_call_name;
+        } else {
+            c_frame_name = string_table.key("(C function)");
+        }
+        
+        const auto& c_frame_filename = frame.filename;
+        const auto& c_frame_location = frame.location;
+
+        uintptr_t c_frame_key = c_frame_filename;
+        c_frame_key = (c_frame_key * 31) + c_frame_name;
+        c_frame_key = (c_frame_key * 31) + static_cast<uintptr_t>(c_frame_location.line);
+        c_frame_key = (c_frame_key * 31) + static_cast<uintptr_t>(c_frame_location.column);        
+
+        auto c_frame = std::make_unique<Frame>(c_frame_filename, c_frame_name, c_frame_location);
+        c_frame->cache_key = c_frame_key;
+        frame.c_frame_key = c_frame_key;
+
+        frame_cache->store(c_frame_key, std::move(c_frame));
+
+        Renderer::get().frame(c_frame_key, c_frame_filename, c_frame_name, c_frame_location.line,
+                              c_frame_location.line_end, c_frame_location.column,
+                              c_frame_location.column_end);
+    }
+
+
     return std::ref(frame);
 }
 

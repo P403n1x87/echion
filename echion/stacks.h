@@ -61,7 +61,12 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            Renderer::get().render_frame((*it).get());
+
+            const auto& frame = (*it).get();
+            Renderer::get().render_frame(frame);
+            if (frame.c_frame_key != 0) {
+                Renderer::get().frame_ref(frame.c_frame_key);
+            }
         }
     }
 
@@ -150,38 +155,6 @@ size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 
         if (frame.name == StringTable::C_FRAME) {
             continue;
-        }
-
-        if (frame.in_c_call) {
-            // Use the extracted callable name if available, otherwise fall back to "(C function)"
-            StringTable::Key c_frame_name;
-            if (frame.c_call_name != 0) {
-                c_frame_name = frame.c_call_name;
-            } else {
-                c_frame_name = string_table.key("(C function)");
-            }
-
-            const auto& c_frame_filename = frame.filename;
-            const auto& c_frame_location = frame.location;
-
-            auto* c_frame=new Frame(c_frame_filename, c_frame_name, c_frame_location);
-            auto c_frame_ref = std::ref(*c_frame);
-
-            // const auto key = std::make_tuple(c_frame_filename, c_frame_name, c_frame_location.line, c_frame_location.column);
-
-            // static std::map<std::tuple<uintptr_t, uintptr_t, int, int>, std::unique_ptr<Frame>> special_frames;
-            // if (special_frames.find(key) == special_frames.end()) {
-            //     std::cerr << "Inserting!\n";
-            //     special_frames.emplace(key, c_frame);
-            // }
-
-            // assert(special_frames.find(key) != special_frames.end());
-            // const auto& special_frame = special_frames.find(key)->second;
-
-            // Add the same frame as before
-            stack.push_back(c_frame_ref);
-            // std::cerr << "Added C frame to stack: " << string_table.lookup(stack.back().get().name)->get() << " " << string_table.lookup(stack.back().get().filename)->get() << " " << stack.back().get().location.line << " " << stack.back().get().location.column << std::endl;
-            count++;
         }
 
         stack.push_back(maybe_frame->get());
