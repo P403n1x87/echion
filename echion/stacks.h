@@ -4,6 +4,11 @@
 
 #pragma once
 
+#if PY_VERSION_HEX >= 0x030c0000
+// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#undef _PyGC_FINALIZED
+#endif
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -20,6 +25,7 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
+#include "echion/strings.h"
 #if PY_VERSION_HEX >= 0x030b0000
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
@@ -54,7 +60,12 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            Renderer::get().render_frame((*it).get());
+
+            const auto& frame = (*it).get();
+            Renderer::get().render_frame(frame);
+            if (frame.c_frame_key != 0) {
+                Renderer::get().frame_ref(frame.c_frame_key);
+            }
         }
     }
 
@@ -112,8 +123,10 @@ inline void unwind_native_stack()
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
+// ----------------------------------------------------------------------------
+size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
+    std::cerr << "== UNWIND == " << std::endl;
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
 
@@ -137,11 +150,13 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
-        if (maybe_frame->get().name == StringTable::C_FRAME) {
+        const auto& frame = maybe_frame->get();
+
+        if (frame.name == StringTable::C_FRAME) {
             continue;
         }
 
-        stack.push_back(*maybe_frame);
+        stack.push_back(maybe_frame->get());
         count++;
     }
 
