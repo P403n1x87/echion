@@ -22,8 +22,13 @@
 static inline bool is_call_opcode([[maybe_unused]] uint8_t opcode)
 {
 #if PY_VERSION_HEX >= 0x030d0000
-    // Python 3.13+: CALL, CALL_KW, CALL_FUNCTION_EX
-    return opcode == CALL || opcode == CALL_KW || opcode == CALL_FUNCTION_EX;
+    // Python 3.13+: Check for specialized CALL_BUILTIN_* variants
+    // These are adaptive specializations that indicate a C/builtin function call
+    return opcode == CALL_BUILTIN_CLASS ||
+           opcode == CALL_BUILTIN_FAST ||
+           opcode == CALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == CALL_BUILTIN_O ||
+           opcode == CALL_FUNCTION_EX;
 #elif PY_VERSION_HEX >= 0x030c0000
     // Python 3.12: CALL is specialized but no PRECALL
     // Check for CALL and specialized CALL_BUILTIN_* variants
@@ -39,9 +44,10 @@ static inline bool is_call_opcode([[maybe_unused]] uint8_t opcode)
            opcode == CALL_NO_KW_TUPLE_1 ||
            opcode == CALL_NO_KW_TYPE_1;
 #elif PY_VERSION_HEX >= 0x030b0000
-    // Python 3.11: Check specialized PRECALL_BUILTIN_* variants
-    // When in a C call, prev_instr points to the specialized PRECALL
-    return opcode == PRECALL_BUILTIN_CLASS ||
+    // Python 3.11: Check specialized PRECALL_BUILTIN_* variants and CALL
+    // When in a C call, prev_instr might point to CALL or the specialized PRECALL
+    return opcode == CALL ||
+           opcode == PRECALL_BUILTIN_CLASS ||
            opcode == PRECALL_BUILTIN_FAST_WITH_KEYWORDS ||
            opcode == PRECALL_NO_KW_BUILTIN_FAST ||
            opcode == PRECALL_NO_KW_BUILTIN_O ||
