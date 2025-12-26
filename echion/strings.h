@@ -99,6 +99,8 @@ public:
             this->emplace(k, s);
         }
 
+        Renderer::get().string(k, s);
+
         return k;
     }
 
