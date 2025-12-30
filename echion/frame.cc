@@ -643,7 +643,7 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
 #endif  // PY_VERSION_HEX >= 0x030b0000
 
-    if (frame.in_c_call) {
+    if (frame.in_c_call && frame.c_call_name != 0) {
         StringTable::Key c_frame_name;
         if (frame.c_call_name != 0) {
             c_frame_name = frame.c_call_name;
@@ -669,7 +669,6 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
                               c_frame_location.line_end, c_frame_location.column,
                               c_frame_location.column_end);
     }
-
 
     return std::ref(frame);
 }

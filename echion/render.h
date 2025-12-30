@@ -340,7 +340,6 @@ public:
     void render_task_begin(std::string, bool) override {};
     void render_stack_begin(long long pid, long long iid, const std::string& name) override
     {
-        std::cerr << "------" << std::endl;
         stack(pid, iid, name);
     };
     void render_frame(const Frame& frame) override;

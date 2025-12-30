@@ -61,11 +61,7 @@ public:
                 continue;
 #endif
 
-            const auto& frame = (*it).get();
-            Renderer::get().render_frame(frame);
-            if (frame.c_frame_key != 0) {
-                Renderer::get().frame_ref(frame.c_frame_key);
-            }
+            Renderer::get().render_frame(it->get());
         }
     }
 
@@ -150,13 +146,35 @@ size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
-        const auto& frame = maybe_frame->get();
+        auto& frame = maybe_frame->get();
 
         if (frame.name == StringTable::C_FRAME) {
             continue;
         }
 
-        stack.push_back(maybe_frame->get());
+        // THIS DOESNT WORK BECAUSE WE SET OR NOT C_CALL AT THE FRAME LEVEL BUT FRAMES ARE REUSED 
+        // ACROSS UNWINDINGS, SO WE NEED TO SET IT "FOR THE CURRENT CONTEXT" (IS THE CURRENT FRAME THE LEAF
+        // IN THE CURRENT CONTEXT?)
+        if (stack.size() == 0 && frame.in_c_call) {
+            auto c_frame = frame_cache->lookup(frame.c_frame_key);
+            if (c_frame) {
+                std::cerr << "Keeping C frame: " <<string_table.lookup(frame.c_call_name)->get() << " called from " << string_table.lookup(frame.name)->get() << std::endl;
+                stack.push_back(*c_frame);
+            } else {
+                std::cerr << "C frame not found: " << frame.c_frame_key << " from " << string_table.lookup(frame.name)->get() << std::endl;
+            }
+        } else {
+            if (frame.in_c_call) {
+                auto c_frame = frame_cache->lookup(frame.c_frame_key);
+                auto c_frame_name = c_frame ? string_table.lookup(c_frame->get().name)->get() : "(unknown C function)";
+
+                auto caller_frame_name = string_table.lookup(frame.name)->get();
+                std::cerr << "Skipping C frame: " << c_frame_name << " from " << caller_frame_name << std::endl;
+            }
+        }
+
+        std::cerr << "Pushing frame: " << string_table.lookup(frame.name)->get() << std::endl;
+        stack.push_back(frame);
         count++;
     }
 
