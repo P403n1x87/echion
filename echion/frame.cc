@@ -3,6 +3,8 @@
 #include <echion/errors.h>
 #include <echion/render.h>
 
+#include <utility>
+
 #if PY_VERSION_HEX >= 0x030b0000
 #define Py_BUILD_CORE
 #if PY_VERSION_HEX >= 0x030d0000
@@ -111,10 +113,50 @@ static inline bool is_load_global_opcode(uint8_t opcode)
 }
 
 // ----------------------------------------------------------------------------
+// Cache key for lookup_name_from_code: (code_addr, name_idx) -> name_key
+struct NameLookupKey {
+    uintptr_t code_addr;
+    int name_idx;
+    
+    bool operator==(const NameLookupKey& other) const {
+        return code_addr == other.code_addr && name_idx == other.name_idx;
+    }
+};
+
+// Hash function for NameLookupKey
+namespace std {
+    template<>
+    struct hash<NameLookupKey> {
+        size_t operator()(const NameLookupKey& key) const {
+            // Combine hash of code_addr and name_idx
+            return hash<uintptr_t>()(key.code_addr) ^ (hash<int>()(key.name_idx) << 1);
+        }
+    };
+}
+
+// LRU cache for name lookups: maps (code_addr, name_idx) -> StringTable::Key
+static LRUCache<NameLookupKey, StringTable::Key>* name_lookup_cache = nullptr;
+
+// Initialize the name lookup cache
+static void init_name_lookup_cache() {
+    if (name_lookup_cache == nullptr) {
+        name_lookup_cache = new LRUCache<NameLookupKey, StringTable::Key>(512);
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Helper to look up a name from co_names by index
 static inline StringTable::Key lookup_name_from_code(PyCodeObject* code_addr, int name_idx)
 {
-    // TODO: Cache this!
+    // Initialize cache on first use
+    init_name_lookup_cache();
+    
+    // Check cache first
+    NameLookupKey cache_key{reinterpret_cast<uintptr_t>(code_addr), name_idx};
+    auto cached_result = name_lookup_cache->lookup(cache_key);
+    if (cached_result) {
+        return cached_result->get();
+    }
 
     // Copy the code object to get co_names
     PyCodeObject code;
@@ -140,7 +182,44 @@ static inline StringTable::Key lookup_name_from_code(PyCodeObject* code_addr, in
 
     // Get the string key for this name
     auto maybe_name = string_table.key(name_obj_ptr);
-    return maybe_name ? *maybe_name : 0;
+    StringTable::Key result = maybe_name ? *maybe_name : 0;
+    
+    // Cache the result (even if 0, to avoid repeated failed lookups)
+    name_lookup_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+    
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Cache key for extract_callable_name: (code_addr, instr_ptr) -> name_key
+struct CallableNameKey {
+    uintptr_t code_addr;
+    uintptr_t instr_ptr;
+    
+    bool operator==(const CallableNameKey& other) const {
+        return code_addr == other.code_addr && instr_ptr == other.instr_ptr;
+    }
+};
+
+// Hash function for CallableNameKey
+namespace std {
+    template<>
+    struct hash<CallableNameKey> {
+        size_t operator()(const CallableNameKey& key) const {
+            // Combine hash of code_addr and instr_ptr
+            return hash<uintptr_t>()(key.code_addr) ^ (hash<uintptr_t>()(key.instr_ptr) << 1);
+        }
+    };
+}
+
+// LRU cache for callable name extraction: maps (code_addr, instr_ptr) -> StringTable::Key
+static LRUCache<CallableNameKey, StringTable::Key>* callable_name_cache = nullptr;
+
+// Initialize the callable name cache
+static void init_callable_name_cache() {
+    if (callable_name_cache == nullptr) {
+        callable_name_cache = new LRUCache<CallableNameKey, StringTable::Key>(512);
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -151,6 +230,16 @@ static inline StringTable::Key extract_callable_name(
     [[maybe_unused]] _Py_CODEUNIT* instr_ptr,
     [[maybe_unused]] PyCodeObject* code_addr)
 {
+    // Initialize cache on first use
+    init_callable_name_cache();
+    
+    // Check cache first
+    CallableNameKey cache_key{reinterpret_cast<uintptr_t>(code_addr), reinterpret_cast<uintptr_t>(instr_ptr)};
+    auto cached_result = callable_name_cache->lookup(cache_key);
+    if (cached_result) {
+        return cached_result->get();
+    }
+    
 #if PY_VERSION_HEX >= 0x030b0000
     // Scan backwards up to 32 code units looking for LOAD instructions
     constexpr int MAX_SCAN = 32;
@@ -190,7 +279,10 @@ static inline StringTable::Key extract_callable_name(
             // In Python 3.11, LOAD_ATTR arg is just the name index
             int name_idx = arg;
 #endif
-            return lookup_name_from_code(code_addr, name_idx);
+            StringTable::Key result = lookup_name_from_code(code_addr, name_idx);
+            // Cache the result before returning
+            callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+            return result;
         }
     }
 
@@ -202,10 +294,16 @@ static inline StringTable::Key extract_callable_name(
         {
             // In Python 3.11+, LOAD_GLOBAL arg = (name_index << 1) | push_null_flag
             int name_idx = _Py_OPARG(bytecode[i]) >> 1;
-            return lookup_name_from_code(code_addr, name_idx);
+            StringTable::Key result = lookup_name_from_code(code_addr, name_idx);
+            // Cache the result before returning
+            callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+            return result;
         }
     }
 #endif
+    
+    // No name found, cache 0 to avoid repeated scans
+    callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(0));
     return 0;
 }
 

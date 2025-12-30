@@ -22,7 +22,7 @@ def confirm_hashes(max_time: float) -> tuple[int, str]:
     return i, hash 
 
 def main() -> None:
-    run_time = 3
+    run_time = 15
     start = time.monotonic()
     while time.monotonic() - start < run_time:
         x=complex_computation(max_time=run_time / 2)
