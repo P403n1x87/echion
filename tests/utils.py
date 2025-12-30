@@ -1,5 +1,6 @@
 import os
 import sys
+import inspect
 import typing as t
 from functools import wraps
 import json
@@ -109,7 +110,9 @@ class DataSummary:
     ) -> None:
         try:
             stack = self.threads[thread][frames]
-            assert predicate(stack), stack
+            assert predicate(stack), (
+                f"Predicate '{inspect.getsource(predicate).strip()}' failed for stack {stack}"
+            )
         except KeyError:
             if thread not in self.threads:
                 raise AssertionError(
@@ -250,25 +253,33 @@ else:
     )
 
 
-def summary_to_json(summary: DataSummary, line_numbers: bool = False) -> t.Dict[str, t.Any]:
+def summary_to_json(
+    summary: DataSummary, line_numbers: bool = False
+) -> t.Dict[str, t.Any]:
     summary_json = {}
     for thread in summary.threads:
         summary_json[thread] = sorted(
             [
                 {
                     "stack": (
-                        list(key) if isinstance(next(iter(key)), str)
+                        list(key)
+                        if isinstance(next(iter(key)), str)
                         else [f"{item[0]}:{item[1]}" for item in key]
                     ),
                     "metric": value,
                     "count": summary.sample_counts[thread][key],
                 }
                 for key, value in summary.threads[thread].items()
-                if key and ((line_numbers and isinstance(next(iter(key)), tuple)) or (not line_numbers and isinstance(next(iter(key)), str)))
+                if key
+                and (
+                    (line_numbers and isinstance(next(iter(key)), tuple))
+                    or (not line_numbers and isinstance(next(iter(key)), str))
+                )
             ],
             key=lambda x: t.cast(float, x["metric"]),
             reverse=True,
         )
+
     return summary_json
 
 
