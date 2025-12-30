@@ -150,7 +150,7 @@ async def main(index: int) -> None:
             for coro in asyncio.as_completed(tasks):
                 try:
                     res = await coro
-                except:
+                except:  # noqa: E722
                     continue
 
                 if isinstance(res, tuple):

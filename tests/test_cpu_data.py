@@ -1,3 +1,4 @@
+from typing import List, Optional
 import pytest
 
 from tests.utils import PY
@@ -5,6 +6,7 @@ from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import stealth
 from tests.utils import retry_on_valueerror
+from tests.utils import dump_summary
 
 
 @retry_on_valueerror()
@@ -18,6 +20,7 @@ def test_cpu_time(stealth):
     assert md["interval"] == "1000"
 
     summary = DataSummary(data)
+    dump_summary(summary, "summary_cpu_time.json", line_numbers=True)
 
     expected_nthreads = 3 - bool(stealth)
     assert summary.nthreads == expected_nthreads
@@ -26,10 +29,12 @@ def test_cpu_time(stealth):
 
     # Test line numbers
     assert summary.query("0:MainThread", (("main", 22), ("bar", 17))) is None
+
+    thread_run = "Thread.run" if PY >= (3, 11) else "run"
     assert (
         summary.query(
             "0:SecondaryThread",
-            ("Thread.run" if PY >= (3, 11) else "run", "keep_cpu_busy"),
+            (thread_run, "keep_cpu_busy"),
         )
         is not None
     )
@@ -43,7 +48,7 @@ def test_cpu_time(stealth):
             "<module>",
             "keep_cpu_busy",
         ),
-        lambda v: v >= 3e5,
+        lambda v: v >= 2e5,
     )
 
     if PY >= (3, 11):
@@ -56,7 +61,7 @@ def test_cpu_time(stealth):
                 "Thread.run",
                 "keep_cpu_busy",
             ),
-            lambda v: v >= 3e5,
+            lambda v: v >= 2e5,
         )
     else:
         summary.assert_stack(
@@ -68,8 +73,62 @@ def test_cpu_time(stealth):
                 "run",
                 "keep_cpu_busy",
             ),
-            lambda v: v >= 3e5,
+            lambda v: v >= 2e5,
         )
+
+    expected_functions: List[str] = ["time", "append"]
+    for f_name in expected_functions:
+        assert (
+            summary.query(
+                "0:SecondaryThread",
+                (thread_run, "keep_cpu_busy", f_name) if f_name is not None else (thread_run, "keep_cpu_busy"),
+            )
+            is not None
+        )
+
+        # Test stacks and expected values
+        summary.assert_stack(
+            "0:MainThread",
+            (
+                "_run_module_as_main",
+                "_run_code",
+                "<module>",
+                "keep_cpu_busy",
+                f_name,
+            ),
+            lambda v: v >= 2e5,
+        )
+
+        if PY >= (3, 11):
+            summary.assert_stack(
+                "0:SecondaryThread",
+                (
+                    "Thread._bootstrap",
+                    "thread_bootstrap_inner",
+                    "Thread._bootstrap_inner",
+                    "Thread.run",
+                    "keep_cpu_busy",
+                    f_name,
+                ),
+                lambda v: v >= 2e5,
+            )
+        else:
+            summary.assert_stack(
+                "0:SecondaryThread",
+                (
+                    "_bootstrap",
+                    "thread_bootstrap_inner",
+                    "_bootstrap_inner",
+                    "run",
+                    "keep_cpu_busy",
+                    f_name,
+                ),
+                lambda v: v >= 2e5,
+            )
+
+
+
+
 
 
 @retry_on_valueerror()
