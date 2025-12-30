@@ -31,4 +31,10 @@ def main() -> None:
 
     print(f"Total time: {time.monotonic() - start}")
 
-main()
+if __name__ == '__main__':
+    import threading
+    ts = [threading.Thread(target=main) for _ in range(10)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
