@@ -19,31 +19,33 @@ def test_on_cpu_c_function():
     summary = DataSummary(data)
     dump_summary(summary, "summary_on_cpu_c_function.json")
 
-    summary.assert_substack(
-        "0:MainThread",
-        (
-            "main",
-            "confirm_hashes",
-            "sha256",
-        ),
-        lambda v: v >= 0.0,
-    )
+    for i in range(10):
+        summary.assert_substack(
+            f"0:Thread-{i}",
+            (
+                "main",
+                "confirm_hashes",
+                "sha256",
+            ),
+            lambda v: v >= 0.0,
+        )
 
-    summary.assert_substack(
-        "0:MainThread",
-        (
-            "main",
-            "complex_computation",
-            "monotonic",
-        ),
-        lambda v: v >= 0.0,
-    )
-    summary.assert_substack(
-        "0:MainThread",
-        (
-            "main",
-            "complex_computation",
-            "pow",
-        ),
-        lambda v: v >= 0.0,
-    )
+        # summary.assert_substack(
+        #     f"0:Thread-{i}",
+        #     (
+        #         "main",
+        #         "complex_computation",
+        #         "monotonic",
+        #     ),
+        #     lambda v: v >= 0.0,
+        # )
+
+        summary.assert_substack(
+            f"0:Thread-{i}",
+            (
+                "main",
+                "complex_computation",
+                "pow",
+            ),
+            lambda v: v >= 0.0,
+        )

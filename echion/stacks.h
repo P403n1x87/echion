@@ -53,6 +53,7 @@ public:
     // ------------------------------------------------------------------------
     void render()
     {
+        size_t pushed = 0;
         for (auto it = this->rbegin(); it != this->rend(); ++it)
         {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -60,8 +61,14 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-
-            Renderer::get().render_frame(it->get());
+            auto& frame = it->get();
+            if (frame.is_c_frame && pushed == 0)  {
+                Renderer::get().render_frame(frame);
+                pushed++;
+            } else if (!frame.is_c_frame) {
+                Renderer::get().render_frame(frame);
+                pushed++;
+            }
         }
     }
 

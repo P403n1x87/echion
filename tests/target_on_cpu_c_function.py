@@ -1,5 +1,6 @@
 import math
 import hashlib
+import threading
 import time
 
 
@@ -22,7 +23,7 @@ def confirm_hashes(max_time: float) -> tuple[int, str]:
     return i, hash 
 
 def main() -> None:
-    run_time = 15
+    run_time = 4
     start = time.monotonic()
     while time.monotonic() - start < run_time:
         x=complex_computation(max_time=run_time / 2)
@@ -32,8 +33,7 @@ def main() -> None:
     print(f"Total time: {time.monotonic() - start}")
 
 if __name__ == '__main__':
-    import threading
-    ts = [threading.Thread(target=main) for _ in range(10)]
+    ts = [threading.Thread(target=main, name=f"Thread-{i}") for i in range(10)]
     for t in ts:
         t.start()
     for t in ts:

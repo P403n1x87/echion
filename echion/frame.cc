@@ -758,9 +758,10 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
         c_frame_key = (c_frame_key * 31) + static_cast<uintptr_t>(c_frame_location.column);        
 
         auto c_frame = std::make_unique<Frame>(c_frame_filename, c_frame_name, c_frame_location);
+        c_frame->is_c_frame = true;
         c_frame->cache_key = c_frame_key;
-        frame.c_frame_key = c_frame_key;
 
+        frame.c_frame_key = c_frame_key;
         frame_cache->store(c_frame_key, std::move(c_frame));
 
         Renderer::get().frame(c_frame_key, c_frame_filename, c_frame_name, c_frame_location.line,
