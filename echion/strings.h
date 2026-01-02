@@ -6,6 +6,12 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
+#if PY_VERSION_HEX >= 0x030c0000
+// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#undef _PyGC_FINALIZED
+#endif
+
 #include <unicodeobject.h>
 
 #include <cstdint>
@@ -83,6 +89,20 @@ public:
     static constexpr Key INVALID = 1;
     static constexpr Key UNKNOWN = 2;
     static constexpr Key C_FRAME = 3;
+
+    [[nodiscard]] inline Key key(const std::string& s)
+    {
+        const std::lock_guard<std::mutex> lock(table_lock);
+
+        auto k = std::hash<std::string>()(s);
+        if (this->find(k) == this->end()) {
+            this->emplace(k, s);
+        }
+
+        Renderer::get().string(k, s);
+
+        return k;
+    }
 
     // Python string object
     [[nodiscard]] inline Result<Key> key(PyObject* s)

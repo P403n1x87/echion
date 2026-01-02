@@ -27,12 +27,12 @@ from time import monotonic as time
 from time import sleep
 
 
-def idle():
+def idle() -> None:
     sleep(1)
 
 
-def keep_cpu_busy():
-    a = []
+def keep_cpu_busy() -> None:
+    a: list[int] = []
     i = 0
     idle()
     end = time() + 1

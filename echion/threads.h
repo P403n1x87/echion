@@ -592,6 +592,10 @@ inline Result<void> ThreadInfo::sample(int64_t iid, PyThreadState* tstate, micro
 static void for_each_thread(InterpreterInfo& interp,
                             std::function<void(PyThreadState*, ThreadInfo&)> callback)
 {
+    static unsigned long call_count = 0;
+    static unsigned long total_time_us = 0;
+    microsecond_t start_time = gettime();
+    
     std::unordered_set<PyThreadState*> threads;
     std::unordered_set<PyThreadState*> seen_threads;
 
@@ -667,5 +671,15 @@ static void for_each_thread(InterpreterInfo& interp,
             // Call back with the thread state and thread info.
             callback(&tstate, *thread_info_map.find(tstate.thread_id)->second);
         }
+    }
+    
+    microsecond_t end_time = gettime();
+    unsigned long duration_us = end_time - start_time;
+    total_time_us += duration_us;
+    call_count++;
+    
+    if (call_count % 30 == 0) {
+        fprintf(stderr, "for_each_thread: call %lu took %lu us (avg over last 30: %lu us)\n",
+                call_count, duration_us, total_time_us / call_count);
     }
 }
