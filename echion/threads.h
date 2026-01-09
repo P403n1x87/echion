@@ -448,7 +448,7 @@ inline void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long na
         // Safety: prevent infinite loops from cycles or corrupted parent maps
         for (size_t iteration_count = 0; iteration_count < MAX_GREENLET_DEPTH; ++iteration_count) {
             // Check for cycles
-            if (visited.contains(greenlet_id)) {
+            if (visited.find(greenlet_id) != visited.end()) {
                 break;
             }
             visited.insert(greenlet_id);
