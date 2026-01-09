@@ -374,8 +374,8 @@ inline Result<void> ThreadInfo::unwind_tasks()
         // Finish off with the remaining thread stack
         // If we have seen an on-CPU Task, then upper_python_stack_size will be set and will include the sync entry point
         // and the asyncio machinery Frames. Otherwise, we are in `select` (idle) and we should push all the Frames.
-        
-        // There could be a race condition where relevant partial Python Thread Stack ends up being different from the 
+
+        // There could be a race condition where relevant partial Python Thread Stack ends up being different from the
         // one we saw in TaskInfo::unwind. This is extremely unlikely, I believe, but failing to account for it would
         // cause an underflow, so let's be conservative.
         size_t start_index = 0;
@@ -439,9 +439,20 @@ inline void ThreadInfo::unwind_greenlets(PyThreadState* tstate, unsigned long na
 
         greenlet->unwind(frame, tstate, stack);
 
+        std::unordered_set<GreenletInfo::ID> visited;
+
         // Unwind the parent greenlets
-        for (;;)
-        {
+        // The limit here is arbitrary, but it should be more than enough for
+        // most use cases.
+        const size_t MAX_GREENLET_DEPTH = 512;
+        // Safety: prevent infinite loops from cycles or corrupted parent maps
+        for (size_t iteration_count = 0; iteration_count < MAX_GREENLET_DEPTH; ++iteration_count) {
+            // Check for cycles
+            if (visited.contains(greenlet_id)) {
+                break;
+            }
+            visited.insert(greenlet_id);
+
             auto parent_greenlet_info = greenlet_parent_map.find(greenlet_id);
             if (parent_greenlet_info == greenlet_parent_map.end())
                 break;
