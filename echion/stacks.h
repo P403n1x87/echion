@@ -4,6 +4,11 @@
 
 #pragma once
 
+#if PY_VERSION_HEX >= 0x030c0000
+// https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#undef _PyGC_FINALIZED
+#endif
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -20,6 +25,7 @@
 #include <echion/config.h>
 #include <echion/frame.h>
 #include <echion/mojo.h>
+#include "echion/strings.h"
 #if PY_VERSION_HEX >= 0x030b0000
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
@@ -47,6 +53,7 @@ public:
     // ------------------------------------------------------------------------
     void render()
     {
+        size_t pushed = 0;
         for (auto it = this->rbegin(); it != this->rend(); ++it)
         {
 #if PY_VERSION_HEX >= 0x030c0000
@@ -54,7 +61,14 @@ public:
                 // This is a shim frame so we skip it.
                 continue;
 #endif
-            Renderer::get().render_frame((*it).get());
+            auto& frame = it->get();
+            if (frame.is_c_frame && pushed == 0)  {
+                Renderer::get().render_frame(frame);
+                pushed++;
+            } else if (!frame.is_c_frame) {
+                Renderer::get().render_frame(frame);
+                pushed++;
+            }
         }
     }
 
@@ -112,8 +126,10 @@ inline void unwind_native_stack()
 #endif  // UNWIND_NATIVE_DISABLE
 
 // ----------------------------------------------------------------------------
-static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
+// ----------------------------------------------------------------------------
+size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
 {
+    // std::cerr << "== UNWIND == " << std::endl;
     std::unordered_set<PyObject*> seen_frames;  // Used to detect cycles in the stack
     int count = 0;
 
@@ -137,11 +153,35 @@ static size_t unwind_frame(PyObject* frame_addr, FrameStack& stack)
             break;
         }
 
-        if (maybe_frame->get().name == StringTable::C_FRAME) {
+        auto& frame = maybe_frame->get();
+
+        if (frame.name == StringTable::C_FRAME) {
             continue;
         }
 
-        stack.push_back(*maybe_frame);
+        // THIS DOESNT WORK BECAUSE WE SET OR NOT C_CALL AT THE FRAME LEVEL BUT FRAMES ARE REUSED 
+        // ACROSS UNWINDINGS, SO WE NEED TO SET IT "FOR THE CURRENT CONTEXT" (IS THE CURRENT FRAME THE LEAF
+        // IN THE CURRENT CONTEXT?)
+        if (stack.size() == 0 && frame.in_c_call) {
+            auto c_frame = frame_cache->lookup(frame.c_frame_key);
+            if (c_frame) {
+                // std::cerr << "Keeping C frame: " <<string_table.lookup(frame.c_call_name)->get() << " called from " << string_table.lookup(frame.name)->get() << std::endl;
+                stack.push_back(*c_frame);
+            } else {
+                // std::cerr << "C frame not found: " << frame.c_frame_key << " from " << string_table.lookup(frame.name)->get() << std::endl;
+            }
+        } else {
+            if (frame.in_c_call) {
+                // auto c_frame = frame_cache->lookup(frame.c_frame_key);
+                // auto c_frame_name = c_frame ? string_table.lookup(c_frame->get().name)->get() : "(unknown C function)";
+
+                // auto caller_frame_name = string_table.lookup(frame.name)->get();
+                // std::cerr << "Skipping C frame: " << c_frame_name << " from " << caller_frame_name << std::endl;
+            }
+        }
+
+        // std::cerr << "Pushing frame: " << string_table.lookup(frame.name)->get() << std::endl;
+        stack.push_back(frame);
         count++;
     }
 
@@ -281,7 +321,7 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
             {
                 // We expected a Python frame but we found none, so we report
                 // the native frame instead.
-                std::cerr << "Expected Python frame(s), found none!" << std::endl;
+                // std::cerr << "Expected Python frame(s), found none!" << std::endl;
                 interleaved_stack.push_front(native_frame);
             }
             else
@@ -311,7 +351,7 @@ static Result<void> interleave_stacks(FrameStack& python_stack)
 
     if (p != python_stack.rend())
     {
-        std::cerr << "Python stack not empty after interleaving!" << std::endl;
+        // std::cerr << "Python stack not empty after interleaving!" << std::endl;
         while (p != python_stack.rend())
             interleaved_stack.push_front(*p++);
     }

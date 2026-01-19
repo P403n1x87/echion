@@ -3,6 +3,310 @@
 #include <echion/errors.h>
 #include <echion/render.h>
 
+#include <utility>
+
+#if PY_VERSION_HEX >= 0x030b0000
+#define Py_BUILD_CORE
+#if PY_VERSION_HEX >= 0x030d0000
+#include <opcode.h>
+#else
+#include <internal/pycore_opcode.h>
+#endif
+#else
+// Python < 3.11
+#include <opcode.h>
+#endif
+
+// ----------------------------------------------------------------------------
+// Check if an opcode is a CALL to a C/builtin function
+// In Python 3.11+, opcodes are specialized at runtime, so we check for
+// specialized PRECALL_BUILTIN_* variants that indicate a C function call
+static inline bool is_call_opcode([[maybe_unused]] uint8_t opcode)
+{
+#if PY_VERSION_HEX >= 0x030d0000
+    // Python 3.13+: Check for specialized CALL_BUILTIN_* variants
+    // These are adaptive specializations that indicate a C/builtin function call
+    return opcode == CALL_BUILTIN_CLASS ||
+           opcode == CALL_BUILTIN_FAST ||
+           opcode == CALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == CALL_BUILTIN_O ||
+           opcode == CALL_FUNCTION_EX;
+#elif PY_VERSION_HEX >= 0x030c0000
+    // Python 3.12: CALL is specialized but no PRECALL
+    // Check for CALL and specialized CALL_BUILTIN_* variants
+    return opcode == CALL || opcode == CALL_FUNCTION_EX ||
+           opcode == CALL_BUILTIN_CLASS ||
+           opcode == CALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == CALL_NO_KW_BUILTIN_FAST ||
+           opcode == CALL_NO_KW_BUILTIN_O ||
+           opcode == CALL_NO_KW_ISINSTANCE ||
+           opcode == CALL_NO_KW_LEN ||
+           opcode == CALL_NO_KW_LIST_APPEND ||
+           opcode == CALL_NO_KW_STR_1 ||
+           opcode == CALL_NO_KW_TUPLE_1 ||
+           opcode == CALL_NO_KW_TYPE_1;
+#elif PY_VERSION_HEX >= 0x030b0000
+    // Python 3.11: Check specialized PRECALL_BUILTIN_* variants and CALL
+    // When in a C call, prev_instr might point to CALL or the specialized PRECALL
+    return opcode == CALL ||
+           opcode == PRECALL_BUILTIN_CLASS ||
+           opcode == PRECALL_BUILTIN_FAST_WITH_KEYWORDS ||
+           opcode == PRECALL_NO_KW_BUILTIN_FAST ||
+           opcode == PRECALL_NO_KW_BUILTIN_O ||
+           opcode == PRECALL_NO_KW_ISINSTANCE ||
+           opcode == PRECALL_NO_KW_LEN ||
+           opcode == PRECALL_NO_KW_LIST_APPEND ||
+           opcode == PRECALL_NO_KW_STR_1 ||
+           opcode == PRECALL_NO_KW_TUPLE_1 ||
+           opcode == PRECALL_NO_KW_TYPE_1 ||
+           opcode == CALL_FUNCTION_EX;
+#else
+    // Python 3.10 and earlier: CALL_FUNCTION, CALL_FUNCTION_KW, CALL_FUNCTION_EX, CALL_METHOD
+    return opcode == CALL_FUNCTION || opcode == CALL_FUNCTION_KW ||
+           opcode == CALL_FUNCTION_EX || opcode == CALL_METHOD;
+#endif
+}
+
+// ----------------------------------------------------------------------------
+// Check if an opcode is a LOAD_ATTR/LOAD_METHOD (preferred for method names)
+// Includes specialized variants that Python 3.11+ uses at runtime
+static inline bool is_load_attr_opcode(uint8_t opcode)
+{
+    if (opcode == LOAD_ATTR)
+        return true;
+#if PY_VERSION_HEX >= 0x030b0000 && PY_VERSION_HEX < 0x030c0000
+    // Python 3.11 specialized LOAD_ATTR variants
+    if (opcode == LOAD_ATTR_ADAPTIVE ||
+        opcode == LOAD_ATTR_INSTANCE_VALUE ||
+        opcode == LOAD_ATTR_MODULE ||
+        opcode == LOAD_ATTR_SLOT ||
+        opcode == LOAD_ATTR_WITH_HINT ||
+        opcode == LOAD_METHOD ||
+        opcode == LOAD_METHOD_ADAPTIVE ||
+        opcode == LOAD_METHOD_CLASS ||
+        opcode == LOAD_METHOD_MODULE ||
+        opcode == LOAD_METHOD_NO_DICT ||
+        opcode == LOAD_METHOD_WITH_DICT ||
+        opcode == LOAD_METHOD_WITH_VALUES)
+        return true;
+#elif PY_VERSION_HEX >= 0x030c0000
+    // Python 3.12+ specialized LOAD_ATTR variants (LOAD_METHOD merged into LOAD_ATTR)
+    if (opcode == LOAD_ATTR_CLASS ||
+        opcode == LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN ||
+        opcode == LOAD_ATTR_INSTANCE_VALUE ||
+        opcode == LOAD_ATTR_MODULE ||
+        opcode == LOAD_ATTR_PROPERTY ||
+        opcode == LOAD_ATTR_SLOT ||
+        opcode == LOAD_ATTR_WITH_HINT ||
+        opcode == LOAD_ATTR_METHOD_LAZY_DICT ||
+        opcode == LOAD_ATTR_METHOD_NO_DICT ||
+        opcode == LOAD_ATTR_METHOD_WITH_VALUES)
+        return true;
+#endif
+    return false;
+}
+
+// Check if an opcode is a LOAD_GLOBAL/LOAD_NAME (fallback for function names)
+static inline bool is_load_global_opcode(uint8_t opcode)
+{
+    return opcode == LOAD_GLOBAL || opcode == LOAD_NAME;
+}
+
+// ----------------------------------------------------------------------------
+// Cache key for lookup_name_from_code: (code_addr, name_idx) -> name_key
+struct NameLookupKey {
+    uintptr_t code_addr;
+    int name_idx;
+    
+    bool operator==(const NameLookupKey& other) const {
+        return code_addr == other.code_addr && name_idx == other.name_idx;
+    }
+};
+
+// Hash function for NameLookupKey
+namespace std {
+    template<>
+    struct hash<NameLookupKey> {
+        size_t operator()(const NameLookupKey& key) const {
+            // Combine hash of code_addr and name_idx
+            return hash<uintptr_t>()(key.code_addr) ^ (hash<int>()(key.name_idx) << 1);
+        }
+    };
+}
+
+// LRU cache for name lookups: maps (code_addr, name_idx) -> StringTable::Key
+static LRUCache<NameLookupKey, StringTable::Key>* name_lookup_cache = nullptr;
+
+// Initialize the name lookup cache
+static void init_name_lookup_cache() {
+    if (name_lookup_cache == nullptr) {
+        name_lookup_cache = new LRUCache<NameLookupKey, StringTable::Key>(512);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Helper to look up a name from co_names by index
+static inline StringTable::Key lookup_name_from_code(PyCodeObject* code_addr, int name_idx)
+{
+    // Initialize cache on first use
+    init_name_lookup_cache();
+    
+    // Check cache first
+    NameLookupKey cache_key{reinterpret_cast<uintptr_t>(code_addr), name_idx};
+    auto cached_result = name_lookup_cache->lookup(cache_key);
+    if (cached_result) {
+        return cached_result->get();
+    }
+
+    // Copy the code object to get co_names
+    PyCodeObject code;
+    if (copy_type(code_addr, code))
+        return 0;
+
+    // Get the name from co_names[name_idx]
+    PyTupleObject names_tuple;
+    if (copy_type(code.co_names, names_tuple))
+        return 0;
+
+    if (name_idx < 0 || name_idx >= static_cast<int>(names_tuple.ob_base.ob_size))
+        return 0;
+
+    // Read the pointer to the name object from the tuple's ob_item array
+    PyObject* name_obj_ptr;
+    auto item_addr = reinterpret_cast<PyObject**>(
+        reinterpret_cast<uintptr_t>(code.co_names) +
+        offsetof(PyTupleObject, ob_item) +
+        name_idx * sizeof(PyObject*));
+    if (copy_type(item_addr, name_obj_ptr))
+        return 0;
+
+    // Get the string key for this name
+    auto maybe_name = string_table.key(name_obj_ptr);
+    StringTable::Key result = maybe_name ? *maybe_name : 0;
+    
+    // Cache the result (even if 0, to avoid repeated failed lookups)
+    name_lookup_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+    
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Cache key for extract_callable_name: (code_addr, instr_ptr) -> name_key
+struct CallableNameKey {
+    uintptr_t code_addr;
+    uintptr_t instr_ptr;
+    
+    bool operator==(const CallableNameKey& other) const {
+        return code_addr == other.code_addr && instr_ptr == other.instr_ptr;
+    }
+};
+
+// Hash function for CallableNameKey
+namespace std {
+    template<>
+    struct hash<CallableNameKey> {
+        size_t operator()(const CallableNameKey& key) const {
+            // Combine hash of code_addr and instr_ptr
+            return hash<uintptr_t>()(key.code_addr) ^ (hash<uintptr_t>()(key.instr_ptr) << 1);
+        }
+    };
+}
+
+// LRU cache for callable name extraction: maps (code_addr, instr_ptr) -> StringTable::Key
+static LRUCache<CallableNameKey, StringTable::Key>* callable_name_cache = nullptr;
+
+// Initialize the callable name cache
+static void init_callable_name_cache() {
+    if (callable_name_cache == nullptr) {
+        callable_name_cache = new LRUCache<CallableNameKey, StringTable::Key>(512);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Extract the callable name from bytecode by scanning backwards from the current instruction
+// Prioritizes LOAD_ATTR/LOAD_METHOD (for method calls) over LOAD_GLOBAL (for direct calls)
+// Returns the name key, or 0 if not found
+static inline StringTable::Key extract_callable_name(
+    [[maybe_unused]] _Py_CODEUNIT* instr_ptr,
+    [[maybe_unused]] PyCodeObject* code_addr)
+{
+    // Initialize cache on first use
+    init_callable_name_cache();
+    
+    // Check cache first
+    CallableNameKey cache_key{reinterpret_cast<uintptr_t>(code_addr), reinterpret_cast<uintptr_t>(instr_ptr)};
+    auto cached_result = callable_name_cache->lookup(cache_key);
+    if (cached_result) {
+        return cached_result->get();
+    }
+    
+#if PY_VERSION_HEX >= 0x030b0000
+    // Scan backwards up to 32 code units looking for LOAD instructions
+    constexpr int MAX_SCAN = 32;
+    _Py_CODEUNIT bytecode[MAX_SCAN];
+
+    // code_addr is a REMOTE pointer, so we calculate the remote code_start address
+    auto code_start = reinterpret_cast<_Py_CODEUNIT*>(
+        reinterpret_cast<uintptr_t>(code_addr) + offsetof(PyCodeObject, co_code_adaptive));
+
+    // Calculate how many instructions we can scan (don't go before the start of bytecode)
+    // Note: both instr_ptr and code_start are remote addresses, so the arithmetic is valid
+    if (instr_ptr <= code_start)
+        return 0;
+
+    int available = static_cast<int>(instr_ptr - code_start);
+    int to_scan = std::min(available, MAX_SCAN);
+
+    if (to_scan <= 0)
+        return 0;
+
+    // Copy the bytecode chunk from remote memory
+    auto scan_start = instr_ptr - to_scan;
+    if (copy_generic(scan_start, bytecode, to_scan * sizeof(_Py_CODEUNIT)))
+        return 0;
+
+    // First pass: look for LOAD_ATTR/LOAD_METHOD (the method/attribute being called)
+    for (int i = to_scan - 1; i >= 0; --i)
+    {
+        uint8_t opcode = _Py_OPCODE(bytecode[i]);
+        if (is_load_attr_opcode(opcode))
+        {
+            int arg = _Py_OPARG(bytecode[i]);
+#if PY_VERSION_HEX >= 0x030c0000
+            // In Python 3.12+, LOAD_ATTR arg = (name_index << 1) | is_method_flag
+            int name_idx = arg >> 1;
+#else
+            // In Python 3.11, LOAD_ATTR arg is just the name index
+            int name_idx = arg;
+#endif
+            StringTable::Key result = lookup_name_from_code(code_addr, name_idx);
+            // Cache the result before returning
+            callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+            return result;
+        }
+    }
+
+    // Second pass: fall back to LOAD_GLOBAL/LOAD_NAME (for direct function calls)
+    for (int i = to_scan - 1; i >= 0; --i)
+    {
+        uint8_t opcode = _Py_OPCODE(bytecode[i]);
+        if (is_load_global_opcode(opcode))
+        {
+            // In Python 3.11+, LOAD_GLOBAL arg = (name_index << 1) | push_null_flag
+            int name_idx = _Py_OPARG(bytecode[i]) >> 1;
+            StringTable::Key result = lookup_name_from_code(code_addr, name_idx);
+            // Cache the result before returning
+            callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(result));
+            return result;
+        }
+    }
+#endif
+    
+    // No name found, cache 0 to avoid repeated scans
+    callable_name_cache->store(cache_key, std::make_unique<StringTable::Key>(0));
+    return 0;
+}
+
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
@@ -252,8 +556,8 @@ Result<void> Frame::infer_location(PyCodeObject* code_obj, int lasti)
 
     this->location.line = lineno;
     this->location.line_end = lineno;
-    this->location.column = 0;
-    this->location.column_end = 0;
+    // this->location.column = 0;
+    // this->location.column_end = 0;
 
     return Result<void>::ok();
 }
@@ -361,6 +665,36 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 #else   // PY_VERSION_HEX < 0x030c0000
         frame.is_entry = frame_addr->is_entry;
 #endif  // PY_VERSION_HEX >= 0x030c0000
+
+        // Detect if we're paused at a CALL instruction (likely in C code)
+        // Read only the opcode byte to minimize memory copying
+        _Py_CODEUNIT instr;
+#if PY_VERSION_HEX >= 0x030d0000
+        // In 3.13+, instr_ptr points to the current instruction
+        if (!copy_type(frame_addr->instr_ptr, instr))
+        {
+            frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+            if (frame.in_c_call)
+            {
+                frame.c_call_name = extract_callable_name(
+                    frame_addr->instr_ptr,
+                    reinterpret_cast<PyCodeObject*>(frame_addr->f_executable));
+            }
+        }
+#else
+        // In 3.11-3.12, prev_instr points to the last executed instruction
+        // When in a C call, prev_instr points to the specialized PRECALL_BUILTIN_* instruction
+        if (!copy_type(frame_addr->prev_instr, instr))
+        {
+            frame.in_c_call = is_call_opcode(_Py_OPCODE(instr));
+            if (frame.in_c_call)
+            {
+                frame.c_call_name = extract_callable_name(
+                    frame_addr->prev_instr,
+                    frame_addr->f_code);
+            }
+        }
+#endif
     }
 
     *prev_addr = &frame == &INVALID_FRAME ? NULL : frame_addr->previous;
@@ -382,8 +716,58 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     }
 
     auto& frame = maybe_frame->get();
+
+    // Detect if we're paused at a CALL instruction (likely in C code)
+    // For Python < 3.11, we need to read the bytecode from the code object
+    if (&frame != &INVALID_FRAME && py_frame.f_lasti >= 0)
+    {
+        // py_frame.f_code is a remote pointer, so we need to copy the code object first
+        PyCodeObject code;
+        if (!copy_type(py_frame.f_code, code))
+        {
+            // Now code.co_code is also a remote pointer to the bytecode bytes object
+            // Read just the opcode byte at f_lasti from the bytecode
+            uint8_t opcode;
+            auto bytecode_ptr = reinterpret_cast<uint8_t*>(
+                reinterpret_cast<uintptr_t>(code.co_code) +
+                offsetof(PyBytesObject, ob_sval) + py_frame.f_lasti);
+            if (!copy_type(bytecode_ptr, opcode))
+            {
+                frame.in_c_call = is_call_opcode(opcode);
+            }
+        }
+    }
+
     *prev_addr = (&frame == &INVALID_FRAME) ? NULL : reinterpret_cast<PyObject*>(py_frame.f_back);
 #endif  // PY_VERSION_HEX >= 0x030b0000
+
+    if (frame.in_c_call && frame.c_call_name != 0) {
+        StringTable::Key c_frame_name;
+        if (frame.c_call_name != 0) {
+            c_frame_name = frame.c_call_name;
+        } else {
+            c_frame_name = string_table.key("(C function)");
+        }
+        
+        const auto& c_frame_filename = frame.filename;
+        const auto& c_frame_location = frame.location;
+
+        uintptr_t c_frame_key = c_frame_filename;
+        c_frame_key = (c_frame_key * 31) + c_frame_name;
+        c_frame_key = (c_frame_key * 31) + static_cast<uintptr_t>(c_frame_location.line);
+        c_frame_key = (c_frame_key * 31) + static_cast<uintptr_t>(c_frame_location.column);        
+
+        auto c_frame = std::make_unique<Frame>(c_frame_filename, c_frame_name, c_frame_location);
+        c_frame->is_c_frame = true;
+        c_frame->cache_key = c_frame_key;
+
+        frame.c_frame_key = c_frame_key;
+        frame_cache->store(c_frame_key, std::move(c_frame));
+
+        Renderer::get().frame(c_frame_key, c_frame_filename, c_frame_name, c_frame_location.line,
+                              c_frame_location.line_end, c_frame_location.column,
+                              c_frame_location.column_end);
+    }
 
     return std::ref(frame);
 }
