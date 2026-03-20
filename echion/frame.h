@@ -18,8 +18,10 @@
 #define Py_BUILD_CORE
 #include <internal/pycore_code.h>
 #endif  // PY_VERSION_HEX >= 0x030d0000
-#if PY_VERSION_HEX >= 0x030b0000
-#define Py_BUILD_CORE
+
+#if PY_VERSION_HEX >= 0x030e0000
+#include <internal/pycore_interpframe_structs.h>
+#elif PY_VERSION_HEX >= 0x030b0000
 #include <internal/pycore_frame.h>
 #endif
 
