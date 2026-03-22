@@ -4,6 +4,10 @@
 
 #pragma once
 
+#if PY_VERSION_HEX >= 0x030e0000
+#include <internal/pycore_interpframe_structs.h>
+#endif
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #if defined __GNUC__ && defined HAVE_STD_ATOMIC
