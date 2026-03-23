@@ -427,7 +427,7 @@ ThreadInfo::get_tasks_from_thread_linked_list(std::vector<TaskInfo::Ptr>& tasks)
     constexpr size_t asyncio_tasks_head_offset = offsetof(_PyThreadStateImpl, asyncio_tasks_head);
     uintptr_t head_addr = this->tstate_addr + asyncio_tasks_head_offset;
 
-    return get_tasks_from_linked_list(echion, head_addr, tasks);
+    return get_tasks_from_linked_list(head_addr, tasks);
 }
 
 Result<void>
@@ -441,7 +441,7 @@ ThreadInfo::get_tasks_from_interpreter_linked_list(PyThreadState* tstate,
     constexpr size_t asyncio_tasks_head_offset = offsetof(PyInterpreterState, asyncio_tasks_head);
     uintptr_t head_addr = reinterpret_cast<uintptr_t>(tstate->interp) + asyncio_tasks_head_offset;
 
-    return get_tasks_from_linked_list(echion, head_addr, tasks);
+    return get_tasks_from_linked_list(head_addr, tasks);
 }
 
 Result<void>

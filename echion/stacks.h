@@ -24,6 +24,9 @@
 #include "echion/stack_chunk.h"
 #endif  // PY_VERSION_HEX >= 0x030b0000
 #include <echion/errors.h>
+#if PY_VERSION_HEX >= 0x030e0000
+#include <echion/cpython/tasks.h>  // BITS_TO_PTR_MASKED
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -164,7 +167,14 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         // See the comment in unwind_frame()
         while (current_frame != NULL)
         {
-            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable.ob_type == &PyCode_Type)
+#if PY_VERSION_HEX >= 0x030e0000
+            // In 3.14, f_executable is _PyStackRef (tagged pointer).
+            auto* _exec = BITS_TO_PTR_MASKED(reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable);
+            if (_exec && _exec->ob_type == &PyCode_Type)
+#else
+            // In 3.13, f_executable is PyObject*.
+            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable->ob_type == &PyCode_Type)
+#endif
             {
                 break;
             }
