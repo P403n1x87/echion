@@ -58,19 +58,29 @@ Python 3.15  →  0x030f0000   ← next target
 
 ### Step 1: Diff CPython 3.13 → 3.14 on headers echion depends on
 
-Run the `compare-cpython-versions` skill (dd-trace-py) or manually clone
-`python/cpython` and diff between `v3.13.x` and `v3.14.x`:
+A trimmed diff covering all relevant headers and the asyncio struct definitions
+(function bodies omitted) is committed at:
+
+```
+docs/cpython-diffs/cpython_313_to_314_headers.diff
+```
+
+Full upstream diff (all files):
+https://github.com/python/cpython/compare/v3.13.0...v3.14.0
+
+To regenerate or extend it yourself:
 
 ```bash
+# Clone or use an existing python/cpython checkout
 git diff v3.13.0 v3.14.0 -- \
-  Include/internal/pycore_interpframe_structs.h \
+  Include/cpython/genobject.h \
   Include/internal/pycore_frame.h \
   Include/internal/pycore_interpframe.h \
-  Include/internal/pycore_stackref.h \
+  Include/internal/pycore_interpframe_structs.h \
   Include/internal/pycore_llist.h \
-  Include/internal/pycore_tstate.h \
   Include/internal/pycore_runtime.h \
-  Include/cpython/genobject.h \
+  Include/internal/pycore_stackref.h \
+  Include/internal/pycore_tstate.h \
   Modules/_asynciomodule.c
 ```
 
@@ -210,7 +220,9 @@ sets) with linked-list traversal for 3.14+:
 Refer to the dd-trace-py vendor copy
 (`stack/src/echion/threads.cc`) for the full implementation.
 
-#### `src/echion/stack_chunk.cc` — new include for 3.14
+#### `echion/stack_chunk.h` — new include + safety improvements
+
+The include guard is already in the standalone (no `src/` split here):
 
 ```cpp
 #if PY_VERSION_HEX >= 0x030e0000
@@ -218,15 +230,135 @@ Refer to the dd-trace-py vendor copy
 #endif
 ```
 
-#### `PyThreadState::thread_id` field rename
+Additionally, port three safety improvements from the dd-trace-py version
+that prevent heap-buffer-overflow under race conditions (the remote thread
+can mutate `chunk->size` between the copy and the bounds check):
 
-In 3.14, `tstate->thread_id` moved to `tstate->base.thread_id`:
+**1. Add `copied_size` field and `kMaxChunkDepth` constant to `StackChunk`:**
+
+```cpp
+static constexpr size_t kMaxChunkDepth = 16;
+
+private:
+    void*  origin        = NULL;
+    size_t copied_size   = 0;   // bytes actually copied — NOT chunk->size
+    size_t data_capacity = 0;
+    std::vector<char> data;
+    std::unique_ptr<StackChunk> previous = nullptr;
+```
+
+**2. Add `update_with_depth()` and redirect `update()` to call it:**
+
+```cpp
+[[nodiscard]] inline Result<void> update(_PyStackChunk* chunk_addr);
+[[nodiscard]] inline Result<void> update_with_depth(_PyStackChunk* chunk_addr, size_t depth);
+```
+
+`update_with_depth` is the existing `update` body with four additions:
+- Return `StackChunkError` if `depth >= kMaxChunkDepth`
+- Guard against self-loop: `if (chunk.previous == chunk_addr) { previous = nullptr; return ok; }`
+- Set `copied_size = chunk.size` immediately after the successful `copy_generic` call
+- Pass `depth + 1` when recursing into the previous chunk
+
+**3. Rewrite `resolve()` to use `copied_size` and verify the full frame fits:**
+
+```cpp
+auto origin_char  = reinterpret_cast<char*>(origin);
+auto address_char = reinterpret_cast<char*>(address);
+constexpr size_t frame_size = sizeof(_PyInterpreterFrame);
+
+if (address_char >= origin_char && address_char < origin_char + copied_size) {
+    if (address_char + frame_size <= origin_char + copied_size)
+        return data.data() + (address_char - origin_char);
+    // Frame straddles the end of what was copied — do NOT fall through to
+    // copy_type on the original address; the remote chunk may be stale.
+    return nullptr;
+}
+if (previous)
+    return previous->resolve(address);
+return address;
+```
+
+Also update `is_valid()` to use `copied_size`:
+
+```cpp
+return data_capacity > 0 && copied_size > 0
+    && copied_size >= sizeof(_PyStackChunk)
+    && data.size() >= copied_size
+    && data.data() != nullptr && origin != nullptr;
+```
+
+Reference: dd-trace-py `stack/src/echion/stack_chunk.cc` and
+`stack/echion/echion/stack_chunk.h`.
+
+#### `echion/frame.cc` — three 3.14 changes
+
+**1. Add `FRAME_OWNED_BY_INTERPRETER` to the C-frame check**
+
+In 3.14, CPython added `FRAME_OWNED_BY_INTERPRETER`. Without this, such
+frames fall through the owner sanity check and return `ErrorKind::FrameError`,
+which prematurely terminates stack unwinding.
+
+Replace the `FRAME_OWNED_BY_CSTACK` block inside the `>= 0x030c0000` guard:
 
 ```cpp
 #if PY_VERSION_HEX >= 0x030e0000
-    auto tid = static_cast<PyThreadState*>(tstate)->base.thread_id;
+    if (frame_addr->owner == FRAME_OWNED_BY_CSTACK ||
+        frame_addr->owner == FRAME_OWNED_BY_INTERPRETER)
 #else
-    auto tid = tstate->thread_id;
+    if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
+#endif
+    {
+        *prev_addr = frame_addr->previous;
+        return std::ref(C_FRAME);
+    }
+```
+
+**2. `BITS_TO_PTR_MASKED` for `f_executable` (tagged pointer in 3.14)**
+
+In 3.14, `f_executable` carries an LSB tag bit (python/cpython#123923).
+The raw `reinterpret_cast` in the existing `>= 0x030d0000` branch produces
+a corrupt `PyCodeObject*` → undefined behaviour / crash.
+
+Split the `>= 0x030d0000` block into a new `>= 0x030e0000` branch:
+
+```cpp
+#if PY_VERSION_HEX >= 0x030e0000
+    // f_executable uses a tagged pointer in 3.14 (python/cpython#123923).
+    PyCodeObject* code_obj =
+        reinterpret_cast<PyCodeObject*>(BITS_TO_PTR_MASKED(frame_addr->f_executable));
+    if (code_obj == nullptr || frame_addr->instr_ptr == nullptr)
+        return ErrorKind::FrameError;
+    // In 3.14 instr_ptr points at the current instruction — no -1.
+    _Py_CODEUNIT* code_units = reinterpret_cast<_Py_CODEUNIT*>(code_obj);
+    int instr_offset = static_cast<int>(frame_addr->instr_ptr - code_units);
+    int code_offset  =
+        static_cast<int>(offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT));
+    const int lasti = instr_offset - code_offset;
+    auto maybe_frame = Frame::get(code_obj, lasti);
+#elif PY_VERSION_HEX >= 0x030d0000
+    // 3.13: instr_ptr is one past the current instruction — subtract 1.
+    const int lasti =
+        (static_cast<int>((frame_addr->instr_ptr - 1 -
+                           reinterpret_cast<_Py_CODEUNIT*>(
+                               reinterpret_cast<PyCodeObject*>(frame_addr->f_executable))))) -
+        static_cast<int>(offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT));
+    auto maybe_frame =
+        Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable), lasti);
+```
+
+**3. (Handled by change 2)** The `lasti` off-by-one is fixed as part of the
+new `>= 0x030e0000` branch above — no separate change needed.
+
+Reference: dd-trace-py `stack/src/echion/frame.cc` lines 234–307.
+
+#### `echion/greenlets.h` — add `pycore_frame.h` for 3.14
+
+After the `#define Py_BUILD_CORE` / `#include <Python.h>` block, add:
+
+```cpp
+#if PY_VERSION_HEX >= 0x030e0000
+#include <internal/pycore_frame.h>
 #endif
 ```
 
