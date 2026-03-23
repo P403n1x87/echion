@@ -164,7 +164,7 @@ static size_t unwind_frame_unsafe(PyObject* frame, FrameStack& stack)
         // See the comment in unwind_frame()
         while (current_frame != NULL)
         {
-            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable->ob_type == &PyCode_Type)
+            if (reinterpret_cast<_PyInterpreterFrame*>(current_frame)->f_executable.ob_type == &PyCode_Type)
             {
                 break;
             }
