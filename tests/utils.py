@@ -7,7 +7,7 @@ import json
 from itertools import count
 from pathlib import Path
 from shutil import which
-from subprocess import PIPE, CalledProcessError, CompletedProcess, Popen, run
+from subprocess import PIPE, CompletedProcess, Popen, run
 from time import sleep
 
 import pytest
@@ -175,20 +175,18 @@ class DataSummary:
 
 
 def run_echion(*args: str) -> CompletedProcess:
-    try:
-        return run(
-            [
-                "echion",
-                *args,
-            ],
-            capture_output=True,
-            check=True,
-            timeout=30,
-        )
-    except CalledProcessError as e:
-        print(e.stdout.decode())
-        print(e.stderr.decode())
-        raise
+    result = run(
+        [
+            "echion",
+            *args,
+        ],
+        capture_output=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        print(result.stdout.decode())
+        print(result.stderr.decode())
+    return result
 
 
 def run_target(
