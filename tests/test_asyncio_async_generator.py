@@ -1,9 +1,9 @@
 import json
 
-from tests.utils import DataSummary, run_target, retry_on_valueerror, dump_summary, summary_to_json
+from tests.utils import DataSummary, run_target, retry_on_error, dump_summary, summary_to_json
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_async_generator_wall_time() -> None:
     result, data = run_target("target_async_generator")
     assert result.returncode == 0, result.stderr.decode()

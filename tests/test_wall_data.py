@@ -4,11 +4,11 @@ from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
 from tests.utils import stealth
-from tests.utils import retry_on_valueerror
+from tests.utils import retry_on_error
 
 
 @pytest.mark.skip()
-@retry_on_valueerror()
+@retry_on_error()
 @stealth
 def test_wall_time(stealth):
     result, data = run_target("target", *stealth)
@@ -135,7 +135,7 @@ def test_wall_time(stealth):
             )
 
 
-@retry_on_valueerror()
+@retry_on_error()
 @stealth
 @pytest.mark.xfail
 def test_wall_time_native(stealth):

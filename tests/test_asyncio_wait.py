@@ -1,9 +1,9 @@
 import json
 
-from tests.utils import DataSummary, run_target, retry_on_valueerror
+from tests.utils import DataSummary, run_target, retry_on_error
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_wait():
     result, data = run_target("target_asyncio_wait")
     assert result.returncode == 0, result.stderr.decode()

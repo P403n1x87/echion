@@ -4,7 +4,7 @@ from types import FunctionType
 
 import pytest
 
-from tests.utils import PY, DataSummary, run_target, retry_on_valueerror
+from tests.utils import PY, DataSummary, run_target, retry_on_error
 
 
 try:
@@ -30,7 +30,7 @@ def get_line_number(function: FunctionType, content: str) -> int:
     raise ValueError("Line not found")
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_gevent():
     import echion.monkey.gevent as _gevent
 

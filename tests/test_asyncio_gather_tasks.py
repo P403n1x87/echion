@@ -4,12 +4,12 @@ import sys
 from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import run_target
-from tests.utils import retry_on_valueerror
+from tests.utils import retry_on_error
 from tests.utils import dump_summary
 from tests.utils import summary_to_json
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_gather_tasks_wall_time():
     result, data = run_target("target_gather_tasks")
     assert result.returncode == 0, result.stderr.decode()

@@ -1,7 +1,7 @@
-from tests.utils import PY, DataSummary, run_target, dump_summary, retry_on_valueerror
+from tests.utils import PY, DataSummary, run_target, dump_summary, retry_on_error
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_executor():
     result, data = run_target("target_async_executor")
     assert result.returncode == 0, result.stderr.decode()

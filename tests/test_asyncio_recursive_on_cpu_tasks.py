@@ -1,10 +1,10 @@
 import json
 
 from tests.utils import PY, DataSummary, summary_to_json
-from tests.utils import dump_summary, run_target, retry_on_valueerror
+from tests.utils import dump_summary, run_target, retry_on_error
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_recursive_on_cpu_tasks():
     result, data = run_target("target_asyncio_recursive_on_cpu_tasks", "-c")
     assert result.returncode == 0, result.stderr.decode()

@@ -5,10 +5,10 @@ from tests.utils import PY
 from tests.utils import DataSummary
 from tests.utils import dump_summary
 from tests.utils import run_target
-from tests.utils import retry_on_valueerror
+from tests.utils import retry_on_error
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_within_function():
     result, data = run_target("target_asyncio_within_function")
     assert result.returncode == 0, result.stderr.decode()

@@ -1,9 +1,9 @@
 import json
 
-from tests.utils import PY, DataSummary, run_target, retry_on_valueerror, dump_summary, summary_to_json
+from tests.utils import PY, DataSummary, run_target, retry_on_error, dump_summary, summary_to_json
 
 
-@retry_on_valueerror()
+@retry_on_error()
 def test_asyncio_as_completed():
     result, data = run_target("target_asyncio_as_completed")
     assert result.returncode == 0, result.stderr.decode()

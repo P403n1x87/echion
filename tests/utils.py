@@ -14,7 +14,7 @@ import pytest
 from austin.format.mojo import MojoFile
 
 
-def retry_on_valueerror(
+def retry_on_error(
     max_retries: int = 3,
 ) -> t.Callable[[t.Callable[..., t.Any]], t.Callable[..., t.Any]]:
     """Decorator that retries a test up to max_retries times if ValueError or AssertionError is raised."""
