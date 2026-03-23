@@ -3,6 +3,10 @@
 #include <echion/errors.h>
 #include <echion/render.h>
 
+#if PY_VERSION_HEX >= 0x030e0000
+#include <echion/cpython/tasks.h>  // provides BITS_TO_PTR_MASKED
+#endif
+
 // ----------------------------------------------------------------------------
 #if PY_VERSION_HEX >= 0x030b0000
 static inline int _read_varint(unsigned char* table, ssize_t size, ssize_t* i)
@@ -314,7 +318,12 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
     }
 
 #if PY_VERSION_HEX >= 0x030c0000
+#if PY_VERSION_HEX >= 0x030e0000
+    if (frame_addr->owner == FRAME_OWNED_BY_CSTACK ||
+        frame_addr->owner == FRAME_OWNED_BY_INTERPRETER)
+#else
     if (frame_addr->owner == FRAME_OWNED_BY_CSTACK)
+#endif
     {
         *prev_addr = frame_addr->previous;
         // This is a C frame, we just need to ignore it
@@ -329,12 +338,34 @@ Result<std::reference_wrapper<Frame>> Frame::read(PyObject* frame_addr, PyObject
 
     // We cannot use _PyInterpreterFrame_LASTI because _PyCode_CODE reads
     // from the code object.
-#if PY_VERSION_HEX >= 0x030d0000
+#if PY_VERSION_HEX >= 0x030e0000
+    // f_executable uses a tagged pointer in 3.14 (python/cpython#123923).
+    PyCodeObject* code_obj =
+        reinterpret_cast<PyCodeObject*>(BITS_TO_PTR_MASKED(frame_addr->f_executable));
+    if (code_obj == nullptr || frame_addr->instr_ptr == nullptr)
+    {
+        return ErrorKind::FrameError;
+    }
+    // In 3.14, instr_ptr points at the current instruction — no -1.
+    _Py_CODEUNIT* code_units = reinterpret_cast<_Py_CODEUNIT*>(code_obj);
+    int instr_offset = static_cast<int>(frame_addr->instr_ptr - code_units);
+    int code_offset  =
+        static_cast<int>(offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT));
+    const int lasti = instr_offset - code_offset;
+    auto maybe_frame = Frame::get(code_obj, lasti);
+    if (!maybe_frame)
+    {
+        return ErrorKind::FrameError;
+    }
+
+    auto& frame = maybe_frame->get();
+#elif PY_VERSION_HEX >= 0x030d0000
+    // 3.13: instr_ptr is one past the current instruction — subtract 1.
     const int lasti =
         (static_cast<int>((frame_addr->instr_ptr - 1 -
                            reinterpret_cast<_Py_CODEUNIT*>(
                                (reinterpret_cast<PyCodeObject*>(frame_addr->f_executable)))))) -
-        offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT);
+        static_cast<int>(offsetof(PyCodeObject, co_code_adaptive) / sizeof(_Py_CODEUNIT));
     auto maybe_frame = Frame::get(reinterpret_cast<PyCodeObject*>(frame_addr->f_executable), lasti);
     if (!maybe_frame)
     {
