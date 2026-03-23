@@ -36,7 +36,7 @@ public:
     inline bool is_valid() const;
 
 private:
-    static constexpr size_t kMaxChunkDepth = 16;
+    static constexpr size_t kMaxChunkDepth = 64;
 
     void*  origin        = NULL;
     size_t copied_size   = 0;   // bytes actually copied — NOT chunk->size from remote
