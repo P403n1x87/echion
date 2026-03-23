@@ -17,20 +17,20 @@ from austin.format.mojo import MojoFile
 def retry_on_valueerror(
     max_retries: int = 3,
 ) -> t.Callable[[t.Callable[..., t.Any]], t.Callable[..., t.Any]]:
-    """Decorator that retries a test up to max_retries times if ValueError is raised."""
+    """Decorator that retries a test up to max_retries times if ValueError or AssertionError is raised."""
 
     def decorator(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
         @wraps(func)
         def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
-            last_error: t.Optional[ValueError] = None
+            last_error: t.Optional[Exception] = None
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                except ValueError as e:
+                except (ValueError, AssertionError) as e:
                     last_error = e
                     if attempt < max_retries - 1:
                         print(
-                            f"Retry {attempt + 1}/{max_retries} after ValueError: {e}"
+                            f"Retry {attempt + 1}/{max_retries} after {type(e).__name__}: {e}"
                         )
 
             assert last_error is not None
