@@ -37,6 +37,9 @@ def test_asyncio_gather_tasks_wall_time():
 
     try:
         # Test stacks and expected values
+        # The PY >= (3, 11) branch covers 3.14+: event-loop frame names
+        # (BaseEventLoop.run_until_complete, BaseEventLoop._run_once,
+        # KqueueSelector.select / EpollSelector.select) are unchanged in 3.14.
         if PY >= (3, 11):
             for t in ("F4_0", "F4_1"):
                 summary.assert_substack(
