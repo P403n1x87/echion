@@ -257,7 +257,7 @@ inline Result<void> ThreadInfo::unwind_tasks(PyThreadState* tstate)
 #if PY_VERSION_HEX >= 0x030e0000
     auto maybe_all_tasks = get_all_tasks(tstate);
 #else
-    auto maybe_all_tasks = get_all_tasks(reinterpret_cast<PyObject*>(asyncio_loop));
+    auto maybe_all_tasks = get_all_tasks(tstate);
 #endif
     if (!maybe_all_tasks)
     {
