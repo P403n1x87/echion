@@ -58,20 +58,9 @@ Python 3.15  →  0x030f0000   ← next target
 
 ### Step 1: Diff CPython 3.13 → 3.14 on headers echion depends on
 
-A trimmed diff covering all relevant headers and the asyncio struct definitions
-(function bodies omitted) is committed at:
-
-```
-docs/cpython-diffs/cpython_313_to_314_headers.diff
-```
-
-Full upstream diff (all files):
-https://github.com/python/cpython/compare/v3.13.0...v3.14.0
-
-To regenerate or extend it yourself:
+Run the following in a `python/cpython` checkout (or clone one fresh):
 
 ```bash
-# Clone or use an existing python/cpython checkout
 git diff v3.13.0 v3.14.0 -- \
   Include/cpython/genobject.h \
   Include/internal/pycore_frame.h \
@@ -83,6 +72,9 @@ git diff v3.13.0 v3.14.0 -- \
   Include/internal/pycore_tstate.h \
   Modules/_asynciomodule.c
 ```
+
+Full upstream diff (all files):
+https://github.com/python/cpython/compare/v3.13.0...v3.14.0
 
 ### Step 2: Apply changes — 3.14 deltas already solved in dd-trace-py
 
