@@ -65,7 +65,6 @@ dependencies = [
   "flake8-black",
   "flake8-bugbear~=22.9.23",
   "flake8-docstrings~=1.6.0",
-  "flake8-import-order~=0.18.1",
   "flake8-isort~=5.0.0",
 ]
 
